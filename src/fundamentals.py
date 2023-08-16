@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing import Tuple, NamedTuple, List, Optional
+from typing import Tuple, NamedTuple, List, Optional, Union
 
 #################################################################################
 #################################################################################
@@ -259,3 +259,14 @@ class Clause():
         self.unwatched_indices = list(range(2, len_literals)) if len_literals > 2 else []
 
 #################################################################################
+# CONSTRAINT EXPRESSIONS AND REIFIED CONSTRAINTS
+#################################################################################
+
+ConstrExpr = Union[
+    object,
+    object,
+    object,
+# TODO/FIXME: the "objects" will correspond to "primitive" types of expressions, like AND, OR, DIFFERENCE, etc
+]
+
+ReifiedConstraint = Tuple[ConstrExpr, Literal]

@@ -82,8 +82,7 @@ class SolverCause(ABC):
 
     class Encoding(NamedTuple):
         """
-        Represents a cause corresponding to the initial encoding of the problem.
-        # FIXME: need to check that 
+        Represents a cause corresponding to the encoding of a constraint.
         """
         pass
 
@@ -421,6 +420,10 @@ class Solver():
         self.dec_level: int = 0
         """
         The current decision level.
+        """
+        #########################################################################
+        self.reified_constraints: List[ReifiedConstraint] = []
+        """
         """
         #########################################################################
         self.vars[False].add(ZeroVar)
@@ -883,6 +886,8 @@ class Solver():
         Union[SolverConflictInfo.InvalidBoundUpdate, SolverConflictInfo.ReasonerExplanation],
         SolverReasoner,
     ]]:
+        """
+        """
 
         while True:
 

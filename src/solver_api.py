@@ -154,3 +154,44 @@ def add_implication(
             )
 
 #################################################################################
+
+def post_constraint(
+    solver: Solver,
+    reasoners: List[SolverReasoner],
+    reified_constraint: ReifiedConstraint,
+) -> Optional[Tuple[
+    Union[SolverConflictInfo.InvalidBoundUpdate, SolverConflictInfo.ReasonerExplanation],
+    SolverReasoner,
+]]:
+    """
+    """
+    
+#    sat_reasoner = [reasoner for reasoner in reasoners if isinstance(reasoner, SATReasoner)][0]
+
+    raise NotImplementedError
+
+#################################################################################
+
+def post_constraints(
+    solver: Solver,
+    reasoners: List[SolverReasoner],
+    reified_constraints: List[ReifiedConstraint],
+) -> Optional[Tuple[
+    Union[SolverConflictInfo.InvalidBoundUpdate, SolverConflictInfo.ReasonerExplanation],
+    SolverReasoner,
+]]:
+    """
+    """
+    
+    for reified_constraint in reified_constraints:
+        res = post_constraint(solver, reasoners, reified_constraint)
+
+        if res is not None:
+            return res
+
+    return None
+
+#################################################################################
+#################################################################################
+#################################################################################
+#################################################################################

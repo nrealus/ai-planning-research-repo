@@ -15,6 +15,8 @@ from solver_sat_reasoner import *
 #################################################################################
 #################################################################################
 
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+
 def search(
     solver: Solver,
     reasoners: List[SolverReasoner],
@@ -22,7 +24,7 @@ def search(
 
     sat_reasoner = [reasoner for reasoner in reasoners if isinstance(reasoner, SATReasoner)][0]
 
-    # any initialization ?
+    # We assume constraints are already posted at this point, using the "solver api" functions
 
     while True:
 
