@@ -611,32 +611,6 @@ class Solver():
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-    def undo_and_return_last_event_at_current_decision_level(self) -> SolverEvent:
-        """
-        Reverts the last event from the event trail.
-
-        Deletes last event in the trail, and makes corresponding updates to
-        the current bounds values and event indices of previous bound values.
-
-        Returns:
-            SolverEvent: The event that was reverted.
-        
-        Side effects:
-            Pops the last element of the event trail.
-
-            Updates the bound value of the signed variable of the event.
-
-            Updates the dictionary that stores the indices of events
-        that set the current bound value of a signed variable.
-        """
-
-        ev = self.events_trail[self.dec_level].pop()
-        self.bound_values[ev.signed_var] = ev.previous_bound_value
-        self.bound_values_event_indices[ev.signed_var] = ev.previous_bound_value_event_index
-        return ev
-
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
     # TODO
     def forget_forgettable_clauses_from_clause_db(self):
 
@@ -848,6 +822,32 @@ class Solver():
     #############################################################################
     # BACKTRACKING
     #############################################################################
+
+    def undo_and_return_last_event_at_current_decision_level(self) -> SolverEvent:
+        """
+        Reverts the last event from the event trail.
+
+        Deletes last event in the trail, and makes corresponding updates to
+        the current bounds values and event indices of previous bound values.
+
+        Returns:
+            SolverEvent: The event that was reverted.
+        
+        Side effects:
+            Pops the last element of the event trail.
+
+            Updates the bound value of the signed variable of the event.
+
+            Updates the dictionary that stores the indices of events
+        that set the current bound value of a signed variable.
+        """
+
+        ev = self.events_trail[self.dec_level].pop()
+        self.bound_values[ev.signed_var] = ev.previous_bound_value
+        self.bound_values_event_indices[ev.signed_var] = ev.previous_bound_value_event_index
+        return ev
+
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     def backtrack_to_decision_level(self,
         target_dec_level: int,
