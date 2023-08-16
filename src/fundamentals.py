@@ -166,9 +166,8 @@ class Literal(NamedTuple):
         (i.e. it is on the same signed variable and has a stronger bound value).
         """
 
-        assert self.signed_var == other_literal.signed_var
-
-        return self.bound_value.is_stronger_than(other_literal.bound_value)
+        return (self.signed_var == other_literal.signed_var
+            and self.bound_value.is_stronger_than(other_literal.bound_value))
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
