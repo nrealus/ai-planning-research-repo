@@ -241,6 +241,31 @@ class TestSolverSetBounds(unittest.TestCase):
         )
 
 #################################################################################
+
+class TestSolverEntails(unittest.TestCase):
+
+    def test_is_literal_entailed(self):
+        solver = Solver()
+
+        A = add_new_non_optional_variable(solver, (0, 10), True)
+        AP, AM = SignedVar(A, True), SignedVar(A, False)
+
+        self.assertTrue(solver.is_literal_entailed(Literal(AM, BoundValue(2))))
+        self.assertTrue(solver.is_literal_entailed(Literal(AM, BoundValue(1))))
+        self.assertTrue(solver.is_literal_entailed(Literal(AM, BoundValue(0))))
+
+        self.assertFalse(solver.is_literal_entailed(Literal(AM, BoundValue(-1))))
+        self.assertFalse(solver.is_literal_entailed(Literal(AM, BoundValue(-2))))
+        self.assertFalse(solver.is_literal_entailed(Literal(AM, BoundValue(-10))))
+
+        self.assertTrue(solver.is_literal_entailed(Literal(AP, BoundValue(12))))
+        self.assertTrue(solver.is_literal_entailed(Literal(AP, BoundValue(11))))
+        self.assertTrue(solver.is_literal_entailed(Literal(AP, BoundValue(10))))
+
+        self.assertFalse(solver.is_literal_entailed(Literal(AP, BoundValue(9))))
+        self.assertFalse(solver.is_literal_entailed(Literal(AP, BoundValue(8))))
+        self.assertFalse(solver.is_literal_entailed(Literal(AP, BoundValue(0))))
+
 #################################################################################
 #################################################################################
 
