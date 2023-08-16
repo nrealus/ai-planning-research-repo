@@ -22,7 +22,7 @@ class TestFundamentals(unittest.TestCase):
             Literal(SignedVar(Var(1), False), BoundValue(-3)),
         )
 
-    def test_bound_value_strength_comparison(self):
+    def test_is_bound_value_stronger_than(self):
         self.assertTrue(BoundValue(2).is_stronger_than(BoundValue(3)))
         self.assertTrue(BoundValue(2).is_stronger_than(BoundValue(2)))
         self.assertFalse(BoundValue(2).is_stronger_than(BoundValue(1)))

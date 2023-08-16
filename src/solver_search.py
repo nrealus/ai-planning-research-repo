@@ -52,7 +52,7 @@ def search(
                 )
 
             else:
-                raise UnreachableCodeError
+                assert False
 
             if len(conflict_analysis_info.asserting_clause_literals) == 0:
                 return "INCONSISTENT"
@@ -91,6 +91,6 @@ def search(
                 solver.increment_decision_level_and_perform_set_literal_decision(decision, reasoners)
 
             else:
-                raise UnreachableCodeError
+                assert False
 
 #################################################################################

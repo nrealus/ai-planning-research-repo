@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing import Tuple, NamedTuple, List
+from typing import Tuple, NamedTuple, List, Optional
 
 #################################################################################
 #################################################################################
 #                                 CONTENTS:
+# - BASIC UTILITIES
 # - FUNDAMETALS I:
 #   - VARIABLES
 #   - SIGNED VARIABLES
@@ -19,11 +20,25 @@ from typing import Tuple, NamedTuple, List
 #################################################################################
 #################################################################################
 
-UnreachableCodeError = AssertionError("UNREACHABLE CODE")
+AssertUnreachable = AssertionError("UNREACHABLE CODE")
 """
 Used to mark unreachable locations in code, both for readability
 and for correct type checking.
 """
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+# DEBUG: bool = True
+# 
+# def debug_assert(cond: bool, msg: Optional[str]=None):
+# 
+#     if not DEBUG:
+#         return
+# 
+#     if msg is None:
+#         assert cond
+#     else:
+#         assert cond, msg
 
 #################################################################################
 # VARIABLES
@@ -151,8 +166,9 @@ class Literal(NamedTuple):
         (i.e. it is on the same signed variable and has a stronger bound value).
         """
 
-        return (self.signed_var == other_literal.signed_var
-            and self.bound_value.is_stronger_than(other_literal.bound_value))
+        assert self.signed_var == other_literal.signed_var
+
+        return self.bound_value.is_stronger_than(other_literal.bound_value)
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -232,15 +248,15 @@ class Clause():
     ):
         
         self.literals = literals
+
+        len_literals = len(literals)
+        assert len_literals > 0, "Empty clauses are not allowed."
+
         self.scope = scope
         self.learned = learned
         
-        len_literals = len(literals)
-        if len_literals > 0:
-            self.watch1_index = 0
-            self.watch2_index = 1 if len_literals > 1 else 0
-            self.unwatched_indices = list(range(2, len_literals)) if len_literals > 2 else []
-        else:
-            raise ValueError("Cannot instantiate an empty clause.")
+        self.watch1_index = 0
+        self.watch2_index = 1 if len_literals > 1 else 0
+        self.unwatched_indices = list(range(2, len_literals)) if len_literals > 2 else []
 
 #################################################################################

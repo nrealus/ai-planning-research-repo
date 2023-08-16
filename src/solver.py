@@ -519,7 +519,7 @@ class Solver():
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-    def is_literal_implication_true(self,
+    def is_implication_true(self,
         from_literal: Literal,
         to_literal: Literal,
     ) -> bool:
@@ -601,6 +601,8 @@ class Solver():
         the literal's bound value (i.e. the literal wasn't entailed before this event).
         """
 
+        assert self.is_literal_entailed(literal)
+
         (dl, ev_i) = self.bound_values_event_indices[literal.signed_var]
         while dl > 0:
             ev = self.events_trail[dl][ev_i]
@@ -608,13 +610,6 @@ class Solver():
                 break
             (dl, ev_i) = ev.previous_bound_value_event_index
         return (dl, ev_i)
-
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-    # TODO
-    def forget_forgettable_clauses_from_clause_db(self):
-
-        raise NotImplementedError
 
     #############################################################################
     # SIGNED VARIABLE BOUND VALUE UPDATE
@@ -868,8 +863,7 @@ class Solver():
             Sets the current decision level to the target one.
         """
 
-        if target_dec_level < 0:
-            raise ValueError("""Cannot backtrack to a decision level higher that than top level (0).""")
+        assert target_dec_level >= 0
 
         while self.dec_level > target_dec_level:
             _n = len(self.events_trail[self.dec_level])
@@ -960,10 +954,10 @@ class Solver():
                 explanation_literals_list.append(cause.cause.literal)
 
             else:
-                raise UnreachableCodeError
+                assert False
 
         else:
-            raise UnreachableCodeError
+            assert False
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     
@@ -1085,7 +1079,7 @@ class Solver():
                         asserting_clause_literals.append(lit.negation())
 
                     else:
-                        raise UnreachableCodeError
+                        assert False
                 
                 # If lit is is not entailed, it must have been added in
                 # an eager propagation. Even if it was not necessary for
@@ -1156,8 +1150,7 @@ class Solver():
                 ev = self.undo_and_return_last_event_at_current_decision_level()
                 cause = ev.cause
 
-            if cause is None:
-                raise UnreachableCodeError
+            assert cause is not None
 
             resolved_literals[lit.signed_var] = min(
                 resolved_literals.get(lit.signed_var, lit.bound_value),

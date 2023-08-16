@@ -101,6 +101,13 @@ class SATReasoner(SolverReasoner):
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
+    # TODO
+    def forget_forgettable_clauses_from_clause_db(self):
+
+        raise NotImplementedError
+
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
     def __init__(self):
 
         self.clauses_db: SATReasoner.ClausesDB = SATReasoner.ClausesDB()
@@ -275,7 +282,7 @@ class SATReasoner(SolverReasoner):
                 return None
             
             else:
-                raise UnreachableCodeError
+                assert False
 
         # If the clause has at least two literals
         
@@ -357,7 +364,7 @@ class SATReasoner(SolverReasoner):
             return None
 
         else:
-            raise UnreachableCodeError
+            assert False
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -591,7 +598,7 @@ class SATReasoner(SolverReasoner):
                 (_p1, _p2) = solver.get_index_of_first_event_implying_literal(lit.negation())
                 return _p1+_p2+1 if _p1 != 0 else 0
             else:
-                raise UnreachableCodeError
+                assert False
         
         clause = self.clauses_db.clauses[clause_id]
         

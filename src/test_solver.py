@@ -50,7 +50,7 @@ class TestSolverImplications(unittest.TestCase):
         # However, solver.is_literal_implying(Aleq1, Cleq1)
         # returns True, as it should.
         self.assertEqual(
-            solver.is_literal_implication_true(Aleq1, Cleq1),
+            solver.is_implication_true(Aleq1, Cleq1),
             True,
         )
 
@@ -76,28 +76,28 @@ class TestSolverImplications(unittest.TestCase):
         Cleq2 = Literal(SignedVar(C, True), BoundValue(2))
         Cleq3 = Literal(SignedVar(C, True), BoundValue(3))
 
-        self.assertTrue(solver.is_literal_implication_true(Aleq0, Aleq0))
-        self.assertTrue(solver.is_literal_implication_true(Aleq0, Aleq1))
-        self.assertFalse(solver.is_literal_implication_true(Aleq0, Bleq0))
-        self.assertFalse(solver.is_literal_implication_true(Aleq0, AleqM1))
+        self.assertTrue(solver.is_implication_true(Aleq0, Aleq0))
+        self.assertTrue(solver.is_implication_true(Aleq0, Aleq1))
+        self.assertFalse(solver.is_implication_true(Aleq0, Bleq0))
+        self.assertFalse(solver.is_implication_true(Aleq0, AleqM1))
 
         add_implication(solver, Aleq1, Bleq1)
 
-        self.assertTrue(solver.is_literal_implication_true(Aleq1, Bleq1))
-        self.assertTrue(solver.is_literal_implication_true(Aleq0, Bleq1))
-        self.assertTrue(solver.is_literal_implication_true(Aleq1, Bleq2))
-        self.assertTrue(solver.is_literal_implication_true(Aleq0, Bleq2))
-        self.assertFalse(solver.is_literal_implication_true(Aleq1, Bleq0))
-        self.assertFalse(solver.is_literal_implication_true(Aleq1, Bleq0))
+        self.assertTrue(solver.is_implication_true(Aleq1, Bleq1))
+        self.assertTrue(solver.is_implication_true(Aleq0, Bleq1))
+        self.assertTrue(solver.is_implication_true(Aleq1, Bleq2))
+        self.assertTrue(solver.is_implication_true(Aleq0, Bleq2))
+        self.assertFalse(solver.is_implication_true(Aleq1, Bleq0))
+        self.assertFalse(solver.is_implication_true(Aleq1, Bleq0))
 
         add_implication(solver, Bleq2, Cleq2)
 
-        self.assertTrue(solver.is_literal_implication_true(Aleq1, Bleq1))
-        self.assertTrue(solver.is_literal_implication_true(Aleq1, Cleq2))
-        self.assertTrue(solver.is_literal_implication_true(Aleq1, Cleq3))
-        self.assertFalse(solver.is_literal_implication_true(Aleq1, Cleq1))
-        self.assertTrue(solver.is_literal_implication_true(Aleq0, Cleq2))
-        self.assertFalse(solver.is_literal_implication_true(Aleq2, Cleq2))
+        self.assertTrue(solver.is_implication_true(Aleq1, Bleq1))
+        self.assertTrue(solver.is_implication_true(Aleq1, Cleq2))
+        self.assertTrue(solver.is_implication_true(Aleq1, Cleq3))
+        self.assertFalse(solver.is_implication_true(Aleq1, Cleq1))
+        self.assertTrue(solver.is_implication_true(Aleq0, Cleq2))
+        self.assertFalse(solver.is_implication_true(Aleq2, Cleq2))
 
     def test_implication_cycle(self):
         solver = Solver()
@@ -120,7 +120,7 @@ class TestSolverImplications(unittest.TestCase):
         add_implication(solver, Cleq0, Dleq0)
         add_implication(solver, Dleq0, Cleq0)
 
-        self.assertFalse(solver.is_literal_implication_true(Aleq0, Cleq0))
+        self.assertFalse(solver.is_implication_true(Aleq0, Cleq0))
 
 #################################################################################
 
