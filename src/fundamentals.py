@@ -20,14 +20,6 @@ from typing import Tuple, NamedTuple, List, Optional, Union
 #################################################################################
 #################################################################################
 
-AssertUnreachable = AssertionError("UNREACHABLE CODE")
-"""
-Used to mark unreachable locations in code, both for readability
-and for correct type checking.
-"""
-
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
 # DEBUG: bool = True
 # 
 # def debug_assert(cond: bool, msg: Optional[str]=None):
