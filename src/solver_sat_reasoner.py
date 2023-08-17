@@ -83,8 +83,18 @@ class SATReasoner(SolverReasoner):
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-# TODO: do like in Aries: move pending clauses to the reasoner...
-    def register_learned_clause_and_set_as_pending(self,
+    def add_clause_fixed(self,
+        clause: Clause,
+    ):
+
+        assert not clause.learned
+
+        clause_id = self.clauses_db.register_new_clause(clause)
+        self.pending_clauses_info.insert(0, (clause_id, None))
+
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+    def add_clause_learned(self,
         asserting_clause: Clause,
         asserted_literal: Optional[Literal],
     ) -> None:
@@ -92,19 +102,12 @@ class SATReasoner(SolverReasoner):
         TODO
         """
 
-        if asserted_literal is not None:
-            asserted_literal_clause_id = self.clauses_db.register_new_clause(asserting_clause)
-            self.pending_clauses_info.insert(0, (asserted_literal_clause_id, asserted_literal))
+        assert asserting_clause.learned
 
-        asserting_clause_id = self.clauses_db.register_new_clause(asserting_clause)
-        self.pending_clauses_info.insert(0, (asserting_clause_id, asserted_literal))
+        assert asserted_literal is None or asserted_literal in asserting_clause.literals
 
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-    # TODO
-    def forget_forgettable_clauses_from_clause_db(self):
-
-        raise NotImplementedError
+        clause_id = self.clauses_db.register_new_clause(asserting_clause)
+        self.pending_clauses_info.insert(0, (clause_id, asserted_literal))
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 

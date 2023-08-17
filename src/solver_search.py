@@ -75,7 +75,7 @@ def search(
                 return "INCONSISTENT"
 
             solver.backtrack_to_decision_level(backtrack_level, reasoners)
-            sat_reasoner.register_learned_clause_and_set_as_pending(clause_to_learn, asserted_literal)
+            sat_reasoner.add_clause_learned(clause_to_learn, asserted_literal)
 
         else:
 
