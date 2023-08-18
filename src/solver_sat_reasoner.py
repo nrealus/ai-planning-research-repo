@@ -42,17 +42,84 @@ class SATReasoner(SolverReasoner):
         TODO
         """
 
+        @dataclass
+        class Clause():
+            """
+            Represents a clause registered in a clause database (i.e. an already known
+            or learned clause) for disjunctive/SAT reasoning.
+            TODO
+            """
+            # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+            literals: Tuple[Literal,...]
+            """
+            TODO
+            """
+            # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+            scope: Literal
+            """
+            A literal that describes whether the clause is "active" or not.
+
+            As such, the full clause is actually: (not scope) v l_1 v ... v l_n
+
+            Note that a clause that is known to be violated but also inactive is not
+            considered to be a conflict.
+            """
+            # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+            learned: bool
+            """
+            Whether the clause is learned or not.
+            """
+            # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+            watch1_index: int
+            """
+            Index of the first watched literal.
+            """
+            # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+            watch2_index: int
+            """
+            Index of the second watched literal.
+            """
+            # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+            unwatched_indices: List[int]
+            """
+            TODO
+            """
+
+            # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+            
+            def __init__(self,
+                literals: Tuple[Literal,...],
+                scope: Literal,
+                learned: bool
+            ):
+                
+                self.literals = literals
+
+                len_literals = len(literals)
+                assert len_literals > 0, "Empty clauses are not allowed."
+
+                self.scope = scope
+                self.learned = learned
+                
+                self.watch1_index = 0
+                self.watch2_index = 1 if len_literals > 1 else 0
+                self.unwatched_indices = list(range(2, len_literals)) if len_literals > 2 else []
+
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
         class ClauseId(int):
             """
             Represents the ID of a clause in the database.
             """
             pass
 
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
         def __init__(self):
 
             self._clauses_id_counter: int = 0
 
-            self.clauses: Dict[SATReasoner.ClausesDB.ClauseId, Clause] = {}
+            self.clauses: Dict[SATReasoner.ClausesDB.ClauseId, SATReasoner.ClausesDB.Clause] = {}
             # num_clauses_total: int
             # num_clauses_fixed: int
             self.clauses_activities: Dict[SATReasoner.ClausesDB.ClauseId, float] = {}
@@ -84,10 +151,15 @@ class SATReasoner(SolverReasoner):
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     def add_clause_fixed(self,
-        clause: Clause,
+        clause_literals: Tuple[Literal],
+        scope: Literal,
     ):
 
-        assert not clause.learned
+        clause = SATReasoner.ClausesDB.Clause(
+            clause_literals,
+            scope,
+            False,
+        )
 
         clause_id = self.clauses_db.register_new_clause(clause)
         self.pending_clauses_info.insert(0, (clause_id, None))
@@ -95,14 +167,18 @@ class SATReasoner(SolverReasoner):
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     def add_clause_learned(self,
-        asserting_clause: Clause,
+        asserting_clause_literals: Tuple[Literal,...],
         asserted_literal: Optional[Literal],
     ) -> None:
         """
         TODO
         """
 
-        assert asserting_clause.learned
+        asserting_clause = SATReasoner.ClausesDB.Clause(
+            asserting_clause_literals,
+            TrueLiteral,
+            True
+        )
 
         assert asserted_literal is None or asserted_literal in asserting_clause.literals
 

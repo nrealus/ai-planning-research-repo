@@ -59,23 +59,17 @@ def search(
             if len(conflict_analysis_info.asserting_clause_literals) == 0:
                 return "INCONSISTENT"
 
-            clause_to_learn = Clause(
-                conflict_analysis_info.asserting_clause_literals,
-                TrueLiteral,
-                True
-            )
-
             # CLAUSE LEARNING
 
             (is_clause_conflicting_at_top_level,
             backtrack_level,
-            asserted_literal) = solver.get_decision_level_to_backtrack_to(clause_to_learn)
+            asserted_literal) = solver.get_decision_level_to_backtrack_to(conflict_analysis_info.asserting_clause_literals)
 
             if is_clause_conflicting_at_top_level:
                 return "INCONSISTENT"
 
             solver.backtrack_to_decision_level(backtrack_level, reasoners)
-            sat_reasoner.add_clause_learned(clause_to_learn, asserted_literal)
+            sat_reasoner.add_clause_learned(conflict_analysis_info.asserting_clause_literals, asserted_literal)
 
         else:
 

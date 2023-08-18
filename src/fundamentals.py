@@ -16,7 +16,7 @@ from typing import Tuple, NamedTuple, List, Optional, Union
 #   - BOUND VALUES
 #   - LITERALS
 # - FUNDAMETALS II:
-#   - CLAUSES
+#   - CONSTRAINT EXPRESSIONS AND REIFIED CONSTRAINTS
 #################################################################################
 #################################################################################
 
@@ -180,75 +180,6 @@ A special False (or contradiction) literal.
 
 Is the negation of the "True" literal, which corresponds to the [-ZeroVar <= -1] literal.
 """
-
-#################################################################################
-# CLAUSES
-#################################################################################
-
-# A clause is a disjunction of literals.
-# TODO: more documentation.
-@dataclass
-class Clause():
-    """
-    Represents a clause registered in a clause database (i.e. an already known
-    or learned clause) for disjunctive/SAT reasoning.
-    TODO
-    """
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-    literals: Tuple[Literal,...]
-    """
-    TODO
-    """
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-    scope: Literal
-    """
-    A literal that describes whether the clause is "active" or not.
-
-    As such, the full clause is actually: (not scope) v l_1 v ... v l_n
-
-    Note that a clause that is known to be violated but also inactive is not
-    considered to be a conflict.
-    """
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-    learned: bool
-    """
-    Whether the clause is learned or not.
-    """
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-    watch1_index: int
-    """
-    Index of the first watched literal.
-    """
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-    watch2_index: int
-    """
-    Index of the second watched literal.
-    """
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-    unwatched_indices: List[int]
-    """
-    TODO
-    """
-
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-    
-    def __init__(self,
-        literals: Tuple[Literal,...],
-        scope: Literal,
-        learned: bool
-    ):
-        
-        self.literals = literals
-
-        len_literals = len(literals)
-        assert len_literals > 0, "Empty clauses are not allowed."
-
-        self.scope = scope
-        self.learned = learned
-        
-        self.watch1_index = 0
-        self.watch2_index = 1 if len_literals > 1 else 0
-        self.unwatched_indices = list(range(2, len_literals)) if len_literals > 2 else []
 
 #################################################################################
 # CONSTRAINT EXPRESSIONS AND REIFIED CONSTRAINTS
