@@ -42,14 +42,14 @@ def search(
 
             conflict_analysis_info: SolverConflictInfo.AnalysisResult
             if isinstance(contradiction, SolverConflictInfo.InvalidBoundUpdate):
-                conflict_analysis_info = solver.explain_invalid_bound_update_into_asserting_clause(
+                conflict_analysis_info = solver.explain_invalid_bound_update(
                     contradiction,
                     reasoner,
                 )
 
             elif isinstance(contradiction, SolverConflictInfo.ReasonerExplanation):
-                conflict_analysis_info = solver.refine_explanation_into_asserting_clause(
-                    list(contradiction.explanation_literals_tuple),
+                conflict_analysis_info = solver.refine_explanation(
+                    list(contradiction.explanation_literals),
                     reasoner,
                 )
 
