@@ -37,7 +37,7 @@ class SolverDecision(ABC):
 
     class SetLiteral(NamedTuple):
         """
-        Represents a decision to set (to true) a certain literal. (i.e. entail, enforce it)
+        Represents a decision to set a certain literal. (i.e. set to true, entail, enforce it)
         """
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
         literal: Literal
@@ -159,8 +159,6 @@ class SolverCause(ABC):
     Type alias representing all kinds of causes.
     """
 
-    # Note: "cause" and "clause" look very similar, don't mix them up :)
-
 #################################################################################
 # SOLVER EVENTS 
 #################################################################################
@@ -245,7 +243,7 @@ class SolverConflictInfo(ABC):
         asserting / learned clause (conflict analysis).
         """
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-        explanation_literals_tuple: Tuple[Literal,...]
+        explanation_literals: Tuple[Literal,...]
         """
         The literals returned by a reasoner, as an explanation for the conflict.
         """
@@ -274,9 +272,9 @@ class SolverConflictInfo(ABC):
         A set of literals of which at least one must be true to avoid the conflict.
         """
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-        resolved_literals: Dict[SignedVar, BoundValue] # FIXME ? # Tuple[Literal,...]
+        resolved_literals_storage: Dict[SignedVar, BoundValue] # FIXME ? # Tuple[Literal,...]
         """
-        Resolved literals that participate in the conflict.
+        Stores resolved literals that participate in the conflict.
         
         Those literals appeared in an explanation when producing the associated clause, but
         were replaced by their own explanation (and thus do not appear in the clause).
@@ -298,7 +296,7 @@ class SolverReasoner():
 
     @abstractmethod
     def explain(self,
-        explanation_literals_list: List[Literal],
+        explanation_literals: List[Literal],
         literal: Literal,
         inference_cause: SolverCause.ReasonerInference,
         solver: Solver,
@@ -394,16 +392,16 @@ class Solver():
         """
         Represents an implication graph on literals of non-optional variables.
 
-        Maps a signed variable to a dictionary of adjancency lists,
+        Maps a signed variable to a dictionary of adjancency lists (sets),
         which can be seen as a "labeled adjacency list".
         The key (`BoundValue`) is a "guard" bound value for the signed variable,
         and the value (list of literals) corresponds to literals that
         are implied by the literal formed by the signed variable and
         the guard bound value.
 
-        Note that if a literal is present in a adjacency set "guarded"
+        Note that if a literal is present in a adjacency list "guarded"
         by a value v, there is no need to have it also be in the adjacency
-        set for values greater (weaker) than v.
+        list for values greater (weaker) than v.
         """
         #########################################################################
         self.events_trail: List[List[SolverEvent]] = [[]]
@@ -625,6 +623,7 @@ class Solver():
     ) -> bool | SolverConflictInfo.InvalidBoundUpdate:
         """
         Arguably the most important method of the solver.
+        (along with the propagate method)
 
         Attempts to set a new bound value to a signed variable. This is
         equivalent to setting / entailing / enforcing the corresponding literal.
@@ -641,7 +640,7 @@ class Solver():
 
         Additionally, if the variable isn't optional, "lazily" propagates the
         consequences of this update to non optional variables in the 
-        non_optional_variables_implication_graph, that may be concerned by it.
+        non_optional_vars_implication_graph, that may be concerned by it.
         As such, recursive calls to set_bound_value or returns of 
         an InvalidBoundUpdate are possible during this process.
 
@@ -785,7 +784,7 @@ class Solver():
         reasoners: List[SolverReasoner],
     ) -> None:
         """
-        Increments the current decision level and applies the given decision.
+        Increments the current decision level and applies the given set literal decision.
 
         Args:
             set_literal_decision (Solver.SetLiteralDecision): The decision to apply.
@@ -793,8 +792,8 @@ class Solver():
         Side effects:
             Increments the current decision level.
             
-            Registers the event index that the first event of this
-        new decision level will have.
+            Invokes the reasoners' on_solver_new_decision "callbacks", which
+        updates them internally to account for the decision level incrementation.
             
             Then, applies the given set literal decision by
         calling `set_bound_value`. It is in that call that the
@@ -808,8 +807,6 @@ class Solver():
         
         for reasoner in reasoners:
             reasoner.on_solver_new_decision(self)
-#        self.dec_levels_first_event_indices[self.dec_level] = len(self.events_trail)
-#        self.dec_levels_first_event_indices_reverse[len(self.events_trail)] = self.dec_level
 
         self.set_bound_value(
             set_literal_decision.literal.signed_var,
@@ -823,22 +820,25 @@ class Solver():
 
     def undo_and_return_last_event_at_current_decision_level(self) -> SolverEvent:
         """
-        Reverts the last event from the event trail.
+        Reverts the last (latest) event in the events trail
+        (at the current decision level).
 
-        Deletes last event in the trail, and makes corresponding updates to
-        the current bounds values and event indices of previous bound values.
+        Makes corresponding updates to the current bounds values and event
+        indices of previous bound values.
 
         Returns:
             SolverEvent: The event that was reverted.
         
         Side effects:
-            Pops the last element of the event trail.
+            Pops the last element of the event trail (at the current decision level).
 
             Updates the bound value of the signed variable of the event.
 
             Updates the dictionary that stores the indices of events
         that set the current bound value of a signed variable.
         """
+
+        assert len(self.events_trail[self.dec_level]) > 0
 
         ev = self.events_trail[self.dec_level].pop()
         self.bound_values[ev.signed_var] = ev.previous_bound_value
@@ -858,10 +858,11 @@ class Solver():
             target_decision_level (int): The target decision level to backtrack to.
 
         Side effects:
-            Reverts the correct number of events from the event trail
+            Reverts all events at all decision levels after the target one.
             
-            Clears all information about decision levels between the
-            current one and the target one.
+            Invokes the reasoners' on_solver_backtrack_one_level "callbacks", at
+        each reverted decision level. This updates the reasoners internally to
+        account for the backtracking.
 
             Sets the current decision level to the target one.
         """
@@ -887,6 +888,11 @@ class Solver():
         SolverReasoner,
     ]]:
         """
+        The propagation method of the solver.
+
+        For all reasoners, propagates changes / new events. The propagation
+        process stops either when nothing new can be inferred (success), or
+        when a contradiction is detected by one of the reasoners (failure).
         """
 
         while True:
@@ -908,8 +914,8 @@ class Solver():
     # CONFLICT ANALYSIS, EXPLANATION GENERATION
     #############################################################################
 
-    def add_implying_literals_to_explanation_literals_list(self,
-        explanation_literals_list: List[Literal],
+    def add_implying_literals_to_explanation_literals(self,
+        explanation_literals: List[Literal],
         literal: Literal,
         cause: SolverCause.Any,
         reasoner: SolverReasoner,
@@ -918,13 +924,14 @@ class Solver():
         Computes a set of literals l_1, ..., l_n such that:
          - l_1 & ... & l_n => literal
          - each l_i is entailed at the current decision level.
-        
+        Places them in `explanation_literals`.
+         
         Assumptions:
          - literal is not entailed in the current state
          - cause provides the explanation for asserting literal (and is not a decision)
 
         Args:
-            explanation_literals_list (List[Literal]): The list of literals making up the explanation.
+            explanation_literals (List[Literal]): The list of literals making up the explanation.
 
             literal (Literal): The literal whose implying literals we want to add to the explanation.
 
@@ -933,30 +940,31 @@ class Solver():
             reasoner (Solver.Reasoner):. TODO
 
         Side effects:
-            Modifies `explanation_literals_list`.
+            Modifies `explanation_literals`.
         """
 
         # In this function, the literal shouldn't be true yet,
         # but it should be immediately implied.
+        assert not self.is_literal_entailed(literal)
 
         if isinstance(cause, SolverCause.ReasonerInference):
             # Ask the reasoner for an explanation clause (l_1 & ... & l_n) => literal
-            reasoner.explain(explanation_literals_list, literal, cause, self)
+            reasoner.explain(explanation_literals, literal, cause, self)
 
         elif isinstance(cause, SolverCause.ImplicationPropagation):
-            explanation_literals_list.append(cause.literal)
+            explanation_literals.append(cause.literal)
 
         elif isinstance(cause, SolverCause.PresenceOfEmptyDomain):
             # cause.literal & (not cause.literal) => "variable of cause.literal is absent"
             #                                        (i.e. "not cause.literal.variable.presence_literal")
             #                                        (i.e. literal) #FIXME: sure about that ?
-            explanation_literals_list.append(cause.literal.negation())
+            explanation_literals.append(cause.literal.negation())
             if isinstance(cause.cause, SolverCause.ReasonerInference):
                 # Ask the reasoner for an explanation clause (l_1 & ... & l_n) => cause.literal
-                reasoner.explain(explanation_literals_list, cause.literal, cause.cause, self)
+                reasoner.explain(explanation_literals, cause.literal, cause.cause, self)
 
             elif isinstance(cause.cause, SolverCause.ImplicationPropagation):
-                explanation_literals_list.append(cause.cause.literal)
+                explanation_literals.append(cause.cause.literal)
 
             else:
                 assert False
@@ -966,7 +974,7 @@ class Solver():
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     
-    def explain_invalid_bound_update_into_asserting_clause(self,
+    def explain_invalid_bound_update(self,
         invalid_bound_update: SolverConflictInfo.InvalidBoundUpdate,
         reasoner: SolverReasoner,
     ) -> SolverConflictInfo.AnalysisResult:
@@ -995,15 +1003,15 @@ class Solver():
         # the affected variable is present.
 
         # The base of the explanation is ('not l' v 'l')
-        explanation_literals_list = [invalid_bound_update.literal.negation()]
+        explanation_literals = [invalid_bound_update.literal.negation()]
 
         # However 'l' does not hold in the current state and it needs
         # to be replaced, with a set of literals 'l_1' v ... v 'l_n',
         # such that 'l_1' v ... v 'l_n' => 'l'. As such, the explanation
         # becomes 'not l' v 'l_1' v ... v 'l_n', and all its disjuncts
         # ('not l' and all 'l_i') hold in the current state.
-        self.add_implying_literals_to_explanation_literals_list(
-            explanation_literals_list,
+        self.add_implying_literals_to_explanation_literals(
+            explanation_literals,
             invalid_bound_update.literal,
             invalid_bound_update.cause,
             reasoner,
@@ -1011,22 +1019,22 @@ class Solver():
 
         # The explanation clause 'not l' v 'l_1' v ... v 'l_n' must now be 
         # transformed into 1st Unique Implication Point form.
-        return self.refine_explanation_into_asserting_clause(
-            explanation_literals_list,
+        return self.refine_explanation(
+            explanation_literals,
             reasoner,
         )
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-    def refine_explanation_into_asserting_clause(self,
-        explanation_literals_list: List[Literal],
+    def refine_explanation(self,
+        explanation_literals: List[Literal],
         reasoner: SolverReasoner,
     ) -> SolverConflictInfo.AnalysisResult:
         """
         Refines an explanation into an asserting clause.
         
         Args:
-            explanation_literals_list (List[Literal]): The list of literals making up the explanation.
+            explanation_literals (List[Literal]): The list of literals making up the explanation.
 
             reasoner (Solver.Reasoner): .TODO
 
@@ -1036,7 +1044,7 @@ class Solver():
 
         Side effects:
         
-            Modifies `explanation_literals_list`
+            Modifies `explanation_literals`
 
             !! A partial backtrack (within the current decision level) will occur
         in the process. This is necessary to provide explainers (reasoners)
@@ -1060,7 +1068,7 @@ class Solver():
 
         while True:
 
-            for lit in explanation_literals_list:
+            for lit in explanation_literals:
 
                 # If lit is entailed (standard case).
                 if self.bound_values[lit.signed_var].is_stronger_than(lit.bound_value):
@@ -1162,9 +1170,9 @@ class Solver():
                 lit.bound_value,
             )
 
-            # Add a set of literals whose conjunction implies lit to explanation_literals_list
-            self.add_implying_literals_to_explanation_literals_list(
-                explanation_literals_list,
+            # Add a set of literals whose conjunction implies lit to explanation_literals
+            self.add_implying_literals_to_explanation_literals(
+                explanation_literals,
                 lit,
                 cause,
                 reasoner,
