@@ -513,12 +513,12 @@ class Solver():
         if not literal.signed_var in self.non_optional_vars_implication_graph:
             return []
 
-        res = set()
+        res: List[Literal] = []
         guarded_adj_set = self.non_optional_vars_implication_graph[literal.signed_var]
         for guard_bound in guarded_adj_set:
             if literal.bound_value.is_stronger_than(guard_bound):
-                res.update(guarded_adj_set[guard_bound])
-        return list(res)
+                res.extend(guarded_adj_set[guard_bound])
+        return res
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -1175,13 +1175,13 @@ class Solver():
     #############################################################################
 
     def get_decision_level_to_backtrack_to(self,
-        asserting_clause: Clause,
+        asserting_clause_literals: Tuple[Literal,...],
     ) -> Tuple[bool, int, Optional[Literal]]:
         """
-        Returns the appropriate backtracking level for the given clause, 
-        and the literal that is asserted at that level. Also returns True if
-        the clause is conflicting at the top decision level (this makes
-        the clause a contradiction) and False otherwise.
+        Returns the appropriate backtracking level for the clause formed by the
+        given clause literals, and the literal that is asserted at that level.
+        Also returns True if the clause is conflicting at the top decision level
+        (this makes the clause a contradiction) and False otherwise.
         
         Normally, in the 1UIP backtracking scheme (1st Unique Implication Point),
         the decision level to backtrack to should be the largest one (i.e. "closest"
@@ -1199,7 +1199,7 @@ class Solver():
 
         asserted_literal: Optional[Literal] = None
 
-        for literal in asserting_clause.literals:
+        for literal in asserting_clause_literals:
             
             literal_negation = literal.negation()
 
