@@ -55,11 +55,11 @@ class SATReasoner(SolverReasoner):
             TODO
             """
             # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-            scope: Literal
+            scope_literal: Literal
             """
             A literal that describes whether the clause is "active" or not.
 
-            As such, the full clause is actually: (not scope) v l_1 v ... v l_n
+            As such, the full clause is actually: (not scope_literal) v l_1 v ... v l_n
 
             Note that a clause that is known to be violated but also inactive is not
             considered to be a conflict.
@@ -89,7 +89,7 @@ class SATReasoner(SolverReasoner):
             
             def __init__(self,
                 literals: Tuple[Literal,...],
-                scope: Literal,
+                scope_literal: Literal,
                 learned: bool
             ):
                 
@@ -98,7 +98,7 @@ class SATReasoner(SolverReasoner):
                 len_literals = len(literals)
                 assert len_literals > 0, "Empty clauses are not allowed."
 
-                self.scope = scope
+                self.scope_literal = scope_literal
                 self.learned = learned
                 
                 self.watch1_index = 0
@@ -150,14 +150,14 @@ class SATReasoner(SolverReasoner):
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-    def add_clause_fixed(self,
+    def add_new_fixed_clause_with_scope(self,
         clause_literals: Tuple[Literal],
-        scope: Literal,
+        scope_literal: Literal,
     ):
 
         clause = SATReasoner.ClausesDB.Clause(
             clause_literals,
-            scope,
+            scope_literal,
             False,
         )
 
@@ -166,7 +166,7 @@ class SATReasoner(SolverReasoner):
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-    def add_clause_learned(self,
+    def add_new_learned_clause(self,
         asserting_clause_literals: Tuple[Literal,...],
         asserted_literal: Optional[Literal],
     ) -> None:
@@ -310,10 +310,10 @@ class SATReasoner(SolverReasoner):
         # However, if a violated clause is detected at any point (including during
         # the loop above), return the negation of its literals. They will be used
         # to build an explanation / asserting clause.
-        clause_id = self.clauses_db.clauses[violated_clause_id]
-        explanation_literals_list = [lit.negation() for lit in clause_id.literals]
-        if clause_id.scope != TrueLiteral:
-            explanation_literals_list.append(clause_id.scope)
+        clause = self.clauses_db.clauses[violated_clause_id]
+        explanation_literals_list = [lit.negation() for lit in clause.literals]
+        if clause.scope_literal != TrueLiteral:
+            explanation_literals_list.append(clause.scope_literal)
         # FIXME/TODO: bump the activity of clause (violated_clause_id)
         return SolverConflictInfo.ReasonerExplanation(tuple(explanation_literals_list))
 
@@ -377,27 +377,27 @@ class SATReasoner(SolverReasoner):
         # We now must determine whether a watch should indeed be set on the
         # new first and second literal (watch1 and watch2). I.e. 
 
-        lit0_value: Optional[bool] = solver.get_literal_current_value(
-            clause.literals[clause.watch1_index])
         lit1_value: Optional[bool] = solver.get_literal_current_value(
+            clause.literals[clause.watch1_index])
+        lit2_value: Optional[bool] = solver.get_literal_current_value(
             clause.literals[clause.watch2_index])
 
         # If the first literal is entailed, then the clause is satisfied.
         # So we set the watch and leave the state unchanged.
-        if lit0_value is True:
+        if lit1_value is True:
             self._set_watch_on_first_literals(clause_id, solver)
             return None
 
         # Otherwise, if the first literal is false, then (because of how watched literals
         # work / are chose / because of the priority of watched literals selection)
         # the other ones can only be false as well. So the clause is violated.
-        elif lit0_value is False:
+        elif lit1_value is False:
             self._set_watch_on_first_literals(clause_id, solver)
             return self._process_violated_clause(clause_id, solver)
 
         # Otherwise, if the second literal's status is unknown yet, we set the
         # watch and leave state unchanged.
-        elif lit1_value is None:
+        elif lit2_value is None:
             self._set_watch_on_first_literals(clause_id, solver)
             return None
 
@@ -425,21 +425,21 @@ class SATReasoner(SolverReasoner):
         deactivated), the same violated clause id passed as parameter to this method.
         """
         
-        is_clause_active_literal = self.clauses_db.clauses[clause_id].scope
-        is_clause_active_literal_value: Optional[bool] = solver.get_literal_current_value(is_clause_active_literal)
+        scope_literal = self.clauses_db.clauses[clause_id].scope_literal
+        scope_literal_value: Optional[bool] = solver.get_literal_current_value(scope_literal)
 
         # If the clause is active and violated, it means we have a conflict.
-        if is_clause_active_literal_value is True:
+        if scope_literal_value is True:
             return clause_id
 
         # Otherwise, if the clause is inactive, it (this violated
         # clause) isn't actually a conflict.
-        elif is_clause_active_literal_value is False:
+        elif scope_literal_value is False:
             return None
         
         # Otherwise, if the clause is undefined: deactivate the clause to avoid a conflict
-        elif is_clause_active_literal_value is None:
-            self._set_from_unit_propagation(is_clause_active_literal.negation(), clause_id, solver)
+        elif scope_literal_value is None:
+            self._set_from_unit_propagation(scope_literal.negation(), clause_id, solver)
             return None
 
         else:

@@ -69,7 +69,7 @@ def search(
                 return "INCONSISTENT"
 
             solver.backtrack_to_decision_level(backtrack_level, reasoners)
-            sat_reasoner.add_clause_learned(conflict_analysis_info.asserting_clause_literals, asserted_literal)
+            sat_reasoner.add_new_learned_clause(conflict_analysis_info.asserting_clause_literals, asserted_literal)
 
         else:
 
