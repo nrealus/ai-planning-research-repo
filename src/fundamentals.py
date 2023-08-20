@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing import Tuple, NamedTuple, List, Optional, Union
+from typing import Tuple, NamedTuple, Union
 
 #################################################################################
 #################################################################################
@@ -185,11 +185,49 @@ Is the negation of the "True" literal, which corresponds to the [-ZeroVar <= -1]
 # CONSTRAINT EXPRESSIONS AND REIFIED CONSTRAINTS
 #################################################################################
 
-ConstrExpr = Union[
-    object,
-    object,
-    object,
-# TODO/FIXME: the "objects" will correspond to "primitive" types of expressions, like AND, OR, DIFFERENCE, etc
+class ConstrExprLiteral(NamedTuple):
+    literal: Literal
+
+    def negation(self) -> ConstrExprLiteral:
+        return ConstrExprLiteral(self.literal.negation())
+
+class ConstrExprOr(NamedTuple):
+    literals: Tuple[Literal,...]
+
+    def negation(self) -> ConstrExprAnd:
+        return ConstrExprAnd(tuple(lit.negation() for lit in self.literals))
+
+class ConstrExprAnd(NamedTuple):
+    literals: Tuple[Literal,...]
+
+    def negation(self) -> ConstrExprOr:
+        return ConstrExprOr(tuple(lit.negation() for lit in self.literals))
+
+class ConstrExprMaxDiffCnt(NamedTuple):
+    from_var: Var
+    to_var: Var
+    max_diff: int
+
+    def negation(self) -> ConstrExprMaxDiffCnt:
+        return ConstrExprMaxDiffCnt(
+            self.to_var,
+            self.from_var,
+            -self.max_diff-1,   # NOTE: -1 just sitting here
+        )
+
+#def ConstrExprMaxDiffCtg(NamedTuple):
+#    from_var: Var
+#    to_var: Var
+#    max_diff: int
+
+#def ConstrExprLinear(NamedTuple):
+#    ...
+
+ConstrExprAny = Union[
+    ConstrExprLiteral,
+    ConstrExprOr,
+    ConstrExprAnd,
+    ConstrExprMaxDiffCnt,
 ]
 
-ReifiedConstraint = Tuple[ConstrExpr, Literal]
+#ReifiedConstraint = Tuple[ConstrExpr, Literal]

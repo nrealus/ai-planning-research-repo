@@ -6,6 +6,7 @@ from fundamentals import *
 
 from solver import *
 from solver_api import *
+from solver_api import _add_implication
 
 import unittest
 
@@ -28,12 +29,12 @@ class TestSolverImplications(unittest.TestCase):
 
         Cleq1 = Literal(SignedVar(C, True), BoundValue(1))
 
-        add_implication(solver, Aleq1, Bleq1)
+        _add_implication(solver, Aleq1, Bleq1)
         self.assertEqual(
             solver.get_literals_directly_implied_by(Aleq1),
             [Bleq1]
         )
-        add_implication(solver, Bleq1, Cleq1)
+        _add_implication(solver, Bleq1, Cleq1)
         self.assertEqual(
             solver.get_literals_directly_implied_by(Bleq1),
             [Cleq1]
@@ -81,7 +82,7 @@ class TestSolverImplications(unittest.TestCase):
         self.assertFalse(solver.is_implication_true(Aleq0, Bleq0))
         self.assertFalse(solver.is_implication_true(Aleq0, AleqM1))
 
-        add_implication(solver, Aleq1, Bleq1)
+        _add_implication(solver, Aleq1, Bleq1)
 
         self.assertTrue(solver.is_implication_true(Aleq1, Bleq1))
         self.assertTrue(solver.is_implication_true(Aleq0, Bleq1))
@@ -90,7 +91,7 @@ class TestSolverImplications(unittest.TestCase):
         self.assertFalse(solver.is_implication_true(Aleq1, Bleq0))
         self.assertFalse(solver.is_implication_true(Aleq1, Bleq0))
 
-        add_implication(solver, Bleq2, Cleq2)
+        _add_implication(solver, Bleq2, Cleq2)
 
         self.assertTrue(solver.is_implication_true(Aleq1, Bleq1))
         self.assertTrue(solver.is_implication_true(Aleq1, Cleq2))
@@ -114,11 +115,11 @@ class TestSolverImplications(unittest.TestCase):
         Cleq0 = Literal(SignedVar(C, True), BoundValue(0))
         Dleq0 = Literal(SignedVar(D, True), BoundValue(0))
 
-        add_implication(solver, Aleq0, Bleq0)
-        add_implication(solver, Bleq0, Aleq0)
+        _add_implication(solver, Aleq0, Bleq0)
+        _add_implication(solver, Bleq0, Aleq0)
 
-        add_implication(solver, Cleq0, Dleq0)
-        add_implication(solver, Dleq0, Cleq0)
+        _add_implication(solver, Cleq0, Dleq0)
+        _add_implication(solver, Dleq0, Cleq0)
 
         self.assertFalse(solver.is_implication_true(Aleq0, Cleq0))
 
@@ -185,12 +186,12 @@ class TestSolverSetBounds(unittest.TestCase):
         # P1 is always present
         P1 = add_new_non_optional_variable(solver, (0, 1), True)
         P1_lit = Literal(SignedVar(P1, False), BoundValue(-1))
-        add_implication(solver, P1_lit, TrueLiteral)
+        _add_implication(solver, P1_lit, TrueLiteral)
 
         # P2 is present if P1 is true / P1_lit is entailed
         P2 = add_new_non_optional_variable(solver, (0, 1), True)
         P2_lit = Literal(SignedVar(P2, False), BoundValue(-1))
-        add_implication(solver, P2_lit, P1_lit)
+        _add_implication(solver, P2_lit, P1_lit)
 
         # A is present if P2 is true / P3_lit is entailed
         A = add_new_optional_variable(solver, (0, 10), True, P2_lit)

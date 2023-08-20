@@ -403,6 +403,18 @@ class Solver():
         by a value v, there is no need to have it also be in the adjacency
         list for values greater (weaker) than v.
         """
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+        # self.conjunctive_scopes: Dict[Tuple[Literal,...], Literal] = {}
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+        # self.conjunctive_scopes_reverse: Dict[Literal, Tuple[Literal,...]] = {}
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+        # self.conjunctive_scopes_tautologies: Dict[Literal, Literal] = {}
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+        # self.reified_constraints_literals_reverse: Dict[Literal, ConstrExprAny] = {}
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+        # self.reified_constraints_literals: Dict[ConstrExprAny, Literal] = {}
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+        self.reified_constraints: List[Tuple[ConstrExprAny, Literal]] = []
         #########################################################################
         self.events_trail: List[List[SolverEvent]] = [[]]
         """
@@ -420,16 +432,15 @@ class Solver():
         The current decision level.
         """
         #########################################################################
-        self.reified_constraints: List[ReifiedConstraint] = []
-        """
-        """
-        #########################################################################
         self.vars[False].add(ZeroVar)
         self.bound_values[SignedVar(ZeroVar, True)] = BoundValue(0)
         #self.bound_values_event_indices[SignedVar(ZeroVar, True)] = (0, 0)
         self.bound_values[SignedVar(ZeroVar, False)] = BoundValue(0)
         #self.bound_values_event_indices[SignedVar(ZeroVar, False)] = (0, 1)
         self.vars_presence_literals[ZeroVar] = TrueLiteral
+        # self.conjunctive_scopes[tuple()] = TrueLiteral
+        # self.conjunctive_scopes_reverse[TrueLiteral] = tuple()
+        # self.conjunctive_scopes_tautologies[TrueLiteral] = TrueLiteral
 
     #############################################################################
     # UTILITY METHODS
