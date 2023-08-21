@@ -403,18 +403,20 @@ class Solver():
         by a value v, there is no need to have it also be in the adjacency
         list for values greater (weaker) than v.
         """
-        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-        # self.conjunctive_scopes: Dict[Tuple[Literal,...], Literal] = {}
-        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-        # self.conjunctive_scopes_reverse: Dict[Literal, Tuple[Literal,...]] = {}
-        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-        # self.conjunctive_scopes_tautologies: Dict[Literal, Literal] = {}
-        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-        # self.reified_constraints_literals_reverse: Dict[Literal, ConstrExprAny] = {}
-        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-        # self.reified_constraints_literals: Dict[ConstrExprAny, Literal] = {}
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+        self.conjunctive_scopes: Dict[Tuple[Literal,...], Literal] = {}
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+        self.conjunctive_scopes_reverse: Dict[Literal, Tuple[Literal,...]] = {}
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+        self.conjunctive_scopes_tautologies: Dict[Literal, Literal] = {}
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+        self.reified_constraints_literals_reverse: Dict[Literal, ConstrExprAny] = {}
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+        self.reified_constraints_literals: Dict[ConstrExprAny, Literal] = {}
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
         self.reified_constraints: List[Tuple[ConstrExprAny, Literal]] = []
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+        self.unposted_reified_constraints_indices: List[int] = []
         #########################################################################
         self.events_trail: List[List[SolverEvent]] = [[]]
         """
@@ -438,9 +440,9 @@ class Solver():
         self.bound_values[SignedVar(ZeroVar, False)] = BoundValue(0)
         #self.bound_values_event_indices[SignedVar(ZeroVar, False)] = (0, 1)
         self.vars_presence_literals[ZeroVar] = TrueLiteral
-        # self.conjunctive_scopes[tuple()] = TrueLiteral
-        # self.conjunctive_scopes_reverse[TrueLiteral] = tuple()
-        # self.conjunctive_scopes_tautologies[TrueLiteral] = TrueLiteral
+        self.conjunctive_scopes[tuple()] = TrueLiteral
+        self.conjunctive_scopes_reverse[TrueLiteral] = tuple()
+        self.conjunctive_scopes_tautologies[TrueLiteral] = TrueLiteral
 
     #############################################################################
     # UTILITY METHODS
@@ -792,7 +794,7 @@ class Solver():
 
     def increment_decision_level_and_perform_set_literal_decision(self,
         set_literal_decision: SolverDecision.SetLiteral,
-        reasoners: List[SolverReasoner],
+        reasoners: Tuple[SolverReasoner],
     ) -> None:
         """
         Increments the current decision level and applies the given set literal decision.
@@ -860,7 +862,7 @@ class Solver():
 
     def backtrack_to_decision_level(self,
         target_dec_level: int,
-        reasoners: List[SolverReasoner],
+        reasoners: Tuple[SolverReasoner,...],
     ) -> None:
         """
         Backtracks to the target decision level.
@@ -893,7 +895,7 @@ class Solver():
     #############################################################################
 
     def propagate(self,
-        reasoners:List[SolverReasoner],
+        reasoners:Tuple[SolverReasoner,...],
     ) -> Optional[Tuple[
         Union[SolverConflictInfo.InvalidBoundUpdate, SolverConflictInfo.ReasonerExplanation],
         SolverReasoner,
