@@ -410,13 +410,9 @@ class Solver():
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
         self.conjunctive_scopes_tautologies: Dict[Literal, Literal] = {}
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-        self.reified_constraints_literals_reverse: Dict[Literal, ConstrExprAny] = {}
+        self.reifications: Dict[ConstrFormula.Any, Literal] = {}
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-        self.reified_constraints_literals: Dict[ConstrExprAny, Literal] = {}
-        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-        self.reified_constraints: List[Tuple[ConstrExprAny, Literal]] = []
-        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-        self.unposted_reified_constraints_indices: List[int] = []
+        self.reified_constraints: List[ReifiedConstraint] = []
         #########################################################################
         self.events_trail: List[List[SolverEvent]] = [[]]
         """

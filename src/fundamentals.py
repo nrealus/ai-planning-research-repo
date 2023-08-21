@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing import Tuple, NamedTuple, Union
+from typing import Tuple, NamedTuple, Union, Dict, Iterable
+from abc import ABC
 
 #################################################################################
 #################################################################################
@@ -16,7 +17,7 @@ from typing import Tuple, NamedTuple, Union
 #   - BOUND VALUES
 #   - LITERALS
 # - FUNDAMETALS II:
-#   - CONSTRAINT EXPRESSIONS AND REIFIED CONSTRAINTS
+#   - CONSTRAINT FORMULAS AND REIFIED CONSTRAINTS
 #################################################################################
 #################################################################################
 
@@ -182,52 +183,129 @@ Is the negation of the "True" literal, which corresponds to the [-ZeroVar <= -1]
 """
 
 #################################################################################
-# CONSTRAINT EXPRESSIONS AND REIFIED CONSTRAINTS
+# CONSTRAINT FORMULAS AND REIFIED CONSTRAINTS
 #################################################################################
 
-class ConstrExprLiteral(NamedTuple):
-    literal: Literal
+class ConstrFormula(ABC):
+    """
+    A container or "namespace" containing types representing constraint formulas
+    (like a single literal, a conjunction of literals, a disjunction of literals,
+    or a maximum difference between two variables).
 
-    def negation(self) -> ConstrExprLiteral:
-        return ConstrExprLiteral(self.literal.negation())
+    A constraint's formula is obtained by interpreting/decomposing/converting a
+    constraint's expression. The symbols in the expression are
+    interpreted/decomposed/converted into this "formula format".
+    For example, an equality is converted to a conjunction of two literals (which
+    is itself converted to a disjunction of two literals).
 
-class ConstrExprOr(NamedTuple):
-    literals: Tuple[Literal,...]
+    In a nutshell, a constraint's expression defines a constraint at a high level,
+    and a constraint's formula defines a constraint on a low level.
+    """
 
-    def negation(self) -> ConstrExprAnd:
-        return ConstrExprAnd(tuple(lit.negation() for lit in self.literals))
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-class ConstrExprAnd(NamedTuple):
-    literals: Tuple[Literal,...]
+    class SingleLit(NamedTuple):
+        literal: Literal
 
-    def negation(self) -> ConstrExprOr:
-        return ConstrExprOr(tuple(lit.negation() for lit in self.literals))
+        def negation(self) -> ConstrFormula.SingleLit:
+            return ConstrFormula.SingleLit(self.literal.negation())
 
-class ConstrExprMaxDiffCnt(NamedTuple):
-    from_var: Var
-    to_var: Var
-    max_diff: int
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-    def negation(self) -> ConstrExprMaxDiffCnt:
-        return ConstrExprMaxDiffCnt(
-            self.to_var,
-            self.from_var,
-            -self.max_diff-1,   # NOTE: -1 just sitting here
-        )
+    class Or(NamedTuple):
+        literals: Tuple[Literal,...]
 
-#def ConstrExprMaxDiffCtg(NamedTuple):
-#    from_var: Var
-#    to_var: Var
-#    max_diff: int
+        def negation(self) -> ConstrFormula.And:
+            return ConstrFormula.And(tuple(lit.negation() for lit in self.literals))
 
-#def ConstrExprLinear(NamedTuple):
-#    ...
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-ConstrExprAny = Union[
-    ConstrExprLiteral,
-    ConstrExprOr,
-    ConstrExprAnd,
-    ConstrExprMaxDiffCnt,
-]
+    class And(NamedTuple):
+        literals: Tuple[Literal,...]
 
-#ReifiedConstraint = Tuple[ConstrExpr, Literal]
+        def negation(self) -> ConstrFormula.Or:
+            return ConstrFormula.Or(tuple(lit.negation() for lit in self.literals))
+
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+    class MaxDiffCnt(NamedTuple):
+        from_var: Var
+        to_var: Var
+        max_diff: int
+
+        def negation(self) -> ConstrFormula.MaxDiffCnt:
+            return ConstrFormula.MaxDiffCnt(
+                self.to_var,
+                self.from_var,
+                -self.max_diff-1,   # NOTE: -1 just sitting here
+            )
+
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+    #def MaxDiffCtg(NamedTuple):
+    #    from_var: Var
+    #    to_var: Var
+    #    max_diff: int
+
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+    #def Linear(NamedTuple):
+    #    ...
+
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+    Any = Union[
+        SingleLit,
+        Or,
+        And,
+        MaxDiffCnt,
+    ]
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+class ReifiedConstraint(NamedTuple):
+    constr_formula: ConstrFormula.Any
+    reification_literal: Literal
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+class ConstrExprGrammar(ABC):
+
+#    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+#
+#    class Or(NamedTuple):
+#        ...
+#
+#    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+#
+#    class And(NamedTuple):
+#        ...
+#
+#    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+#
+#    class Eq(NamedTuple):
+#        ...
+#
+#    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+#
+#    class Leq(NamedTuple):
+#        ...
+#
+#    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+#
+#       ...
+#
+#    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+    Any = Union[
+        object, object
+#        Or,
+#        And,
+#        Eq,
+#        Leq,
+#       ....
+    ]
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+ConstrExpr = Dict[ConstrExprGrammar.Any, Iterable['ConstrExpr']]

@@ -112,313 +112,6 @@ def add_new_presence_variable(
 
 #################################################################################
 
-def _insert_conjunctive_scope(
-    solver: Solver,
-    presence_literals_conjunction: Tuple[Literal,...],
-    scope_literal: Literal
-) -> None:
-
-    assert presence_literals_conjunction not in solver.conjunctive_scopes
-
-    solver.conjunctive_scopes[presence_literals_conjunction] = scope_literal
-    solver.conjunctive_scopes_reverse[scope_literal] = presence_literals_conjunction
-
-#################################################################################
-
-def _add_reified_constraint(
-    solver: Solver,
-    constr_expr: ConstrExprAny,
-    literal: Literal
-) -> None:
-
-    solver.reified_constraints.append((constr_expr, literal))
-
-#################################################################################
-# 
-# def get_conjunctive_scope_literal(
-#     solver: Solver,
-#     presence_literals_conjunction: Tuple[Literal,...],
-# ) -> Literal:
-#     """
-#     Returns a presence literal that is true if and only if all
-#     given presence literal are true.
-#     """
-#     
-#     return _get_or_make_new_conjunctive_presence_literal_from_full_conjunction(
-#         solver,
-#         _get_flattened_conjunctive_scope(
-#             solver,
-#             ({lit.signed_var: lit.bound_value for lit in presence_literals_conjunction}, tuple()),
-#             False,
-#     ))
-# 
-# #################################################################################
-# 
-# def _get_flattened_conjunctive_scope(
-#     solver: Solver,
-#     conjunctive_scope: Tuple[Dict[SignedVar, BoundValue], Tuple[Literal,...]],
-#     check_for_top_decision_level: bool,
-# ) -> List[Literal]:
-#     """
-#     Flattens a scope (describing the validity/definition conditions of an expression)
-#     into a "full" conjunction of literals.
-#     """
-# 
-#     def is_tautology(lit: Literal):
-# 
-#         return (solver.is_literal_entailed(lit)
-#             and (not check_for_top_decision_level
-#                 or solver.get_index_of_first_event_implying_literal(lit)[0] == 0
-#         ))
-#         
-#     
-#     scope_required_presences, scope_guards = conjunctive_scope
-#     scope_guards = tuple(guard for guard in scope_guards if guard != FalseLiteral)
-# 
-#     literals_conjunction: Dict[SignedVar, BoundValue] = {}
-# 
-#     for s_var, b_val in scope_required_presences.items():
-#         lit = Literal(s_var, b_val)
-# 
-#         # If a presence literal is defined as a conjunction of other literals,
-#         # replace it with them.
-#         flattened = solver.conjunctive_scopes_reverse.get(lit, None)
-#         if flattened is not None:
-# 
-#             for l in flattened:
-#                 if (not is_tautology(l)
-#                     and (l.signed_var not in literals_conjunction
-#                         or l.bound_value.is_stronger_than(literals_conjunction[l.signed_var])
-#                 )):
-#                     literals_conjunction[l.signed_var] = l.bound_value
-#         
-#         # Otherwise, if the presence literal is not considered to be a tautology,
-#         # do add it to the conjunction
-#         elif not is_tautology(lit):
-#             literals_conjunction[lit.signed_var] = lit.bound_value
-# 
-#     for guard in scope_guards:
-#         guard_neg = guard.negation()
-#     
-#         # If a presence literal is guarded, remove it from the conjunction.
-#         if (guard_neg.signed_var in literals_conjunction
-#             and literals_conjunction[guard_neg.signed_var].is_stronger_than(guard_neg.bound_value)
-#         ):
-#             # FIXME: + 1 used here instead of a defined constant
-#             weaker = Literal(guard_neg.signed_var, BoundValue(guard.bound_value + BoundValue(1)))
-#             if is_tautology(weaker):
-#                 literals_conjunction.pop(guard_neg.signed_var)
-#             else:
-#                 literals_conjunction[guard_neg.signed_var] = weaker.bound_value
-# 
-#     # Convert the set of literals to a list, and sort it (lexicographically).
-#     literals_conjunction_as_list = [Literal(signed_var, bound_value)
-#         for signed_var, bound_value in literals_conjunction.items()]
-#     literals_conjunction_as_list.sort()
-#     return literals_conjunction_as_list
-# 
-# #################################################################################
-# 
-# def _get_or_make_new_conjunctive_presence_literal_from_full_conjunction(
-#     solver: Solver,
-#     literals_conjunction: List[Literal],
-# ) -> Literal:
-# 
-#     # If the scope already exists, return it immediately.
-#     if tuple(literals_conjunction) in solver.conjunctive_scopes:
-#         return solver.conjunctive_scopes[tuple(literals_conjunction)]
-# 
-#     # We need to create a new literal l such that l <=> l1 & l2 & ... & ln
-#     # (where li are the (presence) literals composing the conjunctive scope)
-# 
-#     # Simplify the conjunction of literals
-#     simplified_literal_attempt: Optional[Literal] = None
-# 
-#     if len(literals_conjunction) == 1:
-#         simplified_literal_attempt = literals_conjunction[0]
-#     
-#     elif len(literals_conjunction) == 2:
-# 
-#         # If l1 => l2, the conjunction can be simplified to l1
-#         if solver.is_implication_true(literals_conjunction[0], literals_conjunction[1]):
-#             simplified_literal_attempt = literals_conjunction[0]
-#     
-#         # If l2 => l1, the conjunction can be simplified to l2
-#         elif solver.is_implication_true(literals_conjunction[1], literals_conjunction[0]):
-#             simplified_literal_attempt = literals_conjunction[1]
-#    
-#         # If l1 and l2 are exclusive (i.e. cannot be true at the same time, i.e. l1 => !l2),
-#         # the conjunctive scope literal is false. However, we cannot directly use FalseLiteral,
-#         # because we need to uniquely identify the literal as the conjunction of the other two
-#         # in some corner cases. So we create a new literal that is always false.
-#         if solver.is_implication_true(literals_conjunction[0], literals_conjunction[1].negation()):
-#             simplified_literal_attempt = Literal(
-#                 SignedVar(_add_new_variable(solver, (0,0), False), False),
-#                 BoundValue(-1),
-#             )
-# 
-#     # If a simplification was found, we return it as the scope literal of the conjunction.
-#     if simplified_literal_attempt is not None:
-#         _insert_conjunctive_scope(solver, tuple(literals_conjunction), simplified_literal_attempt)
-#         return simplified_literal_attempt
-#     
-#     # If no simplication was found, a new literal l is created such that:
-#     # - l => l1, l => l2, ...
-#     # - l v !l1 v !l2 v ... v !ln
-#     # This literal l will indeed satisfy l <=> l1 & l2 & ... & ln.
-#     else:
-#         literal = Literal(
-#             SignedVar(_add_new_variable(solver, (0,0), False), False),
-#             BoundValue(-1),
-#         )
-#         clause_literals: List[Literal] = []
-#         for lit in literals_conjunction:
-#             _add_implication(solver, literal, lit)
-#             clause_literals.append(lit.negation())
-#             _enforce_expr(solver, ConstrExprOr(tuple(clause_literals)), [])
-#         return literal
-# 
-# #################################################################################
-# 
-# def _enforce_expr(
-#     solver: Solver,
-#     constr_expr: ConstrExprAny2,
-#     conjunctive_scope: List[Literal],
-# ):
-#     """
-#     Enforce the given expression to be true whenever all literals of the scope are true.
-# 
-#     Similar to posintg a constraint in CP solvers.
-# 
-#     Internally; the expression is reified to an optional literal that is true,
-#     when the expression is valid/defined and absent otherwise.
-#     """
-# 
-#     scope_literal = _get_or_make_new_conjunctive_presence_literal_from_full_conjunction(
-#         solver,
-#         conjunctive_scope,
-#     )
-# 
-#     # Bind the expression with an optional variable that is always true in the scope.
-#     # This optional variable can be retrieved if it already exists, or can be created on the fly.
-#     _bind(solver, constr_expr, _get_tautology_of_scope(solver, scope_literal))
-# 
-# #################################################################################
-# 
-# def _get_tautology_of_scope(
-#     solver: Solver,
-#     scope_literal: Literal,
-# ) -> Literal:
-#     """
-#     Returns a literal whose presence is scope_literal and that is always true.
-# 
-#     This is functionally equivalent to creating a new optional boolean variable
-#     with domain {1} and with presence scope_literal, but will ensure that only
-#     one such variable is created in this scope
-#     """
-# 
-#     if scope_literal in solver.conjunctive_scopes_tautologies:
-#         return solver.conjunctive_scopes_tautologies[scope_literal]
-# 
-#     else:
-#         var = add_new_optional_variable(solver, (1, 1), False, scope_literal)
-#         literal = Literal(SignedVar(var, False), BoundValue(-1))
-#         solver.conjunctive_scopes_tautologies[scope_literal] = literal
-#         return literal
-# 
-# #################################################################################
-# 
-# def _get_expr_conjunctive_scope(
-#     solver: Solver,
-#     constr_expr: ConstrExprAny2,
-# ) -> Tuple[Dict[SignedVar, BoundValue], Tuple[Literal,...]]:
-#     """
-#     Get the validity scope of an expression
-#     """
-#     
-#     if isinstance(constr_expr, ConstrExprLiteral):
-#         prez_lit = solver.vars_presence_literals[constr_expr.literal.signed_var.var]
-#         return (
-#             {prez_lit.signed_var: prez_lit.bound_value},
-#             tuple(),
-#         )
-# 
-#     elif isinstance(constr_expr, ConstrExprOr):
-#         prez_lits = [solver.vars_presence_literals[lit.signed_var.var]
-#             for lit in constr_expr.literals]
-#         return (
-#             {prez_lit.signed_var: prez_lit.bound_value for prez_lit in prez_lits},
-#             tuple(lit for lit in constr_expr.literals
-#                 if solver.vars_presence_literals[lit.signed_var.var] == TrueLiteral),
-#         )
-# 
-#     elif isinstance(constr_expr, ConstrExprAnd):
-#         prez_lits = [solver.vars_presence_literals[lit.signed_var.var]
-#             for lit in constr_expr.literals]
-#         return (
-#             {prez_lit.signed_var: prez_lit.bound_value for prez_lit in prez_lits},
-#             tuple(lit.negation() for lit in constr_expr.literals
-#                 if solver.vars_presence_literals[lit.negation().signed_var.var] == TrueLiteral),
-#         )
-# 
-#     elif isinstance(constr_expr, ConstrExprMaxDiffCnt):
-#         prez_lit_from_var = solver.vars_presence_literals[constr_expr.from_var]
-#         prez_lit_to_var = solver.vars_presence_literals[constr_expr.from_var]
-#         return (
-#             { prez_lit_from_var.signed_var: prez_lit_from_var.bound_value,
-#                 prez_lit_to_var.signed_var: prez_lit_to_var.bound_value },
-#             tuple(),
-#         )
-# 
-#     else:
-#         assert False
-# 
-# #################################################################################
-# 
-# def _bind(
-#     solver: Solver,
-#     constr_expr: ConstrExprAny2,
-#     literal: Literal,
-# ) -> None:
-#     """
-#     Record that literal <=> constr_expr
-#     (i.e. literal is True iff constraint is satisfied)
-#     """
-# 
-#     # FIXME expr = expr.decompose(model) ????
-# 
-#     # Compute the validity scope of the expression, which can be
-#     # larger than that of the literal
-#     expr_scope_literal = _get_or_make_new_conjunctive_presence_literal_from_full_conjunction(
-#         solver,
-#         _get_flattened_conjunctive_scope(
-#             solver,
-#             _get_expr_conjunctive_scope(solver, constr_expr),
-#             False,
-#         )
-#     )
-#     
-#     # If the expression is already reified to a literal l,
-#     # unify it (l) with the parameter literal.
-#     reified_lit = solver.reified_constraints_literals.get(constr_expr, None)
-#     if reified_lit is not None:
-#         if literal != reified_lit:
-#             _add_reified_constraint(solver, constr_expr, literal)
-#     
-#     # If the expression is not already reified and
-#     # scopes are compatible, suggest literal to be the reified literal.
-#     elif expr_scope_literal == solver.vars_presence_literals[literal.signed_var.var]:
-#         _add_reified_constraint(solver, constr_expr, literal)
-#     
-#     # If the expression is not already reified,
-#     # but literal cannot be used directly because it has a different scope
-#     else:
-#         reified_lit = None#FIXME_reify_core(constr_expr)
-#         if literal != reified_lit:
-#             _add_reified_constraint(solver, ConstrExprLiteral(reified_lit), literal)
-# 
-#################################################################################
-
 def _add_implication(
     solver: Solver,
     from_literal: Literal,
@@ -482,13 +175,356 @@ def _add_implication(
             )
 
 #################################################################################
-# NOTE: THE SIMPLEST / CLEAREST OPTION WOULD PROBABLY BE TO
-# "ISOLATE" OR "ENCAPSULATE" SCOPES AND REIFICATIONS DATA
-# IN 2 NESTED CLASSES IN THE SOLVER CLASS.
-# ADDITIONALLY IT COULD BE POSSIBLE (but seems weird if these
-# would be nested classes of Solver) TO PASS THEM AS PARAMETERS
-# IN THESE API FUNCTIONS
 
+def _insert_conjunctive_scope(
+    solver: Solver,
+    presence_literals_conjunction: Tuple[Literal,...],
+    scope_literal: Literal
+) -> None:
+
+    assert presence_literals_conjunction not in solver.conjunctive_scopes
+
+    solver.conjunctive_scopes[presence_literals_conjunction] = scope_literal
+    solver.conjunctive_scopes_reverse[scope_literal] = presence_literals_conjunction
+
+#################################################################################
+
+def enforce_constr_expr(
+    solver: Solver,
+    constr_expr: ConstrExpr,
+    scope_literals_conjunction: Tuple[Literal,...],
+) -> Literal:
+    
+    constr_formula = # TODO_decompose_constr_expr_to_formula()
+    return _enforce_constr_formula(solver, constr_formula, scope_literals_conjunction)
+        
+#################################################################################
+
+def _enforce_constr_formula(
+    solver: Solver,
+    constr_formula: ConstrFormula.Any,
+    scope_literals_conjunction: Tuple[Literal,...],
+) -> Literal:
+    """
+    Enforces the given formula to be true whenever all literals of the scope are true.
+
+    Similar to posintg a constraint in CP solvers.
+
+    Internally, the formula is reified to an optional literal that is true,
+    when the formula is valid/defined and absent otherwise.
+
+    Returns that literal.
+    """
+
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+    def get_tautology_of_scope(
+        _scope_literal: Literal,
+    ) -> Literal:
+        """
+        Returns a literal whose presence is scope_literal and that is always true.
+
+        This is functionally equivalent to creating a new optional boolean variable
+        with domain {1} and with presence scope_literal, but will ensure that only
+        one such variable is created in this scope.
+        
+        Indeed, the TrueLiteral cannot work for this, because it (just as its
+        variable, the special ZeroVar variable) is present always/in all scopes.
+        """
+
+        if _scope_literal in solver.conjunctive_scopes_tautologies:
+            return solver.conjunctive_scopes_tautologies[_scope_literal]
+
+        else:
+            var = add_new_optional_variable(solver, (1, 1), False, _scope_literal)
+            literal = Literal(SignedVar(var, False), BoundValue(-1))
+            solver.conjunctive_scopes_tautologies[_scope_literal] = literal
+            return literal
+
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+    def get_formula_conjunctive_scope(
+        _constr_formula: ConstrFormula.Any,
+    ) -> Tuple[Dict[SignedVar, BoundValue], Tuple[Literal,...]]:
+        """
+        Get the (validity) scope of an formula.
+
+        It is represented by a pair (tuple):
+        - The 1st element (aka `scope_required_presences`) is the set of presence
+        literals that appear in the formula.
+        - The 2nd element (aka `scope_guards`) is a set of literals such that if
+        one of them is true, the formula is defined/valid.
+        """
+        
+        if isinstance(_constr_formula, ConstrFormula.SingleLit):
+            prez_lit = solver.vars_presence_literals[_constr_formula.literal.signed_var.var]
+            return (
+                { prez_lit.signed_var: prez_lit.bound_value },
+                (),
+            )
+
+        elif isinstance(_constr_formula, ConstrFormula.Or):
+            prez_lits = [solver.vars_presence_literals[lit.signed_var.var]
+                for lit in _constr_formula.literals]
+            return (
+                { prez_lit.signed_var: prez_lit.bound_value for prez_lit in prez_lits },
+                tuple(lit for lit in _constr_formula.literals
+                    if solver.vars_presence_literals[lit.signed_var.var] == TrueLiteral),
+            )
+
+        elif isinstance(_constr_formula, ConstrFormula.And):
+            prez_lits = [solver.vars_presence_literals[lit.signed_var.var]
+                for lit in _constr_formula.literals]
+            return (
+                { prez_lit.signed_var: prez_lit.bound_value for prez_lit in prez_lits },
+                tuple(lit.negation() for lit in _constr_formula.literals
+                    if solver.vars_presence_literals[lit.negation().signed_var.var] == TrueLiteral),
+            )
+
+        elif isinstance(_constr_formula, ConstrFormula.MaxDiffCnt):
+            prez_lit_from_var = solver.vars_presence_literals[_constr_formula.from_var]
+            prez_lit_to_var = solver.vars_presence_literals[_constr_formula.from_var]
+            return (
+                { prez_lit_from_var.signed_var: prez_lit_from_var.bound_value,
+                  prez_lit_to_var.signed_var: prez_lit_to_var.bound_value },
+                (),
+            )
+
+        else:
+            assert False
+
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+    def get_flattened_conjunctive_scope_literals(
+        _conjunctive_scope: Tuple[Dict[SignedVar, BoundValue], Tuple[Literal,...]],
+        _check_for_top_decision_level: bool,
+    ) -> Tuple[Literal,...]:
+        """
+        Flattens a scope (describing the validity/definition conditions of
+        a formula) represented as a pair into a conjunction of literals.
+        """
+
+        scope_required_presences, scope_guards = _conjunctive_scope
+        scope_guards = tuple(guard for guard in scope_guards if guard != FalseLiteral)
+
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+        def is_tautology(lit: Literal):
+
+            return (solver.is_literal_entailed(lit)
+                and (not _check_for_top_decision_level
+                    or solver.get_index_of_first_event_implying_literal(lit)[0] == 0
+            ))
+
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+        flattened_scope_literals_conjunction_dict: Dict[SignedVar, BoundValue] = {}
+
+        for s_var, b_val in scope_required_presences.items():
+            lit = Literal(s_var, b_val)
+
+            # If a presence literal is defined as a conjunction of other literals, replace it with them.
+            flattened = solver.conjunctive_scopes_reverse.get(lit, None)
+            if flattened is not None:
+
+                for l in flattened:
+                    if (not is_tautology(l)
+                        and (l.signed_var not in flattened_scope_literals_conjunction_dict
+                            or l.bound_value.is_stronger_than(flattened_scope_literals_conjunction_dict[l.signed_var])
+                        )
+                    ):
+                        flattened_scope_literals_conjunction_dict[l.signed_var] = l.bound_value
+
+            # Otherwise, if the presence literal is not considered to be a tautology,
+            # do add it to the conjunction
+            elif not is_tautology(lit):
+                flattened_scope_literals_conjunction_dict[lit.signed_var] = lit.bound_value
+
+        for guard in scope_guards:
+            guard_neg = guard.negation()
+
+            # If a presence literal is guarded, remove it from the conjunction.
+            if (guard_neg.signed_var in flattened_scope_literals_conjunction_dict
+                and flattened_scope_literals_conjunction_dict[guard_neg.signed_var].is_stronger_than(guard_neg.bound_value)
+            ):
+                # FIXME: + 1 used here instead of a defined constant
+                weaker = Literal(guard_neg.signed_var, BoundValue(guard.bound_value + BoundValue(1)))
+                if is_tautology(weaker):
+                    flattened_scope_literals_conjunction_dict.pop(guard_neg.signed_var)
+                else:
+                    flattened_scope_literals_conjunction_dict[guard_neg.signed_var] = weaker.bound_value
+
+        # Convert the set/conjunction of literals to a list, and sort it (lexicographically).
+        flattened_scope_literals_conjunction_list = [Literal(signed_var, bound_value)
+            for signed_var, bound_value in flattened_scope_literals_conjunction_dict.items()
+        ]
+        flattened_scope_literals_conjunction_list.sort()
+        return tuple(flattened_scope_literals_conjunction_list)
+
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+    def get_or_make_scope_literal_from_flattened_conjunctive_scope_literals(
+        _scope_literals_conjunction: Tuple[Literal,...],
+    ) -> Literal:
+        """
+        Return a scope literal corresponding to the scope defined by the
+        given conjunction of scope literals.
+
+        If there isn't already a scope literal like that, add it to the solver.
+        """
+
+        # If the scope already exists, return it immediately.
+        if _scope_literals_conjunction in solver.conjunctive_scopes:
+            return solver.conjunctive_scopes[_scope_literals_conjunction]
+
+        # We need to create a new literal l such that l <=> l1 & l2 & ... & ln
+        # (where li are the (presence) literals composing the conjunctive scope)
+
+        # Simplify the conjunction of literals
+        simplified_literal_attempt: Optional[Literal] = None
+
+        if len(_scope_literals_conjunction) == 1:
+            simplified_literal_attempt = _scope_literals_conjunction[0]
+
+        elif len(_scope_literals_conjunction) == 2:
+
+            # If l1 => l2, the conjunction can be simplified to l1
+            if solver.is_implication_true(_scope_literals_conjunction[0], _scope_literals_conjunction[1]):
+                simplified_literal_attempt = _scope_literals_conjunction[0]
+
+            # If l2 => l1, the conjunction can be simplified to l2
+            elif solver.is_implication_true(_scope_literals_conjunction[1], _scope_literals_conjunction[0]):
+                simplified_literal_attempt = _scope_literals_conjunction[1]
+    
+            # If l1 and l2 are exclusive (i.e. cannot be true at the same time, i.e. l1 => !l2),
+            # the conjunctive scope literal is false. However, we cannot directly use FalseLiteral,
+            # because we need to uniquely identify the literal as the conjunction of the other two
+            # in some corner cases. So we create a new literal that is always false.
+            if solver.is_implication_true(_scope_literals_conjunction[0], _scope_literals_conjunction[1].negation()):
+                simplified_literal_attempt = Literal(
+                    SignedVar(_add_new_variable(solver, (0,0), False), False),
+                    BoundValue(-1),
+                )
+
+        # If a simplification was found, we return it as the scope literal of the conjunction.
+        if simplified_literal_attempt is not None:
+            _insert_conjunctive_scope(solver, _scope_literals_conjunction, simplified_literal_attempt)
+            return simplified_literal_attempt
+
+        # If no simplication was found, a new literal l is created such that:
+        # - l => l1, l => l2, ...
+        # - l v !l1 v !l2 v ... v !ln
+        # This literal l will indeed satisfy l <=> l1 & l2 & ... & ln.
+        else:
+            literal = Literal(
+                SignedVar(_add_new_variable(solver, (0,0), False), False),
+                BoundValue(-1),
+            )
+            clause_literals: List[Literal] = []
+            for lit in _scope_literals_conjunction:
+                _add_implication(solver, literal, lit)
+                clause_literals.append(lit.negation())
+            bind(
+                ConstrFormula.Or(tuple(clause_literals)),
+                get_tautology_of_scope(
+                    get_or_make_scope_literal_from_flattened_conjunctive_scope_literals(())
+                )
+            )
+            _insert_conjunctive_scope(solver, _scope_literals_conjunction, literal)
+            return literal
+
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+    def reify_and_add_constraint_formula(
+        _constr_formula: ConstrFormula.Any,
+    ) -> Literal:
+        """
+        Reify a constraint and add/register the reification in the solver.
+
+        The returned "reification literal" is *optional* and defined such
+        that it is present iff the formula is valid (typically meaning
+        that all variables involved in the formula are present)
+        """
+        if _constr_formula in solver.reifications:
+            return solver.reifications[_constr_formula]
+    
+#        scope_literal = get_or_create_formula_scope_literal(_constr_formula)
+        scope_literal = get_or_make_scope_literal_from_flattened_conjunctive_scope_literals(
+            get_flattened_conjunctive_scope_literals(
+                get_formula_conjunctive_scope(_constr_formula),
+                False,
+            )
+        )
+        
+        var = add_new_optional_variable(solver, (0,1), True, scope_literal)
+        reification_literal = Literal(SignedVar(var, False), BoundValue(-1))
+
+        solver.reifications[_constr_formula] = reification_literal
+        solver.reifications[_constr_formula.negation()] = reification_literal.negation()
+        solver.reified_constraints.append(ReifiedConstraint(_constr_formula, reification_literal))
+
+        return reification_literal
+
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+    def bind(
+        _constr_formula: ConstrFormula.Any,
+        _literal: Literal,
+    ) -> None:
+        """
+        Record that the given literal <=> the given formula (constrain)
+        (i.e. the literal is True iff the constraint is satisfied)
+        """
+
+        # Compute the validity scope of the formula
+        # (it can be larger than that of the literal)
+        formula_scope_literal = get_or_make_scope_literal_from_flattened_conjunctive_scope_literals(
+            get_flattened_conjunctive_scope_literals(
+                get_formula_conjunctive_scope(_constr_formula),
+                False,
+            )
+        )
+        
+        # If the formula is already reified to a literal l,
+        # unify it (l) with the parameter literal.
+        reification_literal = solver.reifications.get(_constr_formula, None)
+        if reification_literal is not None:
+            if _literal != reification_literal:
+                solver.reified_constraints.append(ReifiedConstraint(
+                    ConstrFormula.SingleLit(reification_literal),
+                    _literal,
+                ))
+        
+        # If the formula is not already reified and
+        # scopes are compatible, suggest literal to be the reified literal.
+        elif formula_scope_literal == solver.vars_presence_literals[_literal.signed_var.var]:
+            solver.reifications[_constr_formula] = _literal
+            solver.reifications[_constr_formula.negation()] = _literal.negation()
+            solver.reified_constraints.append(ReifiedConstraint(_constr_formula, _literal))
+        
+        # If the formula is not already reified,
+        # but literal cannot be used directly because it has a different scope
+        else:
+            reification_literal = reify_and_add_constraint_formula(_constr_formula)
+            if _literal != reification_literal:
+                solver.reified_constraints.append(ReifiedConstraint(
+                    ConstrFormula.SingleLit(reification_literal),
+                    _literal,
+                ))
+
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+    scope_literal = get_or_make_scope_literal_from_flattened_conjunctive_scope_literals(
+        scope_literals_conjunction,
+    )
+
+    # Bind the formula with an optional variable that is always true in the scope.
+    # This optional variable can be retrieved if it already exists, or can be created on the fly.
+    bind(constr_formula, get_tautology_of_scope(scope_literal))
+    return scope_literal
+
+#################################################################################
+#################################################################################
 #################################################################################
 #################################################################################
 #################################################################################

@@ -41,9 +41,9 @@ def search(
     # Until this is clarified, I choose to follow a simpler approach: do the constraint
     # posting / initial propagation once at the beginning, and make it explicit in the code.
     while last_unposted_constraint_index < len(solver.reified_constraints):
-        (reified_constr_expr, reified_constr_literal) = solver.reified_constraints[last_unposted_constraint_index]
+        (constr_formula, reification_literal) = solver.reified_constraints[last_unposted_constraint_index]
 
-        scope_literal = solver.vars_presence_literals[reified_constr_literal.signed_var.var]
+        scope_literal = solver.vars_presence_literals[reification_literal.signed_var.var]
         
         # If the scope of the constraint is false, it means
         # the constraint is absent. So it is ignored.
@@ -51,10 +51,10 @@ def search(
             pass
         
         else:
-            res = _post_constraint(
+            res = _actually_post_reified_constraint(
                 solver,
                 sat_reasoner,
-                (reified_constr_expr, reified_constr_literal),
+                ReifiedConstraint(constr_formula, reification_literal),
             )
             if isinstance(res, SolverConflictInfo.InvalidBoundUpdate):
                 return "INCONSISTENT"
@@ -124,70 +124,153 @@ def search(
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-def _post_constraint(
+# aka initially propagate a constraint
+def _actually_post_reified_constraint(
     solver: Solver,
     sat_reasoner: SATReasoner,
 #    diff_reasoner: ,
-    reified_constraint: Tuple[ConstrExprAny, Literal],
+    reified_constraint: ReifiedConstraint,
 ) -> Optional[SolverConflictInfo.InvalidBoundUpdate]:
     """
     """
     
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+    def _add_clause_from_raw_clause_literals_and_scope(
+        raw_clause_literals: Tuple[Literal,...],
+        raw_scope_literal: Literal,
+    # FIXME: shouldn't we actually ALWAYS want to do this ?
+        return_false_if_tautological_clause_literals: bool,
+    ) -> Union[bool, SolverConflictInfo.InvalidBoundUpdate]:
+
+        clause_literals: List[Literal] = list(raw_clause_literals)
+        processed_scope_literal: Literal = raw_scope_literal
+
+        # Sort clause literals (lexicographically) and remove duplicate
+        # literals (weaker literals on the same signed variable).
+
+        clause_literals.sort()
+
+        n = len(raw_clause_literals)
+        i = 0
+        while i < n-1:
+            # Because the clause literals are now lexicographically sorted,
+            # we know that if two literals are on the same signed variable,
+            # the weaker one is necessarily the next one.
+            if clause_literals[i].entails(clause_literals[i+1]):
+                clause_literals.pop(i)
+            else:
+                i += 1
+
+        # Remove clause literals that are guaranteed to not become true
+        # (i.e. whose value is False / whose negation literal is entailed)
+
+        n = len(clause_literals)
+        i = 0
+        while i < n:
+            if solver.is_literal_entailed(clause_literals[i].negation()):
+                clause_literals.pop(i)
+            else:
+                i += 1
+
+        if return_false_if_tautological_clause_literals:
+            n = len(raw_clause_literals)
+            i = 0
+            while i < n-1:
+                if clause_literals[i].signed_var == clause_literals[i+1].signed_var.opposite_signed_var():
+                    if clause_literals[i].bound_value + clause_literals[i+1].bound_value >= 0:
+                        return False
+
+        # Analyze processed clause literals and scope.
+        #
+        # If the processing of the clause literals removed all of them,
+        # then the scope must be enforced to be false.
+        #
+        # If the processed clause literals are not empty, the we must make
+        # sure the clause added to the solver (or rather its sat reasoner)
+        # can be unit propagated safely, as its literals' variables can be optional.
+        #
+        # NOTE: this could be generalized to look at literals in the clause as potential scopes
+
+        if len(clause_literals) == 0:
+
+            processed_scope_literal_neg = processed_scope_literal.negation()
+
+            scope_negation_enforcement_result = solver.set_bound_value(
+                processed_scope_literal_neg.signed_var,
+                processed_scope_literal_neg.bound_value,
+                SolverCause.Encoding()
+            ) 
+            if isinstance(scope_negation_enforcement_result, SolverConflictInfo.InvalidBoundUpdate):
+                return scope_negation_enforcement_result
+            else:
+                return True
+
+        elif all(solver.is_implication_true(
+            solver.vars_presence_literals[lit.signed_var.var],processed_scope_literal)
+            for lit in clause_literals
+        ):
+            pass
+        
+        else:
+            clause_literals.append(processed_scope_literal.negation())
+            processed_scope_literal = TrueLiteral
+
+        sat_reasoner.add_new_fixed_clause_with_scope(
+            tuple(clause_literals),
+            processed_scope_literal)
+        return True
+
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
     assert solver.dec_level == 0
 
-    (constr_expr, reified_constr_literal) = reified_constraint
+    (constr_formula, reification_literal) = reified_constraint
 
-    scope_literal = solver.vars_presence_literals[reified_constr_literal.signed_var.var]
+    scope_literal = solver.vars_presence_literals[reification_literal.signed_var.var]
 
-    if isinstance(constr_expr, ConstrExprLiteral):
+    if isinstance(constr_formula, ConstrFormula.SingleLit):
 
         assert solver.is_implication_true(
             scope_literal,
-            solver.vars_presence_literals[constr_expr.literal.signed_var.var])
+            solver.vars_presence_literals[constr_formula.literal.signed_var.var])
 
         _add_clause_from_raw_clause_literals_and_scope(
-            solver,
-            sat_reasoner, 
-            (reified_constr_literal.negation(), constr_expr.literal),
+            (reification_literal.negation(), constr_formula.literal),
             scope_literal,
             False,
         )
         _add_clause_from_raw_clause_literals_and_scope(
-            solver,
-            sat_reasoner, 
-            (constr_expr.literal.negation(), reified_constr_literal),
+            (constr_formula.literal.negation(), reification_literal),
             scope_literal,
             False,
         )
 
-    elif isinstance(constr_expr, ConstrExprMaxDiffCnt):
+    elif isinstance(constr_formula, ConstrFormula.MaxDiffCnt):
+        #FIXME
         # _add_reified_edge(
         #     solver,
         #     diff_reasoner,
-        #     reified_constr_literal,
-        #     constr_expr.to_var,
-        #     constr_expr.from_var,
-        #     constr_expr.max_diff,
+        #     reification_literal,
+        #     constr_.to_var,
+        #     constr_.from_var,
+        #     constr_.max_diff,
         # )
         pass
 
-    elif isinstance(constr_expr, ConstrExprOr):
+    elif isinstance(constr_formula, ConstrFormula.Or):
 
-        if solver.is_literal_entailed(reified_constr_literal):
+        if solver.is_literal_entailed(reification_literal):
             _add_clause_from_raw_clause_literals_and_scope(
-                solver,
-                sat_reasoner,
-                constr_expr.literals,
+                constr_formula.literals,
                 scope_literal,
                 False,
             )
             return None
         
-        elif solver.is_literal_entailed(reified_constr_literal.negation()):
-            for lit in constr_expr.literals:
+        elif solver.is_literal_entailed(reification_literal.negation()):
+            for lit in constr_formula.literals:
                 res = _add_clause_from_raw_clause_literals_and_scope(
-                    solver,
-                    sat_reasoner,
                     (lit.negation(),),
                     scope_literal,
                     False,
@@ -199,20 +282,16 @@ def _post_constraint(
         else:
 
             res = _add_clause_from_raw_clause_literals_and_scope(
-                solver,
-                sat_reasoner,
-                (reified_constr_literal.negation(),)+constr_expr.literals,
+                (reification_literal.negation(),)+constr_formula.literals,
                 scope_literal,
                 True,
             )
             if isinstance(res, SolverConflictInfo.InvalidBoundUpdate):
                 return res
             
-            for literal in constr_expr.literals:
+            for literal in constr_formula.literals:
                 res = _add_clause_from_raw_clause_literals_and_scope(
-                    solver,
-                    sat_reasoner,
-                    (literal.negation(), reified_constr_literal),
+                    (literal.negation(), reification_literal),
                     scope_literal,
                     False,
                 )
@@ -221,104 +300,15 @@ def _post_constraint(
 
             return None
 
-    elif isinstance(constr_expr, ConstrExprAnd):
+    elif isinstance(constr_formula, ConstrFormula.And):
 
-        return _post_constraint(
+        return _actually_post_reified_constraint(
             solver,
             sat_reasoner,
-            (constr_expr.negation(), reified_constr_literal.negation()),
+            ReifiedConstraint(constr_formula.negation(), reification_literal.negation()),
         )
 
     else:
         assert False
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-def _add_clause_from_raw_clause_literals_and_scope(
-    solver: Solver,
-    sat_reasoner: SATReasoner,
-    raw_clause_literals: Tuple[Literal,...],
-    raw_scope_literal: Literal,
-# FIXME: shouldn't we actually ALWAYS want to do this ?
-    return_false_if_tautological_clause_literals: bool,
-) -> Union[bool, SolverConflictInfo.InvalidBoundUpdate]:
-
-    assert solver.dec_level == 0
-
-    clause_literals: List[Literal] = list(raw_clause_literals)
-    processed_scope_literal: Literal = raw_scope_literal
-
-    # Sort clause literals (lexicographically) and remove duplicate
-    # literals (weaker literals on the same signed variable).
-
-    clause_literals.sort()
-
-    n = len(raw_clause_literals)
-    i = 0
-    while i < n-1:
-        # Because the clause literals are now lexicographically sorted,
-        # we know that if two literals are on the same signed variable,
-        # the weaker one is necessarily the next one.
-        if clause_literals[i].entails(clause_literals[i+1]):
-            clause_literals.pop(i)
-        else:
-            i += 1
-
-    # Remove clause literals that are guaranteed to not become true
-    # (i.e. whose value is False / whose negation literal is entailed)
-
-    n = len(clause_literals)
-    i = 0
-    while i < n:
-        if solver.is_literal_entailed(clause_literals[i].negation()):
-            clause_literals.pop(i)
-        else:
-            i += 1
-
-    if return_false_if_tautological_clause_literals:
-        n = len(raw_clause_literals)
-        i = 0
-        while i < n-1:
-            if clause_literals[i].signed_var == clause_literals[i+1].signed_var.opposite_signed_var():
-                if clause_literals[i].bound_value + clause_literals[i+1].bound_value >= 0:
-                    return False
-
-    # Analyze processed clause literals and scope.
-    #
-    # If the processing of the clause literals removed all of them,
-    # then the scope must be enforced to be false.
-    #
-    # If the processed clause literals are not empty, the we must make
-    # sure the clause added to the solver (or rather its sat reasoner)
-    # can be unit propagated safely, as its literals' variables can be optional.
-    #
-    # NOTE: this could be generalized to look at literals in the clause as potential scopes
-
-    if len(clause_literals) == 0:
-
-        processed_scope_literal_neg = processed_scope_literal.negation()
-
-        scope_negation_enforcement_result = solver.set_bound_value(
-            processed_scope_literal_neg.signed_var,
-            processed_scope_literal_neg.bound_value,
-            SolverCause.Encoding()
-        ) 
-        if isinstance(scope_negation_enforcement_result, SolverConflictInfo.InvalidBoundUpdate):
-            return scope_negation_enforcement_result
-        else:
-            return True
-
-    elif all(solver.is_implication_true(
-        solver.vars_presence_literals[lit.signed_var.var],processed_scope_literal)
-        for lit in clause_literals
-    ):
-        pass
-    
-    else:
-        clause_literals.append(processed_scope_literal.negation())
-        processed_scope_literal = TrueLiteral
-
-    sat_reasoner.add_new_fixed_clause_with_scope(
-        tuple(clause_literals),
-        processed_scope_literal)
-    return True
