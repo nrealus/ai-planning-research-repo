@@ -2,11 +2,17 @@ from __future__ import annotations
 
 #################################################################################
 
-from fundamentals import *
+from fundamentals import (
+    SignedVar, BoundVal, Lit, TRUE_LIT,
+)
 
-from solver import *
-from solver_api import *
-from solver_api import _insert_implication_between_literals_on_non_optional_vars
+from solver import SolverCauses, SolverConflictInfo, Solver
+
+from solver_api import (
+    add_new_non_optional_variable,
+    add_new_optional_variable,
+    _insert_implication_between_literals_on_non_optional_vars
+)
 
 import unittest
 
