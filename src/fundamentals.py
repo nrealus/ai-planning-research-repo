@@ -435,7 +435,7 @@ class TightDisjunction():
 
         # If the literals are indicated as already in tight form,
         if self._already_tight:
-            self.__setattr__('literals', tuple(literals))
+            object.__setattr__(self, 'literals', tuple(literals))
 
         # Otherwise, tighten them.
         else:
