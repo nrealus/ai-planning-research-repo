@@ -526,6 +526,9 @@ class Solver():
         # Obvious cases where implication is true
 #        if (self.is_literal_entailed(from_literal.negation())
 #            or self.is_literal_entailed(to_literal)
+#       FIXME: do we need the above ? if we're "just" testing for the implications (known in the implication graph),
+#              it would be wrong to include it... but if we're testing for current knowledge... well, then we should.
+#              in Aries: included in domains.implies, which calls implications.implies, which itself does not include it.
         if (to_literal == TRUE_LIT
             or from_literal == FALSE_LIT
             or from_literal.entails(to_literal)
