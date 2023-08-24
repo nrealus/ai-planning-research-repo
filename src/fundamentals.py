@@ -24,8 +24,7 @@ from abc import ABC
 #   - CONSTRAINT ELEMENTARY EXPRESSIONS
 #   - REIFIED CONSTRAINTS
 #
-# - HELPERS I:
-#   - TIGHT DISJUNCTIONS
+# - HELPER CLASS: TIGHT DISJUNCTIONS
 #################################################################################
 #################################################################################
 
@@ -409,17 +408,17 @@ class TightDisjunction():
 
     After the tightening, the literals in tightened may be used freely anywhere.
     
-    Note that nowhere in the code is it "fundamentally required" for some literals
-    to be in tight form. However, it is desirable, for example to reduce the size
-    of clauses or explanations, which is why tightening is used at some specific
-    moments.
+    Note that nowhere in the code is it "fundamentally required" for a disjunction
+    of literals to be in tight form. However, it is desirable, for example to
+    reduce the size of clauses or explanations, which is why tightening is used
+    at some specific moments.
     """
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     literals: Tuple[Lit,...]
     """
     The "tightened" literals of the disjunction. They are sorted in lexicographic
-    order and and there is only one literal per signed variable.
+    order and there is only one literal per signed variable.
     """
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     _already_tight: bool = field(default=False)
@@ -434,7 +433,7 @@ class TightDisjunction():
     ):
         self.__setattr__('_initially_tight', _already_tight)
 
-        # If the the literals are indicated to already be in tight form,
+        # If the literals are indicated as already in tight form,
         if self._already_tight:
             self.__setattr__('literals', tuple(literals))
 
@@ -448,7 +447,7 @@ class TightDisjunction():
             while i < n-1-j:
                 # Because the literals are now lexicographically sorted,
                 # we know that if two literals are on the same signed variable,
-                # the stronger one is necessarily the next one.
+                # the weaker one is necessarily the next one.
                 if lits[i].entails(lits[i+1]):
                     lits.pop(i)
                     j += 1
