@@ -13,13 +13,14 @@ from fundamentals import *
 #################################################################################
 #################################################################################
 #                                   CONTENTS:
-# - SOLVER "AUXILIARY" CLASSES:
+# - SOLVER AUXILIARY CLASSES:
 #   - DECISIONS
 #   - CAUSES
-#   - EVENTS
+#   - EVENT
 #   - CONFLICT INFORMATION
-#   - REASONER INTERFACE / ABSTRACT BASE CLASS
-# - SOLVER CLASS
+#   - REASONER (INTERFACE / ABSTRACT BASE CLASS)
+#
+# - SOLVER CLASS ITSELF
 #################################################################################
 #################################################################################
 
@@ -27,11 +28,7 @@ from fundamentals import *
 # SOLVER DECISIONS 
 #################################################################################
 
-class SolverDecision(ABC):
-    """
-    A container or "namespace" containing types representing decisions
-    that the solver may make to progress its search.
-    """
+class SolverDecisions(ABC):
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -39,8 +36,9 @@ class SolverDecision(ABC):
         """
         Represents a decision to set a certain literal. (i.e. set to true, entail, enforce it)
         """
+
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-        literal: Literal
+        literal: Lit
         """
         The literal to set.
         """
@@ -55,7 +53,7 @@ class SolverDecision(ABC):
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-    Any = Union[SetLiteral, Restart]
+    AnyDecision = Union[SetLiteral, Restart]
     """
     Type alias representing both kinds of decisions.
     """
@@ -64,11 +62,7 @@ class SolverDecision(ABC):
 # SOLVER CAUSES 
 #################################################################################
 
-class SolverCause(ABC):
-    """
-    A container or "namespace" containing types representing origins or causes of
-    updates to variable domains' bounds (aka bound updates, aka events, see `SolverEvent`).
-    """
+class SolverCauses(ABC):
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -99,8 +93,9 @@ class SolverCause(ABC):
         non-optional variable's literals. It stores implications that
         must be satisfied.
         """
+
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-        literal: Literal
+        literal: Lit
         """
         The literal that triggered implication propagation.
         """
@@ -116,13 +111,14 @@ class SolverCause(ABC):
         are "absent" from the model, i.e their (boolean) presence variables,
         which are non-optional, are not entailed.
         """
+
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-        literal: Literal
+        literal: Lit
         """
         The literal whose direct entailment leads to an empty domain of its variable.
         """
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-        cause: SolverCause.Any
+        cause: SolverCauses.AnyCause
         """
         The cause of the event that led to the entailment of the literal.
         """
@@ -134,6 +130,7 @@ class SolverCause(ABC):
         Represents a cause corresponding to an inference made by a reasoner
         (see `SolverReasoner`), during propagation.        
         """
+
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
         reasoner: SolverReasoner
         """
@@ -148,7 +145,7 @@ class SolverCause(ABC):
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-    Any = Union[
+    AnyCause = Union[
         Decision,
         Encoding,
         ImplicationPropagation,
@@ -164,15 +161,6 @@ class SolverCause(ABC):
 #################################################################################
 
 class SolverEvent(NamedTuple):
-    """
-    Represents an event, which is an update on the lower or upper bound of the
-    integer domain of a variable (i.e. the upper bound of a signed variable).
-
-    Aka bound update.
-
-    An event / bound update can happen as a result of a decision of the solver
-    or during propagation.
-    """
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     signed_var: SignedVar
@@ -180,12 +168,12 @@ class SolverEvent(NamedTuple):
     The signed variable whose bound was updated with this event.
     """
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-    new_bound_value: BoundValue
+    new_bound_value: BoundVal
     """
     The new (updated) value of the signed variable's bound.
     """
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-    previous_bound_value: BoundValue
+    previous_bound_value: BoundVal
     """
     The previous value that the signed variable's bound had, before this event.
     """
@@ -199,7 +187,7 @@ class SolverEvent(NamedTuple):
     level, and the second one corresponds to the event's index in that decision level.
     """
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-    cause: SolverCause.Any
+    cause: SolverCauses.AnyCause
     """
     The cause of this event.
     """
@@ -209,10 +197,6 @@ class SolverEvent(NamedTuple):
 #################################################################################
 
 class SolverConflictInfo(ABC):
-    """
-    A container or "namespace" containing types representing information on
-    conflicts encountered by the solver during propagation, and on their analysis.
-    """
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -222,12 +206,12 @@ class SolverConflictInfo(ABC):
         update (leading to an empty domain for an non-optional variable).
         """
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-        literal: Literal
+        literal: Lit
         """
         The literal whose entailment caused its variable's domain to become empty.
         """
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-        cause: SolverCause.Any
+        cause: SolverCauses.AnyCause
         """
         The cause of the entailment of the literal that led to the conflict.
         """
@@ -243,7 +227,7 @@ class SolverConflictInfo(ABC):
         asserting / learned clause (conflict analysis).
         """
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-        explanation_literals: Tuple[Literal,...]
+        explanation_literals: Tuple[Lit,...]
         """
         The literals returned by a reasoner, as an explanation for the conflict.
         """
@@ -264,7 +248,7 @@ class SolverConflictInfo(ABC):
         `InvalidBoundUpdate`, or with a `ReasonerExplanation`.
         """
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-        asserting_clause_literals: Tuple[Literal,...]
+        asserting_clause_literals: Tuple[Lit,...]
         """
         The asserting clause (as a list of its literals). Not yet learned (i.e.
         not yet in the clause database).
@@ -272,7 +256,7 @@ class SolverConflictInfo(ABC):
         A set of literals of which at least one must be true to avoid the conflict.
         """
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-        resolved_literals_storage: Dict[SignedVar, BoundValue] # FIXME ? # Tuple[Literal,...]
+        resolved_literals_storage: Dict[SignedVar, BoundVal] # FIXME ? # Tuple[Literal,...]
         """
         Stores resolved literals that participate in the conflict.
         
@@ -289,20 +273,18 @@ class SolverConflictInfo(ABC):
 
 class SolverReasoner():
     """
-    TODO
     """
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     @abstractmethod
     def explain(self,
-        explanation_literals: List[Literal],
-        literal: Literal,
-        inference_cause: SolverCause.ReasonerInference,
+        explanation_literals: List[Lit],
+        literal: Lit,
+        inference_cause: SolverCauses.ReasonerInference,
         solver: Solver,
     ) -> None:
         """
-        TODO
         """
         pass
 
@@ -313,7 +295,6 @@ class SolverReasoner():
         solver:Solver,
     ) -> None:
         """
-        TODO
         """
         pass
 
@@ -335,7 +316,6 @@ class SolverReasoner():
         solver: Solver,
     ) -> Optional[Union[SolverConflictInfo.InvalidBoundUpdate, SolverConflictInfo.ReasonerExplanation]]:
         """
-        TODO
         """
         pass
 
@@ -348,7 +328,6 @@ class SolverReasoner():
 class Solver():
     """
     The main solver class.
-    TODO
     """
 
     #############################################################################
@@ -367,7 +346,7 @@ class Solver():
         and the uncontrollable ones are in the set under key `False`.
         """
         #########################################################################
-        self.bound_values: Dict[SignedVar, BoundValue] = {}
+        self.bound_values: Dict[SignedVar, BoundVal] = {}
         """
         Stores the upper and lower bounds of variables' domains (at the
         current decision level).
@@ -380,15 +359,15 @@ class Solver():
         Stores the indices of events in `events_trail` that set the current bounds of variables.
         """
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-        self.vars_presence_literals: Dict[Var, Literal] = {}
+        self.vars_presence_literals: Dict[Var, Lit] = {}
         """
         Maps variables to their presence literals.
 
         Variables of present literals have to be non-optional
-        (i.e. have the `TrueLiteral` as their presence literal).
+        (i.e. have the `TRUE_LIT` as their presence literal).
         """
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-        self.non_optional_vars_implication_graph: Dict[SignedVar, Dict[BoundValue, Set[Literal]]] = {}
+        self.non_optional_vars_implication_graph: Dict[SignedVar, Dict[BoundVal, Set[Lit]]] = {}
         """
         Represents an implication graph on literals of non-optional variables.
 
@@ -403,16 +382,16 @@ class Solver():
         by a value v, there is no need to have it also be in the adjacency
         list for values greater (weaker) than v.
         """
+        #########################################################################
+        self.conjunctive_scopes: Dict[Tuple[Lit,...], Lit] = {}
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-        self.conjunctive_scopes: Dict[Tuple[Literal,...], Literal] = {}
+        self.conjunctive_scopes_reverse: Dict[Lit, Tuple[Lit,...]] = {}
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-        self.conjunctive_scopes_reverse: Dict[Literal, Tuple[Literal,...]] = {}
-        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-        self.conjunctive_scopes_tautologies: Dict[Literal, Literal] = {}
-        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-        self.reifications: Dict[ConstrFormula.Any, Literal] = {}
+        self.conjunctive_scopes_tautologies: Dict[Lit, Lit] = {}
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
         self.reified_constraints: List[ReifiedConstraint] = []
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+        self.reifications: Dict[ConstraintElementaryExpression.AnyExpr, Lit] = {}
         #########################################################################
         self.events_trail: List[List[SolverEvent]] = [[]]
         """
@@ -430,30 +409,34 @@ class Solver():
         The current decision level.
         """
         #########################################################################
-        self.vars[False].add(ZeroVar)
-        self.bound_values[SignedVar(ZeroVar, True)] = BoundValue(0)
-        #self.bound_values_event_indices[SignedVar(ZeroVar, True)] = (0, 0)
-        self.bound_values[SignedVar(ZeroVar, False)] = BoundValue(0)
-        #self.bound_values_event_indices[SignedVar(ZeroVar, False)] = (0, 1)
-        self.vars_presence_literals[ZeroVar] = TrueLiteral
-        self.conjunctive_scopes[tuple()] = TrueLiteral
-        self.conjunctive_scopes_reverse[TrueLiteral] = tuple()
-        self.conjunctive_scopes_tautologies[TrueLiteral] = TrueLiteral
+        self.vars[False].add(ZERO_VAR)
+        self.vars_presence_literals[ZERO_VAR] = TRUE_LIT
+
+        self.bound_values[SignedVar(ZERO_VAR, True)] = BoundVal(0)
+        self.bound_values[SignedVar(ZERO_VAR, False)] = BoundVal(0)
+
+        self.set_bound_value(SignedVar(ZERO_VAR, True), BoundVal(0), SolverCauses.Encoding())
+        self.set_bound_value(SignedVar(ZERO_VAR, False), BoundVal(0), SolverCauses.Encoding())
+
+        self.conjunctive_scopes[tuple()] = TRUE_LIT
+        self.conjunctive_scopes_reverse[TRUE_LIT] = tuple()
+        self.conjunctive_scopes_tautologies[TRUE_LIT] = TRUE_LIT
 
     #############################################################################
     # UTILITY METHODS
     #############################################################################
 
     def is_literal_entailed(self,
-        literal: Literal,
+        literal: Lit,
     ) -> bool:
         """
         Args:
             literal (Literal): A literal.
 
         Returns:
-            bool: Whether `literal` is currently entailed / known to be true (i.e.
-            the current bound value on its signed variable is stronger than its own)
+            bool: Whether `literal` is currently entailed / known to be true at the
+        current decision level (i.e. the current bound value on its signed variable
+        is stronger than its own)
         """ 
 
         return self.bound_values[literal.signed_var].is_stronger_than(literal.bound_value)
@@ -461,7 +444,7 @@ class Solver():
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     def get_literal_current_value(self,
-        literal: Literal,
+        literal: Lit,
     ) -> Optional[bool]:
         """
         Args:
@@ -492,16 +475,15 @@ class Solver():
         """
 
         return all([
-            self.bound_values[SignedVar(var, True)].is_stronger_than(
-                BoundValue(-self.bound_values[SignedVar(var, False)]))
-            for var in self.vars[True]
-        ])
+            self.bound_values[SignedVar(var, True)]
+                .is_stronger_than(BoundVal(-self.bound_values[SignedVar(var, False)]))
+            for var in self.vars[True]])
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     def get_literals_directly_implied_by(self,
-        literal: Literal,
-    ) -> List[Literal]:
+        literal: Lit,
+    ) -> List[Lit]:
         """
         Args:
             literal (Literal): A literal
@@ -520,18 +502,20 @@ class Solver():
         if not literal.signed_var in self.non_optional_vars_implication_graph:
             return []
 
-        res: List[Literal] = []
+        res: List[Lit] = []
+
         guarded_adj_set = self.non_optional_vars_implication_graph[literal.signed_var]
         for guard_bound in guarded_adj_set:
             if literal.bound_value.is_stronger_than(guard_bound):
                 res.extend(guarded_adj_set[guard_bound])
+
         return res
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     def is_implication_true(self,
-        from_literal: Literal,
-        to_literal: Literal,
+        from_literal: Lit,
+        to_literal: Lit,
     ) -> bool:
         """
         Returns:
@@ -539,9 +523,11 @@ class Solver():
         (Whether it is directly or indirectly/implicitly)
         """
 
-        # Obvious cases of implications
-        if (to_literal == TrueLiteral
-            or from_literal == FalseLiteral
+        # Obvious cases where implication is true
+        if (self.is_literal_entailed(from_literal.negation())
+            or self.is_literal_entailed(to_literal)
+            or to_literal == TRUE_LIT
+            or from_literal == FALSE_LIT
             or from_literal.entails(to_literal)
         ):
             return True
@@ -560,8 +546,8 @@ class Solver():
         # implication graph, starting at from_literal. Look for
         # a literal that entails to_literal to
         # determine whether from_literal implies to_literal.
-        stack: List[Literal] = [from_literal]
-        visited: Dict[SignedVar, BoundValue] = {}
+        stack: List[Lit] = [from_literal]
+        visited: Dict[SignedVar, BoundVal] = {}
         while stack:
             lit = stack.pop()
 
@@ -596,7 +582,7 @@ class Solver():
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     def get_index_of_first_event_implying_literal(self,
-        literal: Literal,
+        literal: Lit,
     ) -> Tuple[int, int]:
         """
         Args:
@@ -614,11 +600,13 @@ class Solver():
         assert self.is_literal_entailed(literal)
 
         (dl, ev_i) = self.bound_values_event_indices[literal.signed_var]
+
         while dl > 0:
             ev = self.events_trail[dl][ev_i]
             if not ev.previous_bound_value.is_stronger_than(literal.bound_value):
                 break
             (dl, ev_i) = ev.previous_bound_value_event_index
+
         return (dl, ev_i)
 
     #############################################################################
@@ -627,8 +615,8 @@ class Solver():
 
     def set_bound_value(self,
         signed_var: SignedVar,
-        bound_value: BoundValue,
-        cause: SolverCause.Any,
+        bound_value: BoundVal,
+        cause: SolverCauses.AnyCause,
     ) -> bool | SolverConflictInfo.InvalidBoundUpdate:
         """
         Arguably the most important method of the solver.
@@ -658,14 +646,13 @@ class Solver():
         """
 
         prez_lit = self.vars_presence_literals[signed_var.var]
-        prez_lit_neg = prez_lit.negation()
 
         # If variable is proven absent (i.e. the negation of its
         # presence literal is entailed), we return False as there
         # is no update to the domain. Note: Non optional variables
         # are always present (i.e. their presence literal is TrueBoundLiteral)
         # so this indeed doesn't apply to them.
-        if self.bound_values[prez_lit_neg.signed_var].is_stronger_than(prez_lit_neg.bound_value):
+        if self.is_literal_entailed(prez_lit.negation()):
             return False
 
         # If the new candidate bound value is weaker than the current
@@ -676,24 +663,24 @@ class Solver():
             return False
 
         # If the new candidate bound value leads to an empty domain.
-        if (not BoundValue(-self.bound_values[signed_var.opposite_signed_var()])
+        if (not BoundVal(-self.bound_values[signed_var.opposite_signed_var()])
             .is_stronger_than(bound_value)
         ):
             # If the variable is not optional (i.e. always present),
             # we directly return a conflict for this invalid 
             # domain update that we attempted to make, indicating
             # the corresponding literal as the cause of the conflict.
-            if prez_lit == TrueLiteral:
-                return SolverConflictInfo.InvalidBoundUpdate(Literal(signed_var, bound_value), cause)
+            if prez_lit == TRUE_LIT:
+                return SolverConflictInfo.InvalidBoundUpdate(Lit(signed_var, bound_value), cause)
 
             # If the variable is optional and its domain is empty, it
             # can only be absent. As such, we attempt to enforce the
             # entailment of the negation of its presence literal.
+            prez_lit_neg = prez_lit.negation()
             return self.set_bound_value(
                 prez_lit_neg.signed_var,
                 prez_lit_neg.bound_value,
-                SolverCause.PresenceOfEmptyDomain(Literal(signed_var, bound_value), cause),
-            )
+                SolverCauses.PresenceOfEmptyDomain(Lit(signed_var, bound_value), cause))
             
         # If the new candidate bound value is stronger and the current
         # bound value and is valid (doesn't lead to an empty domain)
@@ -707,13 +694,10 @@ class Solver():
             cause,
         ))
         self.bound_values[signed_var] = bound_value
-        self.bound_values_event_indices[signed_var] = (
-            self.dec_level,
-            len(self.events_trail[self.dec_level])-1,
-        )
+        self.bound_values_event_indices[signed_var] = (self.dec_level, len(self.events_trail[self.dec_level])-1)
 
         # If the variable is optional, we can already return True.
-        if prez_lit != TrueLiteral:
+        if prez_lit != TRUE_LIT:
             return True
 
         # Now, if the variable is not optional, we want to perform 
@@ -728,10 +712,9 @@ class Solver():
         j = i+1
         while i < j:
             i += 1
-            pending_literal = Literal(
+            pending_literal = Lit(
                 self.events_trail[self.dec_level][i].signed_var,
-                self.events_trail[self.dec_level][i].new_bound_value,
-            )
+                self.events_trail[self.dec_level][i].new_bound_value)
             
             # Propagation is done exactly like in the first part of the function,
             # simply taking into account the fact that the implied literal's
@@ -750,7 +733,7 @@ class Solver():
                 # the implied literal as the cause for failure is returned. Because
                 # we know the var of the implied literal to be non-optional, it
                 # cannot be made absent to resolve the problem.
-                if (BoundValue(-self.bound_values[implied_literal.signed_var.opposite_signed_var()])
+                if (BoundVal(-self.bound_values[implied_literal.signed_var.opposite_signed_var()])
                     .is_stronger_than(implied_literal.bound_value)
                 ):
                     return SolverConflictInfo.InvalidBoundUpdate(implied_literal, cause)
@@ -764,8 +747,7 @@ class Solver():
                     implied_literal.bound_value,
                     self.bound_values[implied_literal.signed_var],
                     self.bound_values_event_indices[implied_literal.signed_var],
-                    SolverCause.ImplicationPropagation(implied_literal)
-                ))
+                    SolverCauses.ImplicationPropagation(implied_literal)))
                 self.bound_values[implied_literal.signed_var] = implied_literal.bound_value
                 self.bound_values_event_indices[signed_var] = (self.dec_level, j+1)
                 j += 1
@@ -780,7 +762,7 @@ class Solver():
     #############################################################################
 
     # TODO
-    def choose_next_decision(self) -> SolverDecision.Any:
+    def choose_next_decision(self) -> SolverDecisions.AnyDecision:
 
         raise NotImplementedError
 
@@ -789,7 +771,7 @@ class Solver():
     #############################################################################
 
     def increment_decision_level_and_perform_set_literal_decision(self,
-        set_literal_decision: SolverDecision.SetLiteral,
+        set_literal_decision: SolverDecisions.SetLiteral,
         reasoners: Tuple[SolverReasoner],
     ) -> None:
         """
@@ -820,8 +802,7 @@ class Solver():
         self.set_bound_value(
             set_literal_decision.literal.signed_var,
             set_literal_decision.literal.bound_value,
-            SolverCause.Decision(),
-        )
+            SolverCauses.Decision())
 
     #############################################################################
     # BACKTRACKING
@@ -905,12 +886,10 @@ class Solver():
         """
 
         while True:
-
             num_events_at_propagation_start: int = len(self.events_trail[self.dec_level])
 
             for reasoner in reasoners:
                 contradiction = reasoner.propagate(self)
-
                 if contradiction is not None:
                     return (contradiction, reasoner)
         
@@ -924,9 +903,9 @@ class Solver():
     #############################################################################
 
     def add_implying_literals_to_explanation_literals(self,
-        explanation_literals: List[Literal],
-        literal: Literal,
-        cause: SolverCause.Any,
+        explanation_literals: List[Lit],
+        literal: Lit,
+        cause: SolverCauses.AnyCause,
         reasoner: SolverReasoner,
     ) -> None:
         """
@@ -956,23 +935,23 @@ class Solver():
         # but it should be immediately implied.
         assert not self.is_literal_entailed(literal)
 
-        if isinstance(cause, SolverCause.ReasonerInference):
+        if isinstance(cause, SolverCauses.ReasonerInference):
             # Ask the reasoner for an explanation clause (l_1 & ... & l_n) => literal
             reasoner.explain(explanation_literals, literal, cause, self)
 
-        elif isinstance(cause, SolverCause.ImplicationPropagation):
+        elif isinstance(cause, SolverCauses.ImplicationPropagation):
             explanation_literals.append(cause.literal)
 
-        elif isinstance(cause, SolverCause.PresenceOfEmptyDomain):
+        elif isinstance(cause, SolverCauses.PresenceOfEmptyDomain):
             # cause.literal & (not cause.literal) => "variable of cause.literal is absent"
             #                                        (i.e. "not cause.literal.variable.presence_literal")
             #                                        (i.e. literal) #FIXME: sure about that ?
             explanation_literals.append(cause.literal.negation())
-            if isinstance(cause.cause, SolverCause.ReasonerInference):
+            if isinstance(cause.cause, SolverCauses.ReasonerInference):
                 # Ask the reasoner for an explanation clause (l_1 & ... & l_n) => cause.literal
                 reasoner.explain(explanation_literals, cause.literal, cause.cause, self)
 
-            elif isinstance(cause.cause, SolverCause.ImplicationPropagation):
+            elif isinstance(cause.cause, SolverCauses.ImplicationPropagation):
                 explanation_literals.append(cause.cause.literal)
 
             else:
@@ -1012,7 +991,7 @@ class Solver():
         # the affected variable is present.
 
         # The base of the explanation is ('not l' v 'l')
-        explanation_literals = [invalid_bound_update.literal.negation()]
+        explanation_literals: List[Lit] = [invalid_bound_update.literal.negation()]
 
         # However 'l' does not hold in the current state and it needs
         # to be replaced, with a set of literals 'l_1' v ... v 'l_n',
@@ -1023,20 +1002,18 @@ class Solver():
             explanation_literals,
             invalid_bound_update.literal,
             invalid_bound_update.cause,
-            reasoner,
-        )
+            reasoner)
 
         # The explanation clause 'not l' v 'l_1' v ... v 'l_n' must now be 
         # transformed into 1st Unique Implication Point form.
         return self.refine_explanation(
             explanation_literals,
-            reasoner,
-        )
+            reasoner)
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     def refine_explanation(self,
-        explanation_literals: List[Literal],
+        explanation_literals: List[Lit],
         reasoner: SolverReasoner,
     ) -> SolverConflictInfo.AnalysisResult:
         """
@@ -1066,14 +1043,14 @@ class Solver():
         # where the literal was implied. It acts as the priority value
         # of the maxheap. But since the Python heapq is a minheap
         # and we want a maxheap, we need to invert the priority values...
-        prio_queue: List[Tuple[Tuple[int,int], Literal]] = []
+        prio_queue: List[Tuple[Tuple[int,int], Lit]] = []
         heapq.heapify(prio_queue)
 
         # Literals that are beyond the curren decision and
         # will be part of the final asserting clause.
-        asserting_clause_literals: List[Literal] = []
+        asserting_clause_literals: List[Lit] = []
 
-        resolved_literals: Dict[SignedVar, BoundValue] = {}
+        resolved_literals: Dict[SignedVar, BoundVal] = {}
 
         while True:
 
@@ -1119,7 +1096,7 @@ class Solver():
             # Corollary: if dl is 0, the derived clause must be empty.
             if not prio_queue:
                 return SolverConflictInfo.AnalysisResult(
-                    tuple(asserting_clause_literals),
+                    TightDisjunction(asserting_clause_literals).literals,
                     resolved_literals,
                 )
             
@@ -1156,7 +1133,7 @@ class Solver():
             if not prio_queue:
                 asserting_clause_literals.append(lit.negation())
                 return SolverConflictInfo.AnalysisResult(
-                    tuple(asserting_clause_literals),
+                    TightDisjunction(asserting_clause_literals).literals,
                     resolved_literals,
                 )
 
@@ -1167,7 +1144,7 @@ class Solver():
             # cannot be a decision, because otherwise it would have been
             # detected as a UIP earlier.
 
-            cause: Optional[SolverCause.Any] = None
+            cause: Optional[SolverCauses.AnyCause] = None
             while ev_i < len(self.events_trail[self.dec_level]):
                 ev = self.undo_and_return_last_event_at_current_decision_level()
                 cause = ev.cause
@@ -1192,8 +1169,8 @@ class Solver():
     #############################################################################
 
     def get_decision_level_to_backtrack_to(self,
-        asserting_clause_literals: Tuple[Literal,...],
-    ) -> Tuple[bool, int, Optional[Literal]]:
+        asserting_clause_literals: Tuple[Lit,...],
+    ) -> Tuple[bool, int, Optional[Lit]]:
         """
         Returns the appropriate backtracking level for the clause formed by the
         given clause literals, and the literal that is asserted at that level.
@@ -1214,7 +1191,7 @@ class Solver():
         max_dl = 0
         next_max_dl = 0
 
-        asserted_literal: Optional[Literal] = None
+        asserted_literal: Optional[Lit] = None
 
         for literal in asserting_clause_literals:
             
