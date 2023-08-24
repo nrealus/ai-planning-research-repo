@@ -2,13 +2,18 @@ from __future__ import annotations
 
 #################################################################################
 
-from typing import Tuple, Dict, List, Set, Optional, Union
-
+from typing import Dict, List, NamedTuple, Optional, Set, Tuple, Union
 from abc import ABC, abstractmethod
 
-import heapq
+from fundamentals import (
+    Var, ZERO_VAR,
+    SignedVar, BoundVal, Lit, TRUE_LIT, FALSE_LIT,
+    ConstraintElementaryExpression,
+    ReifiedConstraint,
+    TightDisjunction,
+)
 
-from fundamentals import *
+import heapq
 
 #################################################################################
 #################################################################################
@@ -314,7 +319,7 @@ class SolverReasoner():
     @abstractmethod
     def propagate(self,
         solver: Solver,
-    ) -> Optional[Union[SolverConflictInfo.InvalidBoundUpdate, SolverConflictInfo.ReasonerExplanation]]:
+    ) -> Optional[SolverConflictInfo.InvalidBoundUpdate | SolverConflictInfo.ReasonerExplanation]:
         """
         """
         pass

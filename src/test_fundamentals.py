@@ -2,7 +2,11 @@ from __future__ import annotations
 
 #################################################################################
 
-from fundamentals import *
+from fundamentals import (
+    Var,
+    SignedVar, BoundVal, Lit,
+    TightDisjunction,
+)
 
 import unittest
 

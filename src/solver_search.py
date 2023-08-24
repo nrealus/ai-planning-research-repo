@@ -2,11 +2,17 @@ from __future__ import annotations
 
 #################################################################################
 
-from typing import Tuple
+from typing import Dict, List, NamedTuple, Optional, Set, Tuple, Union
 
-from fundamentals import *
-from solver import *
-from solver_sat_reasoner import *
+from fundamentals import (
+    Lit, TRUE_LIT,
+    ConstraintElementaryExpression,
+    ReifiedConstraint,
+    TightDisjunction,
+)
+
+from solver import SolverDecisions, SolverCauses, SolverConflictInfo, Solver
+from solver_sat_reasoner import SATReasoner
 
 #################################################################################
 #################################################################################
@@ -146,7 +152,7 @@ def _actually_post_reified_constraint(
         clause_literals: Tuple[Lit,...],
         scope_literal: Lit,
         clause_literals_already_tight: bool=False,
-    ) -> Union[bool, SolverConflictInfo.InvalidBoundUpdate]:
+    ) -> bool | SolverConflictInfo.InvalidBoundUpdate:
 
         clause_in_tight_form = TightDisjunction(clause_literals, clause_literals_already_tight)
 

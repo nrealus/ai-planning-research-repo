@@ -2,11 +2,19 @@ from __future__ import annotations
 
 #################################################################################
 
-from typing import Tuple
+from typing import Dict, List, Optional, Tuple
 
-from fundamentals import *
-from solver import *
-from solver_sat_reasoner import *
+from fundamentals import (
+    Var, ZERO_VAR,
+    SignedVar, BoundVal, Lit, TRUE_LIT, FALSE_LIT,
+    ConstraintExpressionAtoms,
+    ConstraintExpression,
+    ConstraintElementaryExpression,
+    ReifiedConstraint,
+    TightDisjunction,
+)
+
+from solver import SolverCauses, SolverConflictInfo, Solver
 
 #################################################################################
 #################################################################################

@@ -3,10 +3,14 @@ from __future__ import annotations
 #################################################################################
 
 import typing
-from typing import Tuple, Dict, List, Set, Optional, Union
+from typing import Dict, List, Optional, Set, Tuple
+from dataclasses import dataclass, field
 
-from fundamentals import *
-from solver import *
+from fundamentals import (
+    SignedVar, BoundVal, Lit, TRUE_LIT
+)
+
+from solver import SolverCauses, SolverConflictInfo, SolverReasoner, Solver
 
 #################################################################################
 #################################################################################
@@ -275,7 +279,7 @@ class SATReasoner(SolverReasoner):
 
     def propagate(self,
         solver:Solver,
-    )-> Optional[Union[SolverConflictInfo.InvalidBoundUpdate, SolverConflictInfo.ReasonerExplanation]]:
+    )-> Optional[SolverConflictInfo.InvalidBoundUpdate | SolverConflictInfo.ReasonerExplanation]:
         """
         Propagate method of the SAT reasoner.
 
