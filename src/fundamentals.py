@@ -398,7 +398,7 @@ class ReifiedConstraint(NamedTuple):
 # TIGHT DISJUNCTIONS
 #################################################################################
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, init=False)
 class TightDisjunction():
     """
     Helper class that transforms (or "tightens") a disjunction of literals into
@@ -421,7 +421,7 @@ class TightDisjunction():
     order and there is only one literal per signed variable.
     """
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-    _already_tight: bool = field(default=False)
+    _already_tight: bool
     """
     Whether the literals given initially were indicated as already in tight form.
     """
@@ -431,7 +431,7 @@ class TightDisjunction():
         literals: Sequence[Lit],
         _already_tight: bool=False,
     ):
-        self.__setattr__('_initially_tight', _already_tight)
+        object.__setattr__(self, '_already_tight', _already_tight)
 
         # If the literals are indicated as already in tight form,
         if self._already_tight:
@@ -454,7 +454,7 @@ class TightDisjunction():
                 else:
                     i += 1
 
-            self.__setattr__('literals', tuple(lits))
+            object.__setattr__(self, 'literals', tuple(lits))
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -469,7 +469,7 @@ class TightDisjunction():
         i = 0
         while i < n-1:
             if self.literals[i].signed_var.opposite_signed_var() == self.literals[i+1].signed_var:
-                if self.literals[i].bound_value + self.literals[i+1].bound_value >= 0:
+                if self.literals[i].bound_value - self.literals[i+1].bound_value <= 0:
                     return True
             i += 1
         return False        
