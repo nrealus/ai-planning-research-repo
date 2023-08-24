@@ -18,14 +18,14 @@ class TestFundamentals(unittest.TestCase):
 
     def test_literal_negation(self):
         self.assertEqual(
-            Literal(SignedVar(Var(1), True), BoundValue(2)).negation(),
-            Literal(SignedVar(Var(1), False), BoundValue(-3)),
+            Lit(SignedVar(Var(1), True), BoundVal(2)).negation(),
+            Lit(SignedVar(Var(1), False), BoundVal(-3)),
         )
 
-    def test_bound_value_strength_comparison(self):
-        self.assertTrue(BoundValue(2).is_stronger_than(BoundValue(3)))
-        self.assertTrue(BoundValue(2).is_stronger_than(BoundValue(2)))
-        self.assertFalse(BoundValue(2).is_stronger_than(BoundValue(1)))
+    def test_is_bound_value_stronger_than(self):
+        self.assertTrue(BoundVal(2).is_stronger_than(BoundVal(3)))
+        self.assertTrue(BoundVal(2).is_stronger_than(BoundVal(2)))
+        self.assertFalse(BoundVal(2).is_stronger_than(BoundVal(1)))
 
 #################################################################################
 
