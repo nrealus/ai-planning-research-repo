@@ -524,9 +524,9 @@ class Solver():
         """
 
         # Obvious cases where implication is true
-        if (self.is_literal_entailed(from_literal.negation())
-            or self.is_literal_entailed(to_literal)
-            or to_literal == TRUE_LIT
+#        if (self.is_literal_entailed(from_literal.negation())
+#            or self.is_literal_entailed(to_literal)
+        if (to_literal == TRUE_LIT
             or from_literal == FALSE_LIT
             or from_literal.entails(to_literal)
         ):
@@ -690,7 +690,9 @@ class Solver():
             signed_var,
             bound_value,
             self.bound_values[signed_var],
-            self.bound_values_event_indices[signed_var],
+            self.bound_values_event_indices.get(
+                signed_var, 
+                (self.dec_level, len(self.events_trail[self.dec_level]))),
             cause,
         ))
         self.bound_values[signed_var] = bound_value
