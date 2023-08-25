@@ -20,6 +20,8 @@ import unittest
 
 class TestSolverImplications(unittest.TestCase):
    
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
     def test_direct_implications(self):
         solver = Solver()
 
@@ -38,13 +40,13 @@ class TestSolverImplications(unittest.TestCase):
         _insert_implication_between_literals_on_non_optional_vars(solver, Aleq1, Bleq1)
         self.assertEqual(
             solver.get_literals_directly_implied_by(Aleq1),
-            [Bleq1]
-        )
+            [Bleq1])
+
         _insert_implication_between_literals_on_non_optional_vars(solver, Bleq1, Cleq1)
         self.assertEqual(
             solver.get_literals_directly_implied_by(Bleq1),
-            [Cleq1]
-        )
+            [Cleq1])
+
         # We have Aleq1 => Bleq1 and Bleq1 => Cleq1,
         # so we also have Aleq1 => Cleq1. However, this is 
         # not a "direct" implication, as Cleq1 isn't explicitly
@@ -52,14 +54,15 @@ class TestSolverImplications(unittest.TestCase):
         # variable A-.
         self.assertNotIn(
             Cleq1,
-            solver.get_literals_directly_implied_by(Aleq1),
-        )
+            solver.get_literals_directly_implied_by(Aleq1))
+
         # However, solver.is_Lit_implying(Aleq1, Cleq1)
         # returns True, as it should.
         self.assertEqual(
             solver.is_implication_true(Aleq1, Cleq1),
-            True,
-        )
+            True)
+
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     def test_full_implications(self):
         solver = Solver()
@@ -106,6 +109,8 @@ class TestSolverImplications(unittest.TestCase):
         self.assertTrue(solver.is_implication_true(Aleq0, Cleq2))
         self.assertFalse(solver.is_implication_true(Aleq2, Cleq2))
 
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
     def test_implication_cycle(self):
         solver = Solver()
 
@@ -133,6 +138,8 @@ class TestSolverImplications(unittest.TestCase):
 
 class TestSolverSetBounds(unittest.TestCase):
 
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
     def test_non_optional_variables(self):
         solver = Solver()
 
@@ -141,50 +148,47 @@ class TestSolverSetBounds(unittest.TestCase):
 
         self.assertEqual(
             solver.set_bound_value(AM, BoundVal(1), SolverCauses.Decision()),
-            False,
-        )
+            False)
+        
         self.assertEqual(
             solver.set_bound_value(AM, BoundVal(0), SolverCauses.Decision()),
-            False,
-        )
+            False)
+        
         self.assertEqual(
             solver.set_bound_value(AM, BoundVal(-1), SolverCauses.Decision()),
-            True,
-        )
+            True)
+
         self.assertEqual(
             solver.set_bound_value(AP, BoundVal(11), SolverCauses.Decision()),
-            False,
-        )
+            False)
+
         self.assertEqual(
             solver.set_bound_value(AP, BoundVal(10), SolverCauses.Decision()),
-            False,
-        )
+            False)
+
         self.assertEqual(
             solver.set_bound_value(AP, BoundVal(9), SolverCauses.Decision()),
-            True,
-        )
+            True)
 
         self.assertEqual(
             solver.set_bound_value(AM, BoundVal(-9), SolverCauses.Decision()),
-            True,
-        )
+            True)
 
         self.assertEqual(
             solver.set_bound_value(AM, BoundVal(-10), SolverCauses.Decision()),
-            SolverConflictInfo.InvalidBoundUpdate(Lit(AM, BoundVal(-10)), SolverCauses.Decision()),
-        )
+            SolverConflictInfo.InvalidBoundUpdate(Lit(AM, BoundVal(-10)), SolverCauses.Decision()))
 
-        solver.undo_and_return_last_event_at_current_decision_level()
+        solver._undo_and_return_last_event_at_current_decision_level()
 
         self.assertEqual(
             solver.set_bound_value(AP, BoundVal(1), SolverCauses.Decision()),
-            True,
-        )
+            True)
 
         self.assertEqual(
             solver.set_bound_value(AP, BoundVal(0), SolverCauses.Decision()),
-            SolverConflictInfo.InvalidBoundUpdate(Lit(AP, BoundVal(0)), SolverCauses.Decision()),
-        )
+            SolverConflictInfo.InvalidBoundUpdate(Lit(AP, BoundVal(0)), SolverCauses.Decision()))
+
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     def test_optional_variables(self):
         solver = Solver()
@@ -207,12 +211,12 @@ class TestSolverSetBounds(unittest.TestCase):
         # This should have no consequences on P2 and P1
         self.assertEqual(
             solver.set_bound_value(AP, BoundVal(5), SolverCauses.Decision()),
-            True,
-        )
+            True)
+
         self.assertEqual(
             solver.set_bound_value(AM, BoundVal(-5), SolverCauses.Decision()),
-            True,
-        )
+            True)
+
         self.assertEqual(solver.bound_values[SignedVar(A, False)], -5)
         self.assertEqual(solver.bound_values[SignedVar(A, True)], 5)
         self.assertEqual(solver.bound_values[SignedVar(P1, False)], 0)
@@ -244,12 +248,13 @@ class TestSolverSetBounds(unittest.TestCase):
         # is false, which is a contradiction with out previous decision
         self.assertIsInstance(
             solver.set_bound_value(SignedVar(P2, True), BoundVal(-1), SolverCauses.Decision()),
-            SolverConflictInfo.InvalidBoundUpdate,
-        )
+            SolverConflictInfo.InvalidBoundUpdate)
 
 #################################################################################
 
 class TestSolverEntails(unittest.TestCase):
+
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     def test_is_literal_entailed(self):
         solver = Solver()
@@ -273,7 +278,6 @@ class TestSolverEntails(unittest.TestCase):
         self.assertFalse(solver.is_literal_entailed(Lit(AP, BoundVal(8))))
         self.assertFalse(solver.is_literal_entailed(Lit(AP, BoundVal(0))))
 
-#################################################################################
 #################################################################################
 
 if __name__ == '__main__':

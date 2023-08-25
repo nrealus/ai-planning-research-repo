@@ -14,22 +14,28 @@ import unittest
 
 class TestFundamentals(unittest.TestCase):
 
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
     def test_opposite_signed_var(self):
         self.assertEqual(
             SignedVar(Var(1), True),
-            SignedVar(Var(1), False).opposite_signed_var(),
-        )
+            SignedVar(Var(1), False).opposite_signed_var())
+
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     def test_literal_negation(self):
         self.assertEqual(
             Lit(SignedVar(Var(1), True), BoundVal(2)).negation(),
-            Lit(SignedVar(Var(1), False), BoundVal(-3)),
-        )
+            Lit(SignedVar(Var(1), False), BoundVal(-3)))
+
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     def test_is_bound_value_stronger_than(self):
         self.assertTrue(BoundVal(2).is_stronger_than(BoundVal(3)))
         self.assertTrue(BoundVal(2).is_stronger_than(BoundVal(2)))
         self.assertFalse(BoundVal(2).is_stronger_than(BoundVal(1)))
+
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     def test_tight_disjunction_construction(self):
         A = Var(1)
@@ -75,6 +81,8 @@ class TestFundamentals(unittest.TestCase):
                 Lit.geq(A, 1),
                 Lit.geq(B, 0)]).literals,
             (Lit.geq(A, 0), Lit.leq(A, 1), Lit.geq(B, 0), Lit.leq(B, 1)))
+
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     def test_tight_disjunction_tautology(self):
         A = Var(1)
