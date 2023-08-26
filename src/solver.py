@@ -183,7 +183,7 @@ class SolverEvent(NamedTuple):
     The previous value that the signed variable's bound had, before this event.
     """
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-    previous_bound_value_event_index: Tuple[int, int]
+    previous_bound_value_event_index: Optional[Tuple[int, int]]
     """
     The index of the event (in the event trail) that set the signed variable's
     previous bound value.
@@ -359,7 +359,7 @@ class Solver():
         (See `Literal`)
         """
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-        self.bound_values_event_indices: Dict[SignedVar, Tuple[int, int]] = {} 
+        self.bound_values_event_indices: Dict[SignedVar, Optional[Tuple[int, int]]] = {} 
         """
         Stores the indices of events in `events_trail` that set the current bounds of variables.
         """
@@ -420,8 +420,8 @@ class Solver():
         self.bound_values[SignedVar(ZERO_VAR, True)] = BoundVal(0)
         self.bound_values[SignedVar(ZERO_VAR, False)] = BoundVal(0)
 
-        self.set_bound_value(SignedVar(ZERO_VAR, True), BoundVal(0), SolverCauses.Encoding())
-        self.set_bound_value(SignedVar(ZERO_VAR, False), BoundVal(0), SolverCauses.Encoding())
+#        self.set_bound_value(SignedVar(ZERO_VAR, True), BoundVal(0), SolverCauses.Encoding())
+#        self.set_bound_value(SignedVar(ZERO_VAR, False), BoundVal(0), SolverCauses.Encoding())
 
         self.conjunctive_scopes[tuple()] = TRUE_LIT
         self.conjunctive_scopes_reverse[TRUE_LIT] = tuple()
@@ -591,7 +591,7 @@ class Solver():
 
     def get_index_of_first_event_implying_literal(self,
         literal: Lit,
-    ) -> Tuple[int, int]:
+    ) -> Optional[Tuple[int, int]]:
         """
         Args:
             literal (Literal): The literal whose first event index we want to get.
@@ -607,13 +607,21 @@ class Solver():
 
         assert self.is_literal_entailed(literal)
 
-        (dl, ev_i) = self.bound_values_event_indices[literal.signed_var]
+        prev_ev_index = self.bound_values_event_indices[literal.signed_var]
+        if prev_ev_index is None:
+            return None
+        (dl, ev_i) = prev_ev_index
 
         while dl > 0:
             ev = self.events_trail[dl][ev_i]
+            
             if not ev.previous_bound_value.is_stronger_than(literal.bound_value):
                 break
-            (dl, ev_i) = ev.previous_bound_value_event_index
+
+            prev_ev_index = ev.previous_bound_value_event_index
+            if prev_ev_index is None:
+                return None
+            (dl, ev_i) = prev_ev_index
 
         return (dl, ev_i)
 
@@ -698,9 +706,7 @@ class Solver():
             signed_var,
             bound_value,
             self.bound_values[signed_var],
-            self.bound_values_event_indices.get(
-                signed_var, 
-                (self.dec_level, len(self.events_trail[self.dec_level]))),
+            self.bound_values_event_indices.get(signed_var, None),
             cause,
         ))
         self.bound_values[signed_var] = bound_value
@@ -718,7 +724,7 @@ class Solver():
         # not allow literals of optional variables to appear in the implication
         # graph. We do this by looping through the direct implications of
         # all events / updates pushed to the trail since this method is called.
-        i = len(self.events_trail)-2
+        i = len(self.events_trail[self.dec_level])-2
         j = i+1
         while i < j:
             i += 1
@@ -818,7 +824,7 @@ class Solver():
     # BACKTRACKING
     #############################################################################
 
-    def undo_and_return_last_event_at_current_decision_level(self) -> SolverEvent:
+    def _undo_and_return_last_event_at_current_decision_level(self) -> SolverEvent:
         """
         Reverts the last (latest) event in the events trail
         (at the current decision level).
@@ -872,10 +878,10 @@ class Solver():
         while self.dec_level > target_dec_level:
             _n = len(self.events_trail[self.dec_level])
             for _ in range(_n):
-                self.undo_and_return_last_event_at_current_decision_level()
+                self._undo_and_return_last_event_at_current_decision_level()
+            self.dec_level -= 1
             for reasoner in reasoners:
                 reasoner.on_solver_backtrack_one_level(self)
-            self.dec_level -= 1
 
     #############################################################################
     # PROPAGATION
@@ -1070,10 +1076,14 @@ class Solver():
                 if self.bound_values[lit.signed_var].is_stronger_than(lit.bound_value):
 
                     # Find the location of the event that made lit true.
-                    (ev_i_dl, ev_i) = self.get_index_of_first_event_implying_literal(lit)
+                    first_impl_ev_index = self.get_index_of_first_event_implying_literal(lit)
 
                     # If lit is implied at decision level 0, then it is always true.
                     # So we can discard it.
+                    if first_impl_ev_index is None:
+                        continue
+# FIXME: ambiguity between "None" index or 0... Need to be sure whether 
+                    (ev_i_dl, ev_i) = first_impl_ev_index
                     if ev_i_dl == 0:
                         continue
 
@@ -1156,7 +1166,7 @@ class Solver():
 
             cause: Optional[SolverCauses.AnyCause] = None
             while ev_i < len(self.events_trail[self.dec_level]):
-                ev = self.undo_and_return_last_event_at_current_decision_level()
+                ev = self._undo_and_return_last_event_at_current_decision_level()
                 cause = ev.cause
 
             assert cause is not None
@@ -1208,7 +1218,10 @@ class Solver():
             literal_negation = literal.negation()
 
             if not self.bound_values[literal_negation.signed_var].is_stronger_than(literal_negation.bound_value):
-                (dl, _) = self.get_index_of_first_event_implying_literal(literal_negation)
+                first_impl_ev_index = self.get_index_of_first_event_implying_literal(literal_negation)
+                if first_impl_ev_index is None:
+                    continue
+                (dl, _) = first_impl_ev_index
                 if dl > 0:
                     if dl > max_dl:
                         next_max_dl = max_dl

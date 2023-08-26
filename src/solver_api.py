@@ -105,8 +105,8 @@ def _add_new_variable(
     solver.bound_values[SignedVar(var, False)] = BoundVal(-initial_domain[0])
     solver.bound_values[SignedVar(var, True)] = BoundVal(initial_domain[1])
 
-    solver.set_bound_value(SignedVar(var, False), BoundVal(-initial_domain[0]), SolverCauses.Encoding())
-    solver.set_bound_value(SignedVar(var, True), BoundVal(initial_domain[1]), SolverCauses.Encoding())
+#    solver.set_bound_value(SignedVar(var, False), BoundVal(-initial_domain[0]), SolverCauses.Encoding())
+#    solver.set_bound_value(SignedVar(var, True), BoundVal(initial_domain[1]), SolverCauses.Encoding())
 
     return var
         
@@ -296,7 +296,8 @@ def add_constraint(
 
             return (solver.is_literal_entailed(lit)
                 and (not check_top_dec_level
-                    or solver.get_index_of_first_event_implying_literal(lit)[0] == 0))
+# FIXME: ambiguity: use 0 or None ?                    or solver.get_index_of_first_event_implying_literal(lit)[0] == 0
+                    or solver.get_index_of_first_event_implying_literal(lit) is None))
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -395,7 +396,7 @@ def add_constraint(
         else:
             lit = Lit.geq(add_new_non_optional_variable(solver, (0, 0), False), 1)
 
-            lits: List[Lit] = []
+            lits: List[Lit] = [lit]
             for l in conj_scope_lits:
                 _insert_implication_between_literals_on_non_optional_vars(solver, lit, l)
                 lits.append(l.negation())
