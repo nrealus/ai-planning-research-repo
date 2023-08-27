@@ -23,7 +23,8 @@ from dataclasses import dataclass
 #   - CONSTRAINT ELEMENTARY EXPRESSIONS
 #   - REIFIED CONSTRAINTS
 #
-# - HELPER CLASS: TIGHT DISJUNCTIONS
+# - HELPER FUNCTIONS:
+#   - TIGHTENING OF (DISJUNCTIONS OF) LITERALS
 #################################################################################
 #################################################################################
 
@@ -344,7 +345,7 @@ class ConstraintElementaryExpression(ABC):
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
         def negation(self) -> ConstraintElementaryExpression.Or:
-#            return ConstraintElementaryExpression.Or(TightDisjunction(tuple(lit.negation() for lit in self.literals)).literals)
+#            return ConstraintElementaryExpression.Or(tighten_literals(tuple(lit.negation() for lit in self.literals)))
             return ConstraintElementaryExpression.Or(tuple(lit.negation() for lit in self.literals))
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -383,19 +384,19 @@ class ConstraintElementaryExpression(ABC):
 #################################################################################
 # REIFIED CONSTRAINTS
 #################################################################################
-
-class ReifiedConstraint(NamedTuple):
-    """
-    TODO
-    """
-    
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-    constraint_elementary_expression: ConstraintElementaryExpression.AnyExpr
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-    reification_literal: Lit
-
+# 
+# class ReifiedConstraint(NamedTuple):
+#     """
+#     Represents a constraint as stored by the solver.
+#     """
+#     
+#     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+#     constraint_elementary_expression: ConstraintElementaryExpression.AnyExpr
+#     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+#     reification_literal: Lit
+# 
 #################################################################################
-# TIGHT DISJUNCTIONS
+# TIGHTENING OF (DISJUNCTIONS OF) LITERALS
 #################################################################################
 
 def tighten_literals(literals: Sequence[Lit]) -> Tuple[Lit,...]:
