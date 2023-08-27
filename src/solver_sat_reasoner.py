@@ -258,6 +258,7 @@ class SATReasoner(SolverReasoner):
         solver: Solver
     ) -> None:
         
+        self.earliest_unprocessed_solver_event_index = 0
         if len(self.locked_clauses_trail) == solver.dec_level:
             self.locked_clauses_trail.append([])
 
@@ -270,6 +271,7 @@ class SATReasoner(SolverReasoner):
         for locked_clause in self.locked_clauses_trail[solver.dec_level]:
             self.locked_clauses.remove(locked_clause)
         self.locked_clauses_trail[solver.dec_level].clear()
+        self.earliest_unprocessed_solver_event_index = len(solver.events_trail[solver.dec_level-1])
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -487,6 +489,11 @@ class SATReasoner(SolverReasoner):
 
         working_watches: Dict[BoundVal, List[SATReasoner.ClauseId]] = {}
 
+        # We need to make sure that the next unprocessed event index
+        # is at most the index of the next event that will be posted.
+        # Indeed, in the same decision level, a partial backtrack is
+        # possible when building an explanation (in the main solver).
+        # FIXME: FIND A MORE ELEGANT WAY TO DO THIS "AUTOMATICALLY" ?
         self.earliest_unprocessed_solver_event_index = min(
             self.earliest_unprocessed_solver_event_index,
             len(solver.events_trail[solver.dec_level]))

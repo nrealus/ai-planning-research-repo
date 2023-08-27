@@ -877,11 +877,11 @@ class Solver():
 
         while self.dec_level > target_dec_level:
             _n = len(self.events_trail[self.dec_level])
+            for reasoner in reasoners:
+                reasoner.on_solver_backtrack_one_level(self)
             for _ in range(_n):
                 self._undo_and_return_last_event_at_current_decision_level()
             self.dec_level -= 1
-            for reasoner in reasoners:
-                reasoner.on_solver_backtrack_one_level(self)
 
     #############################################################################
     # PROPAGATION
