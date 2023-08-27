@@ -9,8 +9,7 @@ from fundamentals import (
     Var, ZERO_VAR,
     SignedVar, BoundVal, Lit, TRUE_LIT, FALSE_LIT,
     ConstraintElementaryExpression,
-    ReifiedConstraint,
-#    TightDisjunction,
+#    ReifiedConstraint,
     tighten_literals,
 )
 
@@ -82,7 +81,7 @@ class SolverCauses(ABC):
 
     class Encoding(NamedTuple):
         """
-        Represents a cause corresponding to the encoding of a constraint.
+        Represents a cause corresponding to the encoding/posting of a constraint.
         """
         pass
 
@@ -96,7 +95,7 @@ class SolverCauses(ABC):
         non-optional variables (notably presence variables) and 
         concern literals that are "directly implied" by the newly entailed
         literal. Indeed, the solver has an implication graph, on
-        non-optional variable's literals. It stores implications that
+        non-optional variables' literals. It stores implications that
         must be satisfied.
         """
 
@@ -159,7 +158,7 @@ class SolverCauses(ABC):
         ReasonerInference,
     ]
     """
-    Type alias representing all kinds of causes.
+    Type alias representing all kinds of causes of an event.
     """
 
 #################################################################################
@@ -191,6 +190,8 @@ class SolverEvent(NamedTuple):
     
     It is a "double index": the first int of the tuple corresponds to the decision
     level, and the second one corresponds to the event's index in that decision level.
+
+    A None value however, indicates that this is the first event on its signed variable.
     """
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     cause: SolverCauses.AnyCause
@@ -226,11 +227,10 @@ class SolverConflictInfo(ABC):
 
     class ReasonerExplanation(NamedTuple):
         """
-        Represents an explanation for a conflict, given by the
-        reasoner which detect the conflict.
+        Represents an explanation for a conflict, given by the reasoner which detected it.
         
-        This explanation must be "refined" by the solver into an
-        asserting / learned clause (conflict analysis).
+        This explanation must be "refined" by the solver into an asserting / learned
+        clause (conflict analysis).
         """
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
         explanation_literals: Tuple[Lit,...]
@@ -246,9 +246,9 @@ class SolverConflictInfo(ABC):
 
         Conflicts happen when propagation leads to a contradiction and fails.
         They need to be explained and learned into a new "learned" or "asserting"
-        clause, which is then added to the clause database of the solver, after
-        backtracking to an appropriate backtrack level (the 1st Unique
-        Implication Point, in our case).
+        clause, which is then added to the clause database of the solver (or
+        rather the `SATReasoner`'s), after backtracking to an appropriate
+        backtrack level (in our case, the 1st Unique Implication Point / 1UIP).
 
         A conflict can be returned to the solver in two ways: either with an
         `InvalidBoundUpdate`, or with a `ReasonerExplanation`.
@@ -256,21 +256,24 @@ class SolverConflictInfo(ABC):
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
         asserting_clause_literals: Tuple[Lit,...]
         """
-        The asserting clause (as a list of its literals). Not yet learned (i.e.
-        not yet in the clause database).
+        The asserting clause (as a set of literals). Not yet learned (i.e.
+        not yet in the clause database). They are tightened before the
+        structure (`AnalysisResult`) is created.
 
-        A set of literals of which at least one must be true to avoid the conflict.
+        To avoid the conflict, at least one of the literals will have to be true.
         """
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
         resolved_literals_storage: Dict[SignedVar, BoundVal] # FIXME ? # Tuple[Literal,...]
         """
-        Stores resolved literals that participate in the conflict.
+        The resolved literals that participate in the conflict. Stored as a
+        dictionary instead of a tuple of literals.
         
-        Those literals appeared in an explanation when producing the associated clause, but
-        were replaced by their own explanation (and thus do not appear in the clause).
+        These literals appeared in an explanation when producing the asserting
+        clause, but were "recursively" replaced by their own explanation (and
+        thus do not appear in the clause).
 
-        Those are typically exploited by some branching heuristics (e.g. LRB) to identify
-        literals participating in conflicts.    
+        They are typically exploited by some branching heuristics (e.g. LRB) to
+        identify literals participating in conflicts.    
         """
 
 #################################################################################
@@ -279,6 +282,16 @@ class SolverConflictInfo(ABC):
 
 class SolverReasoner():
     """
+    Base class (or rather interface) for reasoners.
+    
+    Reasoners are specialized inference engines / "modules" of the (main) solver.
+    They are queried by the solver's propagation method one by one, to perform
+    specialized propagation / inference. Each of them processes newly accumulated
+    bound updates / events, including those resulting from inference / propagation
+    by other reasoners, until nothing new can be inferred. They also help the main
+    solver by providing it with an initial (FIXME?) explanation, when a conflict
+    is found during their propagation. This explanation may be further refined
+    by the main solver when doing conflict analysis.
     """
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -291,6 +304,7 @@ class SolverReasoner():
         solver: Solver,
     ) -> None:
         """
+        TODO
         """
         pass
 
@@ -301,6 +315,7 @@ class SolverReasoner():
         solver:Solver,
     ) -> None:
         """
+        TODO
         """
         pass
 
@@ -322,6 +337,7 @@ class SolverReasoner():
         solver: Solver,
     ) -> Optional[SolverConflictInfo.InvalidBoundUpdate | SolverConflictInfo.ReasonerExplanation]:
         """
+        TODO
         """
         pass
 
@@ -343,7 +359,7 @@ class Solver():
     def __init__(self):
 
         self._vars_id_counter: int = 0
-        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+        #########################################################################
         self.vars: Dict[bool, Set[Var]] = { False: set(), True: set() }
         """
         Stores the variables of the problem.
@@ -352,24 +368,67 @@ class Solver():
         and the uncontrollable ones are in the set under key `False`.
         """
         #########################################################################
+        self.conjunctive_scopes: Dict[Tuple[Lit,...], Lit] = {}
+        """
+        Stores conjunctions (of presence literals) corresponding to conjunctive scopes
+        that have been defined in the problem, as well as their associated "scope
+        literals" that represent them.
+
+        A conjunctive scope is created when we want to refer to a subset of the
+        problem that exists iff all required scopes are present. For example, the 
+        expression "a <= b" is defined iff both a and b are present. It can be said
+        to exist in the conjunctive scope "presence(a) & presence(b)".
+        """
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+        self.conjunctive_scopes_reverse: Dict[Lit, Tuple[Lit,...]] = {}
+        """
+        The reverse of `conjunctive_scopes`.
+        """
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+        self.conjunctive_scopes_tautologies: Dict[Lit, Lit] = {}
+        """
+        For each scope literal, associates a literal (on an optional variable).
+        When we're in that scope (i.e. the scope literal is true, i.e. all the
+        literals defining it are true) that literal is always true. When we're
+        not in that scope, the variable of this literal is absent. As such, this
+        literal can indeed be called "tautology of the scope".
+        """
+        #########################################################################
+        self.constraints: List[Tuple[ConstraintElementaryExpression.AnyExpr, Lit]] = []
+        """
+        Stores pairs consisting of a constraint (in elementary form) and a literal,
+        stating that the literal must be true iff the constraint is true.
+
+        FIXME? Both "real" reified constraints that were defined in the problem
+        and "artificial"/"intermediary" constraints can be found here.
+        Apart from pairs consisting of a (reified) constraint and its reification
+        literal, there can be pairs where the constraint is simply the satisfaction
+        of a reification literal of another constraint. This allows to enforce
+        a sort of "truth chain". FIXME?
+        """
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+        self.reifications: Dict[ConstraintElementaryExpression.AnyExpr, Lit] = {}
+        """
+        Stores reification literals of constraints that were defined in the problem (in
+        their "elementary" form) and reified.
+        """
+        #########################################################################
         self.bound_values: Dict[SignedVar, BoundVal] = {}
         """
-        Stores the upper and lower bounds of variables' domains (at the
-        current decision level).
-
-        (See `Literal`)
+        The main "domains" structure.
+        Stores the upper and lower bounds of variables' domains (at the current decision level).
         """
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
         self.bound_values_event_indices: Dict[SignedVar, Optional[Tuple[int, int]]] = {} 
         """
-        Stores the indices of events in `events_trail` that set the current bounds of variables.
+        Stores the indices of events in that set the current bounds of variables.
         """
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
         self.vars_presence_literals: Dict[Var, Lit] = {}
         """
         Maps variables to their presence literals.
 
-        Variables of present literals have to be non-optional
+        Variables of presence literals have to be non-optional
         (i.e. have the `TRUE_LIT` as their presence literal).
         """
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -379,7 +438,7 @@ class Solver():
 
         Maps a signed variable to a dictionary of adjancency lists (sets),
         which can be seen as a "labeled adjacency list".
-        The key (`BoundValue`) is a "guard" bound value for the signed variable,
+        The key of the inner dict is a "guard" bound value for the signed variable,
         and the value (list of literals) corresponds to literals that
         are implied by the literal formed by the signed variable and
         the guard bound value.
@@ -389,40 +448,26 @@ class Solver():
         list for values greater (weaker) than v.
         """
         #########################################################################
-        self.conjunctive_scopes: Dict[Tuple[Lit,...], Lit] = {}
+        self.dec_level: int = 0
+        """
+        The current decision level of the solver.
+        """
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-        self.conjunctive_scopes_reverse: Dict[Lit, Tuple[Lit,...]] = {}
-        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-        self.conjunctive_scopes_tautologies: Dict[Lit, Lit] = {}
-        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-        self.reified_constraints: List[ReifiedConstraint] = []
-        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-        self.reifications: Dict[ConstraintElementaryExpression.AnyExpr, Lit] = {}
-        #########################################################################
         self.events_trail: List[List[SolverEvent]] = [[]]
         """
         The trail of events.
 
-        Uses double indices: the index of the first list is the decision level
-        of the event. The index of the inner list is the index of the event in
-        its decision level.
-        """
-        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-#        self.events_trail_cursor_index: int = 0
-        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-        self.dec_level: int = 0
-        """
-        The current decision level.
+        Uses double indices: the index in the first list is the decision level
+        of the event. The index in the inner list is the index of the event in
+        that decision level.
         """
         #########################################################################
+
         self.vars[False].add(ZERO_VAR)
         self.vars_presence_literals[ZERO_VAR] = TRUE_LIT
 
         self.bound_values[SignedVar(ZERO_VAR, True)] = BoundVal(0)
         self.bound_values[SignedVar(ZERO_VAR, False)] = BoundVal(0)
-
-#        self.set_bound_value(SignedVar(ZERO_VAR, True), BoundVal(0), SolverCauses.Encoding())
-#        self.set_bound_value(SignedVar(ZERO_VAR, False), BoundVal(0), SolverCauses.Encoding())
 
         self.conjunctive_scopes[tuple()] = TRUE_LIT
         self.conjunctive_scopes_reverse[TRUE_LIT] = tuple()
@@ -608,7 +653,8 @@ class Solver():
 
         assert self.is_literal_entailed(literal)
 
-        prev_ev_index = self.bound_values_event_indices[literal.signed_var]
+# FIXME?        prev_ev_index = self.bound_values_event_indices[literal.signed_var]
+        prev_ev_index = self.bound_values_event_indices.get(literal.signed_var, None)
         if prev_ev_index is None:
             return None
         (dl, ev_i) = prev_ev_index
