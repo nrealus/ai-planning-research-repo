@@ -7,8 +7,7 @@ from typing import Dict, List, NamedTuple, Optional, Set, Tuple, Union
 from fundamentals import (
     Lit, TRUE_LIT,
     ConstraintElementaryExpression,
-    ReifiedConstraint,
-#    TightDisjunction,
+#    ReifiedConstraint,
     tighten_literals,
     are_tightened_literals_tautological,
 )
@@ -53,10 +52,10 @@ def search(
     # code with this initial propagation code. But maybe there's a another reason ?
     # Until this is clarified, I choose to follow a simpler approach: do the constraint
     # posting / initial propagation once at the beginning, and make it explicit in the code.
-    while last_unposted_constraint_index < len(solver.reified_constraints):
-        (constr_formula, reification_literal) = solver.reified_constraints[last_unposted_constraint_index]
+    while last_unposted_constraint_index < len(solver.constraints):
+        (constr_elementary_expr, constr_literal) = solver.constraints[last_unposted_constraint_index]
 
-        scope_literal = solver.vars_presence_literals[reification_literal.signed_var.var]
+        scope_literal = solver.vars_presence_literals[constr_literal.signed_var.var]
         
         # If the scope of the constraint is false, it means
         # the constraint is absent. So it is ignored.
@@ -67,7 +66,7 @@ def search(
             res = _actually_post_reified_constraint(
                 solver,
                 sat_reasoner,
-                ReifiedConstraint(constr_formula, reification_literal))
+                (constr_elementary_expr, constr_literal))
             if isinstance(res, SolverConflictInfo.InvalidBoundUpdate):
                 return "INCONSISTENT"
 
@@ -144,7 +143,7 @@ def _actually_post_reified_constraint(
     solver: Solver,
     sat_reasoner: SATReasoner,
 #    diff_reasoner: ,
-    reified_constraint: ReifiedConstraint,
+    constraint: Tuple[ConstraintElementaryExpression.AnyExpr, Lit],
 ) -> Optional[SolverConflictInfo.InvalidBoundUpdate]:
     """
     """
@@ -222,50 +221,50 @@ def _actually_post_reified_constraint(
 
     assert solver.dec_level == 0
 
-    (constraint_elementary_expression, reification_literal) = reified_constraint
-    scope_literal = solver.vars_presence_literals[reification_literal.signed_var.var]
+    (constr_elementary_expr, constr_literal) = constraint
+    scope_literal = solver.vars_presence_literals[constr_literal.signed_var.var]
 
     # If the scope is False, then the constraint is absent: we thus ignore it.
     if solver.is_literal_entailed(scope_literal.negation()):
         return None
 
-    if isinstance(constraint_elementary_expression, ConstraintElementaryExpression.LitExpr):
+    if isinstance(constr_elementary_expr, ConstraintElementaryExpression.LitExpr):
 
         assert solver.is_implication_true(
             scope_literal,
-            solver.vars_presence_literals[constraint_elementary_expression.literal.signed_var.var])
+            solver.vars_presence_literals[constr_elementary_expr.literal.signed_var.var])
 
         _add_clause_to_sat_reasoner(
-            (reification_literal.negation(), constraint_elementary_expression.literal),
+            (constr_literal.negation(), constr_elementary_expr.literal),
             scope_literal)
 
         _add_clause_to_sat_reasoner(
-            (constraint_elementary_expression.literal.negation(), reification_literal),
+            (constr_elementary_expr.literal.negation(), constr_literal),
             scope_literal)
 
-    elif isinstance(constraint_elementary_expression, ConstraintElementaryExpression.MaxDiffCnt):
+    elif isinstance(constr_elementary_expr, ConstraintElementaryExpression.MaxDiffCnt):
         #FIXME
         # _add_reified_edge(
         #     solver,
         #     diff_reasoner,
-        #     reification_literal,
+        #     constr_literal,
         #     constr_.to_var,
         #     constr_.from_var,
         #     constr_.max_diff,
         # )
         raise NotImplementedError
 
-    elif isinstance(constraint_elementary_expression, ConstraintElementaryExpression.Or):
+    elif isinstance(constr_elementary_expr, ConstraintElementaryExpression.Or):
 
-        if solver.is_literal_entailed(reification_literal):
+        if solver.is_literal_entailed(constr_literal):
             _add_clause_to_sat_reasoner(
-                constraint_elementary_expression.literals,
+                constr_elementary_expr.literals,
                 scope_literal,
             )
             return None
         
-        elif solver.is_literal_entailed(reification_literal.negation()):
-            for lit in constraint_elementary_expression.literals:
+        elif solver.is_literal_entailed(constr_literal.negation()):
+            for lit in constr_elementary_expr.literals:
                 res = _add_clause_to_sat_reasoner(
                     (lit.negation(),),
                     scope_literal,
@@ -277,7 +276,7 @@ def _actually_post_reified_constraint(
         else:
 
             clause_tightened_literals = tighten_literals(
-                (reification_literal.negation(),)+constraint_elementary_expression.literals)
+                (constr_literal.negation(),)+constr_elementary_expr.literals)
 
             if are_tightened_literals_tautological(clause_tightened_literals):
                 res = _add_clause_to_sat_reasoner(
@@ -287,21 +286,21 @@ def _actually_post_reified_constraint(
                 if isinstance(res, SolverConflictInfo.InvalidBoundUpdate):
                     return res
             
-            for literal in constraint_elementary_expression.literals:
+            for lit in constr_elementary_expr.literals:
                 res = _add_clause_to_sat_reasoner(
-                    (literal.negation(), reification_literal),
+                    (lit.negation(), constr_literal),
                     scope_literal)
                 if isinstance(res, SolverConflictInfo.InvalidBoundUpdate):
                     return res
 
             return None
 
-    elif isinstance(constraint_elementary_expression, ConstraintElementaryExpression.And):
+    elif isinstance(constr_elementary_expr, ConstraintElementaryExpression.And):
 
         return _actually_post_reified_constraint(
             solver,
             sat_reasoner,
-            ReifiedConstraint(constraint_elementary_expression.negation(), reification_literal.negation()),
+            (constr_elementary_expr.negation(), constr_literal.negation()),
         )
 
     else:

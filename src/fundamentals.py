@@ -408,7 +408,7 @@ def tighten_literals(literals: Sequence[Lit]) -> Tuple[Lit,...]:
     The returned tuple of literals is said to be tightened.
      
     Note that nowhere in the code is it "fundamentally required" for (a clause/disjunction of)
-    literals to be tightened. (At least i think so... FIXME). However, it is
+    literals to be tightened. (At least I think so... FIXME). However, it is
     desirable to tighten them, for example to reduce the size of clauses or explanations.
     """
 

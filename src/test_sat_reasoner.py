@@ -6,7 +6,6 @@ from typing import Optional, Tuple
 
 from fundamentals import (
     SignedVar, BoundVal, Lit, TRUE_LIT,
-#    TightDisjunction,
     tighten_literals,
 )
 
