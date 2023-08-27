@@ -399,6 +399,17 @@ class ReifiedConstraint(NamedTuple):
 #################################################################################
 
 def tighten_literals(literals: Sequence[Lit]) -> Tuple[Lit,...]:
+    """
+    "Tightens" a set of (disjunctive) literals. This means sorting the literals
+    (in lexicographic order - see `Lit` attributes) and, in case there were
+    multiple literals on the same signed variable, only keeping the weakest one.
+     
+    The returned tuple of literals is said to be tightened.
+     
+    Note that nowhere in the code is it "fundamentally required" for (a clause/disjunction of)
+    literals to be tightened. (At least i think so... FIXME). However, it is
+    desirable to tighten them, for example to reduce the size of clauses or explanations.
+    """
 
     lits: List[Lit] = sorted(literals)
 
@@ -419,90 +430,26 @@ def tighten_literals(literals: Sequence[Lit]) -> Tuple[Lit,...]:
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 def are_tightened_literals_tautological(literals: Tuple[Lit,...]) -> bool:
+    """
+    Returns:
+        bool: Whether the disjunction of given (tightened) literals is tautological.
+    (i.e. is always true, because of two literals [v<=x] and [v>=y] with y<=x).
+
+    !!! Requires the given set of literals to have been tightened !!! Indeed, the
+    function assumes that the literals are sorted and that there is only one literal
+    per signed variable.
+    """
 
     n = len(literals)
     i = 0
     while i < n-1:
+
+        assert literals[i] < literals[i+1] and literals[i].signed_var != literals[i+1].signed_var
+
         if literals[i].signed_var.opposite_signed_var() == literals[i+1].signed_var:
             if literals[i].bound_value - literals[i+1].bound_value <= 0:
                 return True
         i += 1
-    return False        
-
-# @dataclass(frozen=True, init=False)
-# class TightDisjunction():
-#     """
-#     Helper class that transforms (or "tightens") a disjunction of literals into
-#     so-called "tight form", meaning the literals are sorted (in lexicographic order)
-#     and, in case there were initially multiple literals on the same signed variable,
-#     only one (the weakest) is kept.
-# 
-#     After tightening, the set of tightened literals may be used freely anywhere.
-#     
-#     Note that nowhere in the code is it "fundamentally required" for a disjunction
-#     of literals to be in tight form. (At least i think so... FIXME).
-#     However, "tight form" is desirable, for example to reduce the size of clauses or
-#     explanations, which is why tightening is used at some specific moments.
-#     """
-# 
-#     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-#     literals: Tuple[Lit,...]
-#     """
-#     The "tightened" literals of the disjunction. They are sorted in lexicographic
-#     order and there is only one literal per signed variable.
-#     """
-#     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-#     _initally_tight: bool
-#     """
-#     Whether the literals given initially were indicated as already in tight form.
-#     """
-#     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-# 
-#     def __init__(self,
-#         literals: Sequence[Lit],
-#         _initally_tight: bool=False,
-#     ):
-#         object.__setattr__(self, '_initally_tight', _initally_tight)
-# 
-#         # If the literals are indicated as already in tight form,
-#         if self._initally_tight:
-#             object.__setattr__(self, 'literals', tuple(literals))
-# 
-#         # Otherwise, tighten them.
-#         else:
-#             lits: List[Lit] = sorted(literals)
-# 
-#             n = len(lits)
-#             i = 0
-#             j = 0
-#             while i < n-1-j:
-#                 # Because the literals are now lexicographically sorted,
-#                 # we know that if two literals are on the same signed variable,
-#                 # the weaker one is necessarily the next one.
-#                 if lits[i].entails(lits[i+1]):
-#                     lits.pop(i)
-#                     j += 1
-#                 else:
-#                     i += 1
-# 
-#             object.__setattr__(self, 'literals', tuple(lits))
-# 
-#     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-# 
-#     def is_tautological(self) -> bool:
-#         """
-#         Returns:
-#             bool: Whether the disjunction is tautological
-#         (i.e. is always true, because of two literals [v<=x] and [v>=y] with y<=x).
-#         """
-#         
-#         n = len(self.literals)
-#         i = 0
-#         while i < n-1:
-#             if self.literals[i].signed_var.opposite_signed_var() == self.literals[i+1].signed_var:
-#                 if self.literals[i].bound_value - self.literals[i+1].bound_value <= 0:
-#                     return True
-#             i += 1
-#         return False        
+    return False
 
 #################################################################################
