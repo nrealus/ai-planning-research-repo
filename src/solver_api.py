@@ -11,7 +11,9 @@ from fundamentals import (
     ConstraintExpression,
     ConstraintElementaryExpression,
     ReifiedConstraint,
-    TightDisjunction,
+#    TightDisjunction,
+    tighten_literals,
+    are_tightened_literals_tautological,
 )
 
 from solver import SolverCauses, SolverConflictInfo, Solver
@@ -163,19 +165,19 @@ def add_constraint(
 
     def transform_or(literals: Tuple[Lit,...]) -> ConstraintElementaryExpression.AnyExpr:
 
-        tight_disjunction: TightDisjunction = TightDisjunction(literals)
+        tightened_literals = tighten_literals(literals)
 
-        if tight_disjunction.is_tautological():
+        if are_tightened_literals_tautological(tightened_literals):
             return ConstraintElementaryExpression.LitExpr(TRUE_LIT)
 
-        elif len(tight_disjunction.literals) == 0:
+        elif len(tightened_literals) == 0:
             return ConstraintElementaryExpression.LitExpr(FALSE_LIT)
 
-        elif len(tight_disjunction.literals) == 1:
-            return ConstraintElementaryExpression.LitExpr(tight_disjunction.literals[0])
+        elif len(tightened_literals) == 1:
+            return ConstraintElementaryExpression.LitExpr(tightened_literals[0])
 
         else:
-            return ConstraintElementaryExpression.Or(tight_disjunction.literals)
+            return ConstraintElementaryExpression.Or(tightened_literals)
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 

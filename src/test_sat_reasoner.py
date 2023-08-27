@@ -6,7 +6,8 @@ from typing import Optional, Tuple
 
 from fundamentals import (
     SignedVar, BoundVal, Lit, TRUE_LIT,
-    TightDisjunction,
+#    TightDisjunction,
+    tighten_literals,
 )
 
 from solver import SolverCauses, SolverDecisions, SolverConflictInfo, Solver
@@ -43,7 +44,7 @@ class TestSATReasonerPropagation(unittest.TestCase):
         self.assertEqual(value_of(A), None)
         self.assertEqual(value_of(B), None)
 
-        A_or_B = TightDisjunction((Lit.geq(A, 1), Lit.geq(B, 1))).literals
+        A_or_B = tighten_literals((Lit.geq(A, 1), Lit.geq(B, 1)))
         sat_reasoner.add_new_fixed_clause_with_scope(A_or_B, TRUE_LIT)
 
         sat_reasoner.propagate(solver)
@@ -80,13 +81,12 @@ class TestSATReasonerPropagation(unittest.TestCase):
 
         self.assertEqual([value_of(v) for v in (A,B,C,D)], [None, None, None, None])
 
-        clause_literals = TightDisjunction((
+        A_or_B_or_C_or_D = tighten_literals((
             Lit.geq(A, 1),
             Lit.geq(B, 1),
             Lit.geq(C, 1),
-            Lit.geq(D, 1),
-            )).literals
-        sat_reasoner.add_new_fixed_clause_with_scope(clause_literals, TRUE_LIT)
+            Lit.geq(D, 1)))
+        sat_reasoner.add_new_fixed_clause_with_scope(A_or_B_or_C_or_D, TRUE_LIT)
 
         sat_reasoner.propagate(solver)
         self.assertEqual([value_of(v) for v in (A,B,C,D)], [None, None, None, None])
@@ -158,7 +158,7 @@ class TestSATReasonerPropagation(unittest.TestCase):
         self.assertEqual(value_of(A), None)
         self.assertEqual(value_of(B), None)
 
-        A_or_B = TightDisjunction((Lit.geq(A, 1), Lit.geq(B, 1))).literals
+        A_or_B = tighten_literals((Lit.geq(A, 1), Lit.geq(B, 1)))
         sat_reasoner.add_new_fixed_clause_with_scope(A_or_B, TRUE_LIT)
 
         sat_reasoner.propagate(solver)
@@ -197,9 +197,9 @@ class TestSATReasonerPropagation(unittest.TestCase):
 
         self.assertListEqual([value_of(v) for v in (A,B,C,D)], [(0,10), (0,10), (0,10), (0,10)])
 
-        clause1_literals = TightDisjunction((Lit.leq(A, 5), Lit.leq(B, 5))).literals
+        clause1_literals = tighten_literals((Lit.leq(A, 5), Lit.leq(B, 5)))
         sat_reasoner.add_new_fixed_clause_with_scope(clause1_literals, TRUE_LIT)
-        clause2_literals = TightDisjunction((Lit.geq(C, 5), Lit.geq(D, 5))).literals
+        clause2_literals = tighten_literals((Lit.geq(C, 5), Lit.geq(D, 5)))
         sat_reasoner.add_new_fixed_clause_with_scope(clause2_literals, TRUE_LIT)
 
         sat_reasoner.propagate(solver)
@@ -298,27 +298,27 @@ class TestSATReasonerClauses(unittest.TestCase):
         solver.set_bound_value(SignedVar(B, True), BoundVal(0), SolverCauses.Decision())
         self.assertEqual([value_of(v) for v in (A,B,C,D)], [0, 0, None, None])
 
-        A_or_B_or_C_or_D = TightDisjunction((Lit.geq(A, 1), Lit.geq(B, 1), Lit.geq(C, 1), Lit.geq(D, 1))).literals
+        A_or_B_or_C_or_D = tighten_literals((Lit.geq(A, 1), Lit.geq(B, 1), Lit.geq(C, 1), Lit.geq(D, 1)))
         sat_reasoner.add_new_fixed_clause_with_scope(A_or_B_or_C_or_D, TRUE_LIT)
         sat_reasoner.propagate(solver)
         self.assertEqual([value_of(v) for v in (A,B,C,D)], [0, 0, None, None])
 
-        notA_or_notB = TightDisjunction((Lit.leq(A, 0), Lit.leq(B, 0))).literals
+        notA_or_notB = tighten_literals((Lit.leq(A, 0), Lit.leq(B, 0)))
         sat_reasoner.add_new_fixed_clause_with_scope(notA_or_notB, TRUE_LIT)
         sat_reasoner.propagate(solver)
         self.assertEqual([value_of(v) for v in (A,B,C,D)], [0, 0, None, None])
 
-        notA_or_B = TightDisjunction((Lit.leq(A, 0), Lit.geq(B, 1))).literals
+        notA_or_B = tighten_literals((Lit.leq(A, 0), Lit.geq(B, 1)))
         sat_reasoner.add_new_fixed_clause_with_scope(notA_or_B, TRUE_LIT)
         sat_reasoner.propagate(solver)
         self.assertEqual([value_of(v) for v in (A,B,C,D)], [0, 0, None, None])
 
-        A_or_B_or_notC = TightDisjunction((Lit.geq(A, 1), Lit.geq(B, 1), Lit.leq(C, 0))).literals
+        A_or_B_or_notC = tighten_literals((Lit.geq(A, 1), Lit.geq(B, 1), Lit.leq(C, 0)))
         sat_reasoner.add_new_fixed_clause_with_scope(A_or_B_or_notC, TRUE_LIT)
         sat_reasoner.propagate(solver)
         self.assertEqual([value_of(v) for v in (A,B,C,D)], [0, 0, 0, 1])
 
-        A_or_B_or_C_or_notD = TightDisjunction((Lit.geq(A, 1), Lit.geq(B, 1), Lit.geq(C, 1), Lit.leq(D, 0))).literals
+        A_or_B_or_C_or_notD = tighten_literals((Lit.geq(A, 1), Lit.geq(B, 1), Lit.geq(C, 1), Lit.leq(D, 0)))
         sat_reasoner.add_new_fixed_clause_with_scope(A_or_B_or_C_or_notD, TRUE_LIT)
 
         self.assertNotEqual(sat_reasoner.propagate(solver), None)

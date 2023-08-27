@@ -8,7 +8,9 @@ from fundamentals import (
     Lit, TRUE_LIT,
     ConstraintElementaryExpression,
     ReifiedConstraint,
-    TightDisjunction,
+#    TightDisjunction,
+    tighten_literals,
+    are_tightened_literals_tautological,
 )
 
 from solver import SolverDecisions, SolverCauses, SolverConflictInfo, Solver
@@ -148,17 +150,20 @@ def _actually_post_reified_constraint(
     """
     
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-    def _add_clause_from_clause_literals_and_scope(
+    def _add_clause_to_sat_reasoner(
         clause_literals: Tuple[Lit,...],
         scope_literal: Lit,
-        clause_literals_already_tight: bool=False,
+        clause_literals_already_tightened: bool=False,
     ) -> bool | SolverConflictInfo.InvalidBoundUpdate:
 
-        clause_in_tight_form = TightDisjunction(clause_literals, clause_literals_already_tight)
+        if clause_literals_already_tightened:
+            clause_tightened_literals = tighten_literals(clause_literals)
+        else:
+            clause_tightened_literals = clause_literals
 
         # Remove clause literals that are guaranteed to not become true
         # (i.e. whose value is False / whose negation literal is entailed)
-        lits: List[Lit] = list(clause_in_tight_form.literals)
+        lits: List[Lit] = list(clause_tightened_literals)
         n: int = len(lits)
         i: int = 0
         j: int = 0
@@ -169,7 +174,7 @@ def _actually_post_reified_constraint(
             else:
                 i += 1
 
-        clause_in_tight_form = TightDisjunction(tuple(lits), True)
+        clause_tightened_literals = tuple(lits)
 
         processed_scope_literal: Lit = scope_literal
 
@@ -184,7 +189,7 @@ def _actually_post_reified_constraint(
         #
         # NOTE: this could be generalized to look at literals in the clause as potential scopes
 
-        if len(clause_in_tight_form.literals) == 0:
+        if len(clause_tightened_literals) == 0:
 
             processed_scope_literal_neg = processed_scope_literal.negation()
 
@@ -199,17 +204,17 @@ def _actually_post_reified_constraint(
 
         elif all(solver.is_implication_true(
             solver.vars_presence_literals[lit.signed_var.var],processed_scope_literal)
-            for lit in clause_in_tight_form.literals
+            for lit in clause_tightened_literals
         ):
             pass
         
         else:
-            clause_in_tight_form = TightDisjunction(
-                clause_in_tight_form.literals+(processed_scope_literal.negation(),))
+            clause_tightened_literals = tighten_literals(
+                clause_tightened_literals+(processed_scope_literal.negation(),))
             processed_scope_literal = TRUE_LIT
 
         sat_reasoner.add_new_fixed_clause_with_scope(
-            clause_in_tight_form.literals,
+            clause_tightened_literals,
             processed_scope_literal)
         return True
 
@@ -230,11 +235,11 @@ def _actually_post_reified_constraint(
             scope_literal,
             solver.vars_presence_literals[constraint_elementary_expression.literal.signed_var.var])
 
-        _add_clause_from_clause_literals_and_scope(
+        _add_clause_to_sat_reasoner(
             (reification_literal.negation(), constraint_elementary_expression.literal),
             scope_literal)
 
-        _add_clause_from_clause_literals_and_scope(
+        _add_clause_to_sat_reasoner(
             (constraint_elementary_expression.literal.negation(), reification_literal),
             scope_literal)
 
@@ -253,7 +258,7 @@ def _actually_post_reified_constraint(
     elif isinstance(constraint_elementary_expression, ConstraintElementaryExpression.Or):
 
         if solver.is_literal_entailed(reification_literal):
-            _add_clause_from_clause_literals_and_scope(
+            _add_clause_to_sat_reasoner(
                 constraint_elementary_expression.literals,
                 scope_literal,
             )
@@ -261,7 +266,7 @@ def _actually_post_reified_constraint(
         
         elif solver.is_literal_entailed(reification_literal.negation()):
             for lit in constraint_elementary_expression.literals:
-                res = _add_clause_from_clause_literals_and_scope(
+                res = _add_clause_to_sat_reasoner(
                     (lit.negation(),),
                     scope_literal,
                 )
@@ -271,19 +276,19 @@ def _actually_post_reified_constraint(
         
         else:
 
-            clause_in_tight_form = TightDisjunction(
+            clause_tightened_literals = tighten_literals(
                 (reification_literal.negation(),)+constraint_elementary_expression.literals)
 
-            if clause_in_tight_form.is_tautological():
-                res = _add_clause_from_clause_literals_and_scope(
-                    clause_in_tight_form.literals,
+            if are_tightened_literals_tautological(clause_tightened_literals):
+                res = _add_clause_to_sat_reasoner(
+                    clause_tightened_literals,
                     scope_literal,
                     True)
                 if isinstance(res, SolverConflictInfo.InvalidBoundUpdate):
                     return res
             
             for literal in constraint_elementary_expression.literals:
-                res = _add_clause_from_clause_literals_and_scope(
+                res = _add_clause_to_sat_reasoner(
                     (literal.negation(), reification_literal),
                     scope_literal)
                 if isinstance(res, SolverConflictInfo.InvalidBoundUpdate):

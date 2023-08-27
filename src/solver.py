@@ -10,7 +10,8 @@ from fundamentals import (
     SignedVar, BoundVal, Lit, TRUE_LIT, FALSE_LIT,
     ConstraintElementaryExpression,
     ReifiedConstraint,
-    TightDisjunction,
+#    TightDisjunction,
+    tighten_literals,
 )
 
 import heapq
@@ -296,7 +297,7 @@ class SolverReasoner():
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     @abstractmethod
-    def on_solver_new_decision(self,
+    def on_solver_new_set_literal_decision(self,
         solver:Solver,
     ) -> None:
         """
@@ -813,7 +814,7 @@ class Solver():
             self.events_trail.append([])
         
         for reasoner in reasoners:
-            reasoner.on_solver_new_decision(self)
+            reasoner.on_solver_new_set_literal_decision(self)
 
         self.set_bound_value(
             set_literal_decision.literal.signed_var,
@@ -1116,7 +1117,7 @@ class Solver():
             # Corollary: if dl is 0, the derived clause must be empty.
             if not prio_queue:
                 return SolverConflictInfo.AnalysisResult(
-                    TightDisjunction(asserting_clause_literals).literals,
+                    tighten_literals(asserting_clause_literals),
                     resolved_literals,
                 )
             
@@ -1153,7 +1154,7 @@ class Solver():
             if not prio_queue:
                 asserting_clause_literals.append(lit.negation())
                 return SolverConflictInfo.AnalysisResult(
-                    TightDisjunction(asserting_clause_literals).literals,
+                    tighten_literals(asserting_clause_literals),
                     resolved_literals,
                 )
 
