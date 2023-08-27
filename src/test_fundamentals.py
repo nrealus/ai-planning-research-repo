@@ -5,7 +5,8 @@ from __future__ import annotations
 from fundamentals import (
     Var,
     SignedVar, BoundVal, Lit,
-    TightDisjunction,
+    tighten_literals,
+    are_tightened_literals_tautological
 )
 
 import unittest
@@ -42,36 +43,36 @@ class TestFundamentals(unittest.TestCase):
         B = Var(2)
 
         self.assertEqual(
-            TightDisjunction([Lit.geq(A, 0), Lit.geq(A, 1)]).literals,
+            tighten_literals([Lit.geq(A, 0), Lit.geq(A, 1)]),
             (Lit.geq(A, 0),))
 
         self.assertEqual(
-            TightDisjunction([Lit.leq(A, 0), Lit.leq(A, 1)]).literals,
+            tighten_literals([Lit.leq(A, 0), Lit.leq(A, 1)]),
             (Lit.leq(A, 1),))
         self.assertEqual(
-            TightDisjunction([Lit.leq(A, 1), Lit.leq(A, 0)]).literals,
+            tighten_literals([Lit.leq(A, 1), Lit.leq(A, 0)]),
             (Lit.leq(A, 1),))
         self.assertEqual(
-            TightDisjunction([Lit.leq(A, 0), Lit.leq(A, 0)]).literals,
+            tighten_literals([Lit.leq(A, 0), Lit.leq(A, 0)]),
             (Lit.leq(A, 0),))
         self.assertEqual(
-            TightDisjunction([Lit.leq(A, 0), Lit.leq(A, 1), Lit.leq(A,1), Lit.leq(A,0)]).literals,
+            tighten_literals([Lit.leq(A, 0), Lit.leq(A, 1), Lit.leq(A,1), Lit.leq(A,0)]),
             (Lit.leq(A, 1),))
 
         self.assertEqual(
-            TightDisjunction([Lit.leq(A, 0), Lit.leq(A, 0).negation()]).literals,
+            tighten_literals([Lit.leq(A, 0), Lit.leq(A, 0).negation()]),
             (Lit.leq(A, 0).negation(), Lit.leq(A, 0)))
 
         self.assertEqual(
-            TightDisjunction([Lit.leq(A, 0), Lit.leq(B, 1), Lit.leq(A, 1), Lit.leq(B, 0)]).literals,
+            tighten_literals([Lit.leq(A, 0), Lit.leq(B, 1), Lit.leq(A, 1), Lit.leq(B, 0)]),
             (Lit.leq(A, 1), Lit.leq(B, 1)))
 
         self.assertEqual(
-            TightDisjunction([Lit.geq(A, 0), Lit.geq(B, 1), Lit.geq(A, 1), Lit.geq(B, 0)]).literals,
+            tighten_literals([Lit.geq(A, 0), Lit.geq(B, 1), Lit.geq(A, 1), Lit.geq(B, 0)]),
             (Lit.geq(A, 0), Lit.geq(B, 0)))
 
         self.assertEqual(
-            TightDisjunction([
+            tighten_literals([
                 Lit.leq(A, 0),
                 Lit.leq(B, 1),
                 Lit.leq(A, 1),
@@ -79,7 +80,7 @@ class TestFundamentals(unittest.TestCase):
                 Lit.geq(A, 0),
                 Lit.geq(B, 1),
                 Lit.geq(A, 1),
-                Lit.geq(B, 0)]).literals,
+                Lit.geq(B, 0)]),
             (Lit.geq(A, 0), Lit.leq(A, 1), Lit.geq(B, 0), Lit.leq(B, 1)))
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -87,10 +88,10 @@ class TestFundamentals(unittest.TestCase):
     def test_tight_disjunction_tautology(self):
         A = Var(1)
         B = Var(2)
-        self.assertTrue(TightDisjunction((Lit.leq(A, 0), Lit.leq(A, 0).negation())).is_tautological())
-        self.assertTrue(TightDisjunction((Lit.leq(A, 0), Lit.geq(A, 0))).is_tautological())
-        self.assertTrue(TightDisjunction((Lit.leq(A, 0), Lit.geq(A, 1))).is_tautological())
-        self.assertTrue(TightDisjunction((Lit.leq(A, 0), Lit.leq(B, 0), Lit.leq(B, 2), Lit.leq(A, 0).negation())).is_tautological())
+        self.assertTrue(are_tightened_literals_tautological(tighten_literals((Lit.leq(A, 0), Lit.leq(A, 0).negation()))))
+        self.assertTrue(are_tightened_literals_tautological(tighten_literals((Lit.leq(A, 0), Lit.geq(A, 0)))))
+        self.assertTrue(are_tightened_literals_tautological(tighten_literals((Lit.leq(A, 0), Lit.geq(A, 1)))))
+        self.assertTrue(are_tightened_literals_tautological(tighten_literals((Lit.leq(A, 0), Lit.leq(B, 0), Lit.leq(B, 2), Lit.leq(A, 0).negation()))))
 
 #################################################################################
 
