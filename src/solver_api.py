@@ -2,11 +2,19 @@ from __future__ import annotations
 
 #################################################################################
 
-from typing import Tuple
+from typing import Dict, List, Optional, Tuple
 
-from fundamentals import *
-from solver import *
-from solver_sat_reasoner import *
+from fundamentals import (
+    Var, ZERO_VAR,
+    SignedVar, BoundVal, Lit, TRUE_LIT, FALSE_LIT,
+    ConstraintExpressionAtoms,
+    ConstraintExpression,
+    ConstraintElementaryExpression,
+    tighten_literals,
+    are_tightened_literals_tautological,
+)
+
+from solver import SolverCauses, SolverConflictInfo, Solver
 
 #################################################################################
 #################################################################################
@@ -62,6 +70,9 @@ def add_new_presence_variable(
 
     A presence variable is simply a non-optional (boolean) variable
     which is used to define presence literals.
+
+    A presence literal, is simply a literal on (the truth value of) a presence
+    variable. They are encoded as [presence_variable >= 1].
     """
     
     var = add_new_non_optional_variable(solver, (0,1), True)
@@ -97,9 +108,6 @@ def _add_new_variable(
     solver.bound_values[SignedVar(var, False)] = BoundVal(-initial_domain[0])
     solver.bound_values[SignedVar(var, True)] = BoundVal(initial_domain[1])
 
-    solver.set_bound_value(SignedVar(var, False), BoundVal(-initial_domain[0]), SolverCauses.Encoding())
-    solver.set_bound_value(SignedVar(var, True), BoundVal(initial_domain[1]), SolverCauses.Encoding())
-
     return var
         
 #################################################################################
@@ -111,9 +119,7 @@ def add_constraint(
     solver: Solver,
     constraint_expression: ConstraintExpression.AnyExpr,
     conjunctive_scope_literals: Tuple[Lit,...],
-#    scope_literals: Tuple[Literal,...],
-#) -> Literal:
-) -> ReifiedConstraint:
+) -> Tuple[ConstraintElementaryExpression.AnyExpr, Lit]:
     """
     Adds a constraint defined by the given expression, in a scope defined by the given literals.
     (i.e. the constraint must be true when all the literals defining the conjunctive scope are true)
@@ -155,19 +161,19 @@ def add_constraint(
 
     def transform_or(literals: Tuple[Lit,...]) -> ConstraintElementaryExpression.AnyExpr:
 
-        tight_disjunction: TightDisjunction = TightDisjunction(literals)
+        tightened_literals = tighten_literals(literals)
 
-        if tight_disjunction.is_tautological():
+        if are_tightened_literals_tautological(tightened_literals):
             return ConstraintElementaryExpression.LitExpr(TRUE_LIT)
 
-        elif len(tight_disjunction.literals) == 0:
+        elif len(tightened_literals) == 0:
             return ConstraintElementaryExpression.LitExpr(FALSE_LIT)
 
-        elif len(tight_disjunction.literals) == 1:
-            return ConstraintElementaryExpression.LitExpr(tight_disjunction.literals[0])
+        elif len(tightened_literals) == 1:
+            return ConstraintElementaryExpression.LitExpr(tightened_literals[0])
 
         else:
-            return ConstraintElementaryExpression.Or(tight_disjunction.literals)
+            return ConstraintElementaryExpression.Or(tightened_literals)
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -286,9 +292,10 @@ def add_constraint(
 
         def is_tautology(lit: Lit):
 
+            first_ev_idx = solver.get_index_of_first_event_implying_literal(lit)
             return (solver.is_literal_entailed(lit)
                 and (not check_top_dec_level
-                    or solver.get_index_of_first_event_implying_literal(lit)[0] == 0))
+                    or first_ev_idx is None or first_ev_idx[0] == 0))       # CHECKME
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -362,18 +369,18 @@ def add_constraint(
         elif len(conj_scope_lits) == 2:
 
             # If l1 => l2, the conjunction can be simplified to l1
-            if solver.is_implication_true(conj_scope_lits[0], conj_scope_lits[1]):
+            if solver._is_implication_true(conj_scope_lits[0], conj_scope_lits[1]):
                 simplified_literal_attempt = conj_scope_lits[0]
 
             # If l2 => l1, the conjunction can be simplified to l2
-            elif solver.is_implication_true(conj_scope_lits[1], conj_scope_lits[0]):
+            elif solver._is_implication_true(conj_scope_lits[1], conj_scope_lits[0]):
                 simplified_literal_attempt = conj_scope_lits[1]
     
             # If l1 and l2 are exclusive (i.e. cannot be true at the same time, i.e. l1 => (not l2)),
             # the conjunctive scope literal is false. However, we cannot directly use FALSE_LIT,
             # because we need to uniquely identify the literal as the conjunction of the other two
             # in some corner cases. So we create a new literal that is always false.
-            if solver.is_implication_true(conj_scope_lits[0], conj_scope_lits[1].negation()):
+            if solver._is_implication_true(conj_scope_lits[0], conj_scope_lits[1].negation()):
                 simplified_literal_attempt = Lit.geq(add_new_non_optional_variable(solver, (0, 0), False), 1)
 
         # If a simplification was found, we return it as the scope literal of the conjunction.
@@ -387,7 +394,7 @@ def add_constraint(
         else:
             lit = Lit.geq(add_new_non_optional_variable(solver, (0, 0), False), 1)
 
-            lits: List[Lit] = []
+            lits: List[Lit] = [lit]
             for l in conj_scope_lits:
                 _insert_implication_between_literals_on_non_optional_vars(solver, lit, l)
                 lits.append(l.negation())
@@ -425,7 +432,7 @@ def add_constraint(
 
         solver.reifications[constr_elementary_expr] = reif_lit
         solver.reifications[constr_elementary_expr.negation()] = reif_lit.negation()
-        solver.reified_constraints.append(ReifiedConstraint(constr_elementary_expr, reif_lit))
+        solver.constraints.append((constr_elementary_expr, reif_lit))
 
         return reif_lit
 
@@ -452,14 +459,14 @@ def add_constraint(
         reification_literal = solver.reifications.get(constr_elementary_expr, None)
         if reification_literal is not None:
             if lit != reification_literal:
-                solver.reified_constraints.append(
-                    ReifiedConstraint(ConstraintElementaryExpression.LitExpr(reification_literal), lit))
+                solver.constraints.append(
+                    (ConstraintElementaryExpression.LitExpr(reification_literal), lit))
         
         # Otherwise and if the scopes are compatible, suggest literal to be the reified literal.
         elif expr_scope_literal == solver.vars_presence_literals[lit.signed_var.var]:
             solver.reifications[constr_elementary_expr] = lit
             solver.reifications[constr_elementary_expr.negation()] = lit.negation()
-            solver.reified_constraints.append(ReifiedConstraint(constr_elementary_expr, lit))
+            solver.constraints.append((constr_elementary_expr, lit))
         
         # Otherwise (if the formula is not already reified, but literal cannot
         # be used directly because it has a different scope), reify it (with
@@ -467,8 +474,8 @@ def add_constraint(
         else:
             reification_literal = reify_elementary_expression(constr_elementary_expr)
             if lit != reification_literal:
-                solver.reified_constraints.append(
-                    ReifiedConstraint(ConstraintElementaryExpression.LitExpr(reification_literal), lit))
+                solver.constraints.append(
+                    (ConstraintElementaryExpression.LitExpr(reification_literal), lit))
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -527,7 +534,7 @@ def add_constraint(
     tauto = get_tautology_of_scope(scope_lit)
     bind_elementary_expression(constr_elementary_expr, tauto)
 
-    return ReifiedConstraint(constr_elementary_expr, tauto)
+    return (constr_elementary_expr, tauto)
 
 #################################################################################
 # HELPER FUNCTIONS
