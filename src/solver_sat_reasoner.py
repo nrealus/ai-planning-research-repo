@@ -604,26 +604,6 @@ class SATReasoner(SolverReasoner):
 
         working_watches: Dict[BoundVal, List[SATReasoner.ClauseId]] = {}
 
-        # self.earliest_unprocessed_solver_event_index = min(
-        #     self.earliest_unprocessed_solver_event_index,
-        #     len(solver.events_trail[solver.dec_level]))
-        # NOTE: The code above was placed here to "synchronize" the earliest unprocessed solver event index,
-        # making sure its almost equal to the index of the last event + 1. Indeed, the earliest unprocessed
-        # solver event index is only updated in two ways: when getting to a new decision level, it is set to 0
-        # (i.e. to the first event of the decision, i.e. the "decision itself"), and when backtracking (one level)
-        # it is set to the number of events in the decision level we backtracked to, which corresponds to the 
-        # index of the *next* event that will be posted in this decision level. However, there is also a possible
-        # partial backtrack (in the same decision level) that can happen during explanation refining in the main
-        # solver. As it is part of one same decision level, the events reverted there do not trigger
-        # on_solver_backtrack_one_level, which means the earliest unprocessed solver event index is not
-        # updated and "still" points to events that have been removed...
-        # So the reasoning behind the code above was to remove this problem. *HOWEVER...* This isn't actually a
-        # problem ! Indeed, this partial backtrack happens during EXPLANATION... which is part of conflict analysis
-        # and is followed right away by "true" backtracking to an earlier decision level. As such, it means that
-        # the earliest unprocessed solver event index will be necessarily updated to a correct value before it
-        # needs to be used again ! So this problem was actually a false alarm.
-        # TODO: move this comment to the refine_explanation ? (main solver)
-
         # Loop through yet unprocessed events, accumulated since the last call to this function.
         while self.earliest_unprocessed_solver_event_index < len(solver.events_trail[solver.dec_level]):
             ev = solver.events_trail[solver.dec_level][self.earliest_unprocessed_solver_event_index]

@@ -1115,8 +1115,15 @@ class Solver():
             Modifies `explanation_literals`
 
             !! A partial backtrack (within the current decision level) will occur
-        in the process. This is necessary to provide explainers (reasoners)
-        with the exact state in which their deicions were made.
+        in the process !! This is necessary to provide explainers (reasoners)
+        with the exact state in which their decisions were made.
+
+        NOTE: There is no need to "synchronize"/update the reasoners' earliest unprocessed
+        event index because of this partial backtracking. Indeed, right after this explanation is
+        made/refined as part of conflict analysis, we will backtrack to an earlier decision
+        level anyway. And during with that backtracking, the earliest unprocessed event index of each
+        reasoner will be reset to 0 (at that decision level). As such, the partial backtracking
+        that happens in this method doesn't cause any problem for reasoners.
         """
 
         # Literals falsified at the current decision level,
