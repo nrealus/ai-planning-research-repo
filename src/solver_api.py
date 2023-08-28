@@ -371,18 +371,18 @@ def add_constraint(
         elif len(conj_scope_lits) == 2:
 
             # If l1 => l2, the conjunction can be simplified to l1
-            if solver.is_implication_true(conj_scope_lits[0], conj_scope_lits[1]):
+            if solver._is_implication_true(conj_scope_lits[0], conj_scope_lits[1]):
                 simplified_literal_attempt = conj_scope_lits[0]
 
             # If l2 => l1, the conjunction can be simplified to l2
-            elif solver.is_implication_true(conj_scope_lits[1], conj_scope_lits[0]):
+            elif solver._is_implication_true(conj_scope_lits[1], conj_scope_lits[0]):
                 simplified_literal_attempt = conj_scope_lits[1]
     
             # If l1 and l2 are exclusive (i.e. cannot be true at the same time, i.e. l1 => (not l2)),
             # the conjunctive scope literal is false. However, we cannot directly use FALSE_LIT,
             # because we need to uniquely identify the literal as the conjunction of the other two
             # in some corner cases. So we create a new literal that is always false.
-            if solver.is_implication_true(conj_scope_lits[0], conj_scope_lits[1].negation()):
+            if solver._is_implication_true(conj_scope_lits[0], conj_scope_lits[1].negation()):
                 simplified_literal_attempt = Lit.geq(add_new_non_optional_variable(solver, (0, 0), False), 1)
 
         # If a simplification was found, we return it as the scope literal of the conjunction.

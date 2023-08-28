@@ -532,54 +532,41 @@ class Solver():
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-    def get_literals_directly_implied_by(self,
-        literal: Lit,
-    ) -> List[Lit]:
-        """
-        Args:
-            literal (Literal): A literal
-
-        Returns:
-            List[Literal]: The list of literals that are "directly implied" 
-        by the given literal.
-        
-        This is only for non-optional variables involved in the
-        `non_optional_vars_implication_graph`, and corresponds to the 
-        given literal' "neighbour" literals in that graph. This is done by
-        taking the signed variable of the literal, and aggregating its adjacency
-        lists that are guarded by values weaker than literal's bound value.
-        """
-
-        if not literal.signed_var in self.non_optional_vars_implication_graph:
-            return []
-
-        res: List[Lit] = []
-
-        guarded_adj_set = self.non_optional_vars_implication_graph[literal.signed_var]
-        for guard_bound in guarded_adj_set:
-            if literal.bound_value.is_stronger_than(guard_bound):
-                res.extend(guarded_adj_set[guard_bound])
-
-        return res
-
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
     def is_implication_true(self,
         from_literal: Lit,
         to_literal: Lit,
     ) -> bool:
         """
         Returns:
-            bool: Returns whether `from_literal` implies `to_literal`.
-        (Whether it is directly or indirectly/implicitly)
+            bool: Whether the implication from_literal => to_literal is true.
         """
+        if (self.is_literal_entailed(from_literal.negation())
+            or self.is_literal_entailed(to_literal)):
+            return True
+        return self._is_implication_true(from_literal, to_literal)
 
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+    def _is_implication_true(self,
+        from_literal: Lit,
+        to_literal: Lit,
+    ) -> bool:
+        """
+        Returns:
+            bool: Whether from_literal is known to imply to_literal.
+            
+        This function is only used for tests for the implication graph.
+        
+        The main/"actual" function to use to check if from_literal => to_literal is
+        true is `is_implication_true()`.
+
+        The difference between the two is that this function only checks whether the
+        implication is "known", be it explicitly (specifically stored in the
+        implication graph) or implicitly (stronger literal implying a weaker one),
+        but the other function also checks if the implication is satisfied.
+        """
+        
         # Obvious cases where implication is true
-#        if (self.is_literal_entailed(from_literal.negation())
-#            or self.is_literal_entailed(to_literal)
-#       FIXME: do we need the above ? if we're "just" testing for the implications (known in the implication graph),
-#              it would be wrong to include it... but if we're testing for current knowledge... well, then we should.
-#              in Aries: included in domains.implies, which calls implications.implies, which itself does not include it.
         if (to_literal == TRUE_LIT
             or from_literal == FALSE_LIT
             or from_literal.entails(to_literal)
@@ -632,6 +619,38 @@ class Solver():
                     stack.extend(guarded_adj_set[guard_bound])
 
         return False
+
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+    def get_literals_directly_implied_by(self,
+        literal: Lit,
+    ) -> List[Lit]:
+        """
+        Args:
+            literal (Literal): A literal
+
+        Returns:
+            List[Literal]: The list of literals that are "directly implied" 
+        by the given literal.
+        
+        This is only for non-optional variables involved in the
+        `non_optional_vars_implication_graph`, and corresponds to the 
+        given literal' "neighbour" literals in that graph. This is done by
+        taking the signed variable of the literal, and aggregating its adjacency
+        lists that are guarded by values weaker than literal's bound value.
+        """
+
+        if not literal.signed_var in self.non_optional_vars_implication_graph:
+            return []
+
+        res: List[Lit] = []
+
+        guarded_adj_set = self.non_optional_vars_implication_graph[literal.signed_var]
+        for guard_bound in guarded_adj_set:
+            if literal.bound_value.is_stronger_than(guard_bound):
+                res.extend(guarded_adj_set[guard_bound])
+
+        return res
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 

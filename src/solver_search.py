@@ -201,7 +201,7 @@ def _actually_post_reified_constraint(
             else:
                 return True
 
-        elif all(solver.is_implication_true(
+        elif all(solver._is_implication_true(
             solver.vars_presence_literals[lit.signed_var.var],processed_scope_literal)
             for lit in clause_tightened_literals
         ):
@@ -230,7 +230,7 @@ def _actually_post_reified_constraint(
 
     if isinstance(constr_elementary_expr, ConstraintElementaryExpression.LitExpr):
 
-        assert solver.is_implication_true(
+        assert solver._is_implication_true(
             scope_literal,
             solver.vars_presence_literals[constr_elementary_expr.literal.signed_var.var])
 
