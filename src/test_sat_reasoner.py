@@ -6,6 +6,7 @@ from typing import Optional, Tuple
 
 from fundamentals import (
     SignedVar, BoundVal, Lit, TRUE_LIT,
+    ConstraintExpression,
     tighten_literals,
 )
 
@@ -16,7 +17,9 @@ from solver_api import (
     add_new_non_optional_variable,
     add_new_optional_variable,
     add_new_presence_variable,
-    _insert_implication_between_literals_on_non_optional_vars
+    add_constraint,
+    _insert_implication_between_literals_on_non_optional_vars,
+    _insert_new_conjunctive_scope,
 )
 
 import unittest
@@ -324,8 +327,60 @@ class TestSATReasonerClauses(unittest.TestCase):
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-# TODO....    def test_scoped_clauses(self):
-
+#    def test_scoped_clauses(self):
+#        solver = Solver()
+#        sat_reasoner = SATReasoner()
+#
+#        def value_of(var) -> Optional[int]:
+#            if solver.bound_values[SignedVar(var,True)] == -solver.bound_values[SignedVar(var,False)]:
+#                return solver.bound_values[SignedVar(var,True)]
+#            else:
+#                return None            
+#
+#        def get_conjunctive_scope_literal_trivial_case(conj_scope_lits):
+#            lit = Lit.geq(add_new_non_optional_variable(solver, (0,1), True), 1)
+#            lits = [lit]
+#            for l in conj_scope_lits:
+#                _insert_implication_between_literals_on_non_optional_vars(solver, lit, l)
+#                lits.append(l.negation())
+#            add_constraint(solver,
+#                ConstraintExpression.Or(tuple(lits)),
+#                ())
+#            _insert_new_conjunctive_scope(solver, conj_scope_lits, lit)
+#            return lit
+#
+#        def scoped_disj(clause_lits: Tuple[Lit,...], scope: Lit):
+#            if scope == TRUE_LIT:
+#                return (clause_lits, scope)
+#            if len(clause_lits) == 0:
+#                return ((scope.negation(),), TRUE_LIT)
+#            if all(solver.is_implication_true(solver.vars_presence_literals[l.signed_var.var], scope) for l in clause_lits):
+#                return (clause_lits, scope)
+#            return (clause_lits+(scope.negation(),), TRUE_LIT)
+#            
+#        PX = Lit.geq(add_new_presence_variable(solver, TRUE_LIT), 1)
+#        X1 = Lit.geq(add_new_optional_variable(solver, (0, 1), True, PX), 1)
+#        X2 = Lit.geq(add_new_optional_variable(solver, (0, 1), True, PX), 1)
+#
+#        PY = Lit.geq(add_new_presence_variable(solver, TRUE_LIT), 1)
+#        Y1 = Lit.geq(add_new_optional_variable(solver, (0, 1), True, PY), 1)
+#        Y2 = Lit.geq(add_new_optional_variable(solver, (0, 1), True, PY), 1)
+#
+#        PZ = get_conjunctive_scope_literal_trivial_case((PX, PY))
+#        Z1 = Lit.geq(add_new_optional_variable(solver, (0, 1), True, PZ), 1)
+#        Z2 = Lit.geq(add_new_optional_variable(solver, (0, 1), True, PZ), 1)
+#
+#        sat_reasoner.add_new_fixed_clause_with_scope((X1, X2), PX)
+#
+#        solver.increment_decision_level_and_perform_set_literal_decision(
+#            SolverDecisions.SetLiteral(X1.negation()),
+#            (sat_reasoner,))
+#        sat_reasoner.propagate(solver)
+#
+#        assert solver.is_literal_entailed(X2)
+#        assert value_of(PX) is None
+#
+#        # TODO TODO TODO TODO TODO
 
 #################################################################################
 

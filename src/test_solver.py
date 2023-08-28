@@ -2,8 +2,11 @@ from __future__ import annotations
 
 #################################################################################
 
+from typing import Tuple
+
 from fundamentals import (
     SignedVar, BoundVal, Lit, TRUE_LIT,
+    ConstraintExpression,
 )
 
 from solver import SolverCauses, SolverConflictInfo, Solver
@@ -11,7 +14,10 @@ from solver import SolverCauses, SolverConflictInfo, Solver
 from solver_api import (
     add_new_non_optional_variable,
     add_new_optional_variable,
-    _insert_implication_between_literals_on_non_optional_vars
+    add_new_presence_variable,
+    add_constraint,
+    _insert_implication_between_literals_on_non_optional_vars,
+    _insert_new_conjunctive_scope,
 )
 
 import unittest
@@ -59,7 +65,7 @@ class TestSolverImplications(unittest.TestCase):
         # However, solver.is_Lit_implying(Aleq1, Cleq1)
         # returns True, as it should.
         self.assertEqual(
-            solver.is_implication_true(Aleq1, Cleq1),
+            solver._is_implication_true(Aleq1, Cleq1),
             True)
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -86,28 +92,28 @@ class TestSolverImplications(unittest.TestCase):
         Cleq2 = Lit.leq(C, 2)
         Cleq3 = Lit.leq(C, 3)
 
-        self.assertTrue(solver.is_implication_true(Aleq0, Aleq0))
-        self.assertTrue(solver.is_implication_true(Aleq0, Aleq1))
-        self.assertFalse(solver.is_implication_true(Aleq0, Bleq0))
-        self.assertFalse(solver.is_implication_true(Aleq0, AleqM1))
+        self.assertTrue(solver._is_implication_true(Aleq0, Aleq0))
+        self.assertTrue(solver._is_implication_true(Aleq0, Aleq1))
+        self.assertFalse(solver._is_implication_true(Aleq0, Bleq0))
+        self.assertFalse(solver._is_implication_true(Aleq0, AleqM1))
 
         _insert_implication_between_literals_on_non_optional_vars(solver, Aleq1, Bleq1)
 
-        self.assertTrue(solver.is_implication_true(Aleq1, Bleq1))
-        self.assertTrue(solver.is_implication_true(Aleq0, Bleq1))
-        self.assertTrue(solver.is_implication_true(Aleq1, Bleq2))
-        self.assertTrue(solver.is_implication_true(Aleq0, Bleq2))
-        self.assertFalse(solver.is_implication_true(Aleq1, Bleq0))
-        self.assertFalse(solver.is_implication_true(Aleq1, Bleq0))
+        self.assertTrue(solver._is_implication_true(Aleq1, Bleq1))
+        self.assertTrue(solver._is_implication_true(Aleq0, Bleq1))
+        self.assertTrue(solver._is_implication_true(Aleq1, Bleq2))
+        self.assertTrue(solver._is_implication_true(Aleq0, Bleq2))
+        self.assertFalse(solver._is_implication_true(Aleq1, Bleq0))
+        self.assertFalse(solver._is_implication_true(Aleq1, Bleq0))
 
         _insert_implication_between_literals_on_non_optional_vars(solver, Bleq2, Cleq2)
 
-        self.assertTrue(solver.is_implication_true(Aleq1, Bleq1))
-        self.assertTrue(solver.is_implication_true(Aleq1, Cleq2))
-        self.assertTrue(solver.is_implication_true(Aleq1, Cleq3))
-        self.assertFalse(solver.is_implication_true(Aleq1, Cleq1))
-        self.assertTrue(solver.is_implication_true(Aleq0, Cleq2))
-        self.assertFalse(solver.is_implication_true(Aleq2, Cleq2))
+        self.assertTrue(solver._is_implication_true(Aleq1, Bleq1))
+        self.assertTrue(solver._is_implication_true(Aleq1, Cleq2))
+        self.assertTrue(solver._is_implication_true(Aleq1, Cleq3))
+        self.assertFalse(solver._is_implication_true(Aleq1, Cleq1))
+        self.assertTrue(solver._is_implication_true(Aleq0, Cleq2))
+        self.assertFalse(solver._is_implication_true(Aleq2, Cleq2))
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -132,7 +138,7 @@ class TestSolverImplications(unittest.TestCase):
         _insert_implication_between_literals_on_non_optional_vars(solver, Cleq0, Dleq0)
         _insert_implication_between_literals_on_non_optional_vars(solver, Dleq0, Cleq0)
 
-        self.assertFalse(solver.is_implication_true(Aleq0, Cleq0))
+        self.assertFalse(solver._is_implication_true(Aleq0, Cleq0))
 
 #################################################################################
 
@@ -277,6 +283,64 @@ class TestSolverEntails(unittest.TestCase):
         self.assertFalse(solver.is_literal_entailed(Lit(AP, BoundVal(9))))
         self.assertFalse(solver.is_literal_entailed(Lit(AP, BoundVal(8))))
         self.assertFalse(solver.is_literal_entailed(Lit(AP, BoundVal(0))))
+
+#################################################################################
+
+class TestSolverScopes(unittest.TestCase):
+
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+    def test_scoped_disjunction(self):
+        solver = Solver()
+
+        def get_conjunctive_scope_literal_trivial_case(conj_scope_lits):
+            lit = Lit.geq(add_new_non_optional_variable(solver, (0,1), True), 1)
+            lits = [lit]
+            for l in conj_scope_lits:
+                _insert_implication_between_literals_on_non_optional_vars(solver, lit, l)
+                lits.append(l.negation())
+            add_constraint(solver,
+                ConstraintExpression.Or(tuple(lits)),
+                ())
+            _insert_new_conjunctive_scope(solver, conj_scope_lits, lit)
+            return lit
+
+        def scoped_disj(clause_lits: Tuple[Lit,...], scope: Lit):
+            if scope == TRUE_LIT:
+                return (clause_lits, scope)
+            if len(clause_lits) == 0:
+                return ((scope.negation(),), TRUE_LIT)
+            if all(solver.is_implication_true(solver.vars_presence_literals[l.signed_var.var], scope) for l in clause_lits):
+                return (clause_lits, scope)
+            return (clause_lits+(scope.negation(),), TRUE_LIT)
+            
+        PX = Lit.geq(add_new_presence_variable(solver, TRUE_LIT), 1)
+        X1 = Lit.geq(add_new_optional_variable(solver, (0, 1), True, PX), 1)
+        X2 = Lit.geq(add_new_optional_variable(solver, (0, 1), True, PX), 1)
+
+        PY = Lit.geq(add_new_presence_variable(solver, TRUE_LIT), 1)
+
+        PXY = get_conjunctive_scope_literal_trivial_case((PX, PY))
+        XY = Lit.geq(add_new_optional_variable(solver, (0, 1), True, PXY), 1)
+
+        self.assertTupleEqual(
+            scoped_disj((X1,), PX),
+            ((X1,), PX))
+        self.assertTupleEqual(
+            scoped_disj((X1,X2), PX),
+            ((X1,X2), PX))
+        self.assertTupleEqual(
+            scoped_disj((XY,), PX),
+            ((XY,), PX))
+        self.assertTupleEqual(
+            scoped_disj((XY,), PY),
+            ((XY,), PY))
+        self.assertTupleEqual(
+            scoped_disj((XY,), PXY),
+            ((XY,), PXY))
+        self.assertTupleEqual(
+            scoped_disj((X1,), PXY),
+            ((X1, PXY.negation()), TRUE_LIT))
 
 #################################################################################
 
