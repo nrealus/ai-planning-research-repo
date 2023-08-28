@@ -2,7 +2,7 @@ from __future__ import annotations
 
 #################################################################################
 
-from typing import Dict, List, NamedTuple, Optional, Set, Tuple, Union
+from typing import Dict, List, NamedTuple, Optional, Set, Tuple, Union, Callable
 from abc import ABC, abstractmethod
 
 from fundamentals import (
@@ -853,7 +853,7 @@ class Solver():
 
     def increment_decision_level_and_perform_set_literal_decision(self,
         set_literal_decision: SolverDecisions.SetLiteral,
-        reasoners: Tuple[SolverReasoner],
+        reasoners: Tuple[SolverReasoner,...],
     ) -> None:
         """
         Increments the current decision level and applies the given set literal decision.
@@ -983,11 +983,11 @@ class Solver():
     # CONFLICT ANALYSIS, EXPLANATION GENERATION
     #############################################################################
 
-    def add_implying_literals_to_explanation_literals(self,
+    def _add_implying_literals_to_explanation_literals(self,
         explanation_literals: List[Lit],
         literal: Lit,
         cause: SolverCauses.AnyCause,
-        reasoner: SolverReasoner,
+        explain_function: Callable[[List[Lit], Lit, SolverCauses.ReasonerInference, Solver], None],
     ) -> None:
         """
         Computes a set of literals l_1, ..., l_n such that:
@@ -1006,7 +1006,7 @@ class Solver():
 
             cause (Solver.Cause):. TODO
 
-            reasoner (Solver.Reasoner):. TODO
+            explain_function (): TODO
 
         Side effects:
             Modifies `explanation_literals`.
@@ -1018,7 +1018,7 @@ class Solver():
 
         if isinstance(cause, SolverCauses.ReasonerInference):
             # Ask the reasoner for an explanation clause (l_1 & ... & l_n) => literal
-            reasoner.explain(explanation_literals, literal, cause, self)
+            explain_function(explanation_literals, literal, cause, self)
 
         elif isinstance(cause, SolverCauses.ImplicationPropagation):
             explanation_literals.append(cause.literal)
@@ -1030,7 +1030,7 @@ class Solver():
             explanation_literals.append(cause.literal.negation())
             if isinstance(cause.cause, SolverCauses.ReasonerInference):
                 # Ask the reasoner for an explanation clause (l_1 & ... & l_n) => cause.literal
-                reasoner.explain(explanation_literals, cause.literal, cause.cause, self)
+                explain_function(explanation_literals, cause.literal, cause.cause, self)
 
             elif isinstance(cause.cause, SolverCauses.ImplicationPropagation):
                 explanation_literals.append(cause.cause.literal)
@@ -1068,6 +1068,15 @@ class Solver():
         conflict analysis (the asserting clause and set of resolved literals).
         """
 
+        return self._explain_invalid_bound_update(invalid_bound_update, reasoner.explain)
+
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+    def _explain_invalid_bound_update(self,
+        invalid_bound_update: SolverConflictInfo.InvalidBoundUpdate,
+        explain_function: Callable[[List[Lit], Lit, SolverCauses.ReasonerInference, Solver], None],
+    ) -> SolverConflictInfo.AnalysisResult:
+
         # Remember that an update is invalid iff its negation holds AND
         # the affected variable is present.
 
@@ -1079,17 +1088,17 @@ class Solver():
         # such that 'l_1' v ... v 'l_n' => 'l'. As such, the explanation
         # becomes 'not l' v 'l_1' v ... v 'l_n', and all its disjuncts
         # ('not l' and all 'l_i') hold in the current state.
-        self.add_implying_literals_to_explanation_literals(
+        self._add_implying_literals_to_explanation_literals(
             explanation_literals,
             invalid_bound_update.literal,
             invalid_bound_update.cause,
-            reasoner)
+            explain_function)
 
         # The explanation clause 'not l' v 'l_1' v ... v 'l_n' must now be 
         # transformed into 1st Unique Implication Point form.
-        return self.refine_explanation(
+        return self._refine_explanation(
             explanation_literals,
-            reasoner)
+            explain_function)
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -1124,6 +1133,15 @@ class Solver():
         reasoner will be reset to 0 (at that decision level). As such, the partial backtracking
         that happens in this method doesn't cause any problem for reasoners.
         """
+
+        return self._refine_explanation(explanation_literals, reasoner.explain)
+
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+    def _refine_explanation(self,
+        explanation_literals: List[Lit],
+        explain_function: Callable[[List[Lit], Lit, SolverCauses.ReasonerInference, Solver], None],
+    ) -> SolverConflictInfo.AnalysisResult:
 
         # Literals falsified at the current decision level,
         # we need to proceed until there is a single one left (1UIP).
@@ -1249,11 +1267,11 @@ class Solver():
             )
 
             # Add a set of literals whose conjunction implies lit to explanation_literals
-            self.add_implying_literals_to_explanation_literals(
+            self._add_implying_literals_to_explanation_literals(
                 explanation_literals,
                 lit,
                 cause,
-                reasoner,
+                explain_function,
             )
 
     #############################################################################
