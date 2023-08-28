@@ -256,6 +256,51 @@ class TestSolverSetBounds(unittest.TestCase):
             solver.set_bound_value(SignedVar(P2, True), BoundVal(-1), SolverCauses.Decision()),
             SolverConflictInfo.InvalidBoundUpdate)
 
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+    def test_presence_relations(self):
+        solver = Solver()
+
+        def always_present_together(A, B):
+            return solver.vars_presence_literals[A] == solver.vars_presence_literals[B]
+
+        # returns true if presence(A) => presence(B)
+        def only_present_with(A, B):
+            return solver.is_implication_true(solver.vars_presence_literals[A], solver.vars_presence_literals[B])
+
+        P = add_new_non_optional_variable(solver, (0,1), True)
+        P1 = add_new_optional_variable(solver, (0,1), True, Lit.geq(P, 1))
+        P2 = add_new_optional_variable(solver, (0,1), True, Lit.geq(P, 1))
+
+        self.assertTrue(always_present_together(P1, P2))
+        self.assertFalse(always_present_together(P, P1))
+        self.assertFalse(always_present_together(P, P2))
+
+        self.assertTrue(always_present_together(P, P))
+        self.assertTrue(only_present_with(P, P))
+        self.assertTrue(always_present_together(P1, P1))
+        self.assertTrue(only_present_with(P1, P1))
+
+        self.assertTrue(only_present_with(P1, P))
+        self.assertTrue(only_present_with(P2, P))
+        self.assertTrue(only_present_with(P1, P2))
+        self.assertTrue(only_present_with(P2, P1))
+        self.assertFalse(only_present_with(P, P1))
+        self.assertFalse(only_present_with(P, P2))
+
+        X = add_new_non_optional_variable(solver, (0,1), True)
+        X1 = add_new_optional_variable(solver, (0,1), True, Lit.geq(X, 1))
+
+        self.assertTrue(only_present_with(X1, X))
+        self.assertFalse(only_present_with(X, X1))
+
+        self.assertTrue(always_present_together(P, X))
+        self.assertTrue(only_present_with(P1, X))
+        self.assertTrue(only_present_with(X1, P))
+
+        self.assertFalse(only_present_with(P1, X1))
+        self.assertFalse(only_present_with(X1, P1))
+
 #################################################################################
 
 class TestSolverEntails(unittest.TestCase):
