@@ -94,6 +94,11 @@ class SATReasoner(SolverReasoner):
         """
         TODO
         """
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+        # lbd: float = field(init=False)
+        # """
+        # TODO
+        # """
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
         
@@ -107,7 +112,8 @@ class SATReasoner(SolverReasoner):
             self.scope_literal = scope_literal
             self.learned = learned
             
-            self.activity = 0 # FIXME
+            self.activity = 0
+            # self.lbd = 0
 
             len_literals = len(self.literals)
             assert len_literals > 0, "Empty clauses are not allowed in the database."
@@ -346,7 +352,7 @@ class SATReasoner(SolverReasoner):
         self.watches[literal.signed_var][literal.bound_value].remove(clause_id)
 
     #############################################################################
-    # 
+    # DATABASE SCALING, ACTIVITIES
     #############################################################################
     
     def _scale_database(self) -> None:

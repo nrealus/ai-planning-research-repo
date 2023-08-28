@@ -292,10 +292,10 @@ def add_constraint(
 
         def is_tautology(lit: Lit):
 
+            first_ev_idx = solver.get_index_of_first_event_implying_literal(lit)
             return (solver.is_literal_entailed(lit)
                 and (not check_top_dec_level
-# FIXME: ambiguity: use 0 or None ?                    or solver.get_index_of_first_event_implying_literal(lit)[0] == 0
-                    or solver.get_index_of_first_event_implying_literal(lit) is None))
+                    or first_ev_idx is None or first_ev_idx[0] == 0))       # CHECKME
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
