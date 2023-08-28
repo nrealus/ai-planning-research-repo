@@ -21,7 +21,6 @@ from dataclasses import dataclass
 #
 # - FUNDAMETALS III:
 #   - CONSTRAINT ELEMENTARY EXPRESSIONS
-#   - REIFIED CONSTRAINTS
 #
 # - HELPER FUNCTIONS:
 #   - TIGHTENING OF (DISJUNCTIONS OF) LITERALS
@@ -381,20 +380,6 @@ class ConstraintElementaryExpression(ABC):
         MaxDiffCnt,
     ]
 
-#################################################################################
-# REIFIED CONSTRAINTS
-#################################################################################
-# 
-# class ReifiedConstraint(NamedTuple):
-#     """
-#     Represents a constraint as stored by the solver.
-#     """
-#     
-#     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-#     constraint_elementary_expression: ConstraintElementaryExpression.AnyExpr
-#     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-#     reification_literal: Lit
-# 
 #################################################################################
 # TIGHTENING OF (DISJUNCTIONS OF) LITERALS
 #################################################################################

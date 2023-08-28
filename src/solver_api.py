@@ -10,7 +10,6 @@ from fundamentals import (
     ConstraintExpressionAtoms,
     ConstraintExpression,
     ConstraintElementaryExpression,
-#    ReifiedConstraint,
     tighten_literals,
     are_tightened_literals_tautological,
 )
@@ -120,7 +119,6 @@ def add_constraint(
     solver: Solver,
     constraint_expression: ConstraintExpression.AnyExpr,
     conjunctive_scope_literals: Tuple[Lit,...],
-#) -> ReifiedConstraint:
 ) -> Tuple[ConstraintElementaryExpression.AnyExpr, Lit]:
     """
     Adds a constraint defined by the given expression, in a scope defined by the given literals.

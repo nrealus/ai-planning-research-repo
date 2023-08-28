@@ -9,7 +9,6 @@ from fundamentals import (
     Var, ZERO_VAR,
     SignedVar, BoundVal, Lit, TRUE_LIT, FALSE_LIT,
     ConstraintElementaryExpression,
-#    ReifiedConstraint,
     tighten_literals,
 )
 
