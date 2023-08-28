@@ -2,14 +2,15 @@ from __future__ import annotations
 
 #################################################################################
 
-from typing import Tuple
+from typing import Tuple, List
 
 from fundamentals import (
     SignedVar, BoundVal, Lit, TRUE_LIT,
     ConstraintExpression,
 )
 
-from solver import SolverCauses, SolverConflictInfo, Solver
+from solver import SolverCauses, SolverConflictInfo, Solver, SolverDecisions
+from solver_sat_reasoner import SATReasoner
 
 from solver_api import (
     add_new_non_optional_variable,
@@ -328,6 +329,89 @@ class TestSolverEntails(unittest.TestCase):
         self.assertFalse(solver.is_literal_entailed(Lit(AP, BoundVal(9))))
         self.assertFalse(solver.is_literal_entailed(Lit(AP, BoundVal(8))))
         self.assertFalse(solver.is_literal_entailed(Lit(AP, BoundVal(0))))
+
+#################################################################################
+
+class TestSolverExplanation(unittest.TestCase):
+
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+    def test_explanation(self):
+        solver = Solver()
+
+        def optional_domain(v):
+            (lb, ub) =  (-solver.bound_values[SignedVar(v, False)], solver.bound_values[SignedVar(v, True)])
+            prez = solver.vars_presence_literals[v]
+            if solver.is_literal_entailed(prez):
+                return (True, (lb, ub))
+            elif solver.is_literal_entailed(prez.negation()):
+                return None
+            else:
+                return (False, (lb, ub))
+
+        a = Lit.geq(add_new_non_optional_variable(solver, (0,1), True), 1)
+        b = Lit.geq(add_new_non_optional_variable(solver, (0,1), True), 1)
+        n = add_new_non_optional_variable(solver, (0,10), True)
+
+        # constraint 0: "a => (n <= 4)"
+        # constraint 1: "b => (n >= 5)"
+
+        sat_reasoner = SATReasoner()    # dummy
+        cause_a = SolverCauses.ReasonerInference(sat_reasoner, 0)
+        cause_b = SolverCauses.ReasonerInference(sat_reasoner, 1)
+        
+        def propag():
+            if solver.is_literal_entailed(a):
+                res = solver.set_bound_value(SignedVar(n, True), BoundVal(4), cause_a)
+                if isinstance(res, SolverConflictInfo.InvalidBoundUpdate):
+                    return res
+            if solver.is_literal_entailed(b):
+                res = solver.set_bound_value(SignedVar(n, False), BoundVal(-5), cause_b)
+                if isinstance(res, SolverConflictInfo.InvalidBoundUpdate):
+                    return res
+            return None
+
+        def explain(expl:List[Lit], lit: Lit, cause: SolverCauses.ReasonerInference, _:Solver) -> None:
+            if cause.inference_info == 0:
+                self.assertEqual(lit, Lit.leq(n, 4))
+                expl.append(a)
+            elif cause.inference_info == 1:
+                self.assertEqual(lit, Lit.geq(n, 5))
+                expl.append(b)
+            else:
+                assert False
+
+        propag()
+        solver.increment_decision_level_and_perform_set_literal_decision(
+            SolverDecisions.SetLiteral(a),
+            (sat_reasoner,))
+        self.assertTupleEqual(
+            (-solver.bound_values[SignedVar(a.signed_var.var, False)], solver.bound_values[SignedVar(a.signed_var.var, True)]),
+            (1, 1))
+
+        propag()
+        self.assertEqual(optional_domain(n), (True, (0,4)))
+
+        solver.set_bound_value(SignedVar(n, False), BoundVal(-1), SolverCauses.Decision())
+
+        solver.increment_decision_level_and_perform_set_literal_decision(
+            SolverDecisions.SetLiteral(b),
+            (sat_reasoner,))
+
+        err = propag()
+        if err is None:
+            self.assertFalse(True)
+        else:
+            clause_literals = solver._explain_invalid_bound_update(err, explain).asserting_clause_literals
+
+            # we have three rules
+            #  -  !(n <= 4) || !(n >= 5)   (conflict)
+            #  -  !a || (n <= 4)           (clause a)
+            #  -  !b || (n >= 5)           (clause b)
+            # Explanation should perform resolution of the first and last rules for the literal (n >= 5):
+            #   !(n <= 4) || !b
+            #   !b || (n > 4)      (equivalent to previous)
+            self.assertEqual(clause_literals, (b.negation(), Lit.geq(n, 5)))
 
 #################################################################################
 
