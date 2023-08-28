@@ -402,7 +402,7 @@ class TestSolverExplanation(unittest.TestCase):
         if err is None:
             self.assertFalse(True)
         else:
-            clause_literals = solver._explain_invalid_bound_update(err, explain).asserting_clause_literals
+            clause_literals = solver.explain_invalid_bound_update(err, explain).asserting_clause_literals
 
             # we have three rules
             #  -  !(n <= 4) || !(n >= 5)   (conflict)

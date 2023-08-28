@@ -31,6 +31,11 @@ from solver_sat_reasoner import SATReasoner
 def search(
     solver: Solver,
 ):
+    """
+    TODO
+
+    (NOTE:a specialized structure (or just a tuple) will obviously have to be used for returns)
+    """
 
     sat_reasoner: SATReasoner = SATReasoner()
 #    diff_reasoner: ,
@@ -88,12 +93,12 @@ def search(
             if isinstance(contradiction, SolverConflictInfo.InvalidBoundUpdate):
                 conflict_analysis_info = solver.explain_invalid_bound_update(
                     contradiction,
-                    reasoner)
+                    reasoner.explain)
 
             elif isinstance(contradiction, SolverConflictInfo.ReasonerExplanation):
                 conflict_analysis_info = solver.refine_explanation(
                     list(contradiction.explanation_literals),
-                    reasoner)
+                    reasoner.explain)
 
             else:
                 assert False
@@ -243,7 +248,7 @@ def _actually_post_reified_constraint(
             scope_literal)
 
     elif isinstance(constr_elementary_expr, ConstraintElementaryExpression.MaxDiffCnt):
-        #FIXME
+        # TODO
         # _add_reified_edge(
         #     solver,
         #     diff_reasoner,

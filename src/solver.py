@@ -262,7 +262,7 @@ class SolverConflictInfo(ABC):
         To avoid the conflict, at least one of the literals will have to be true.
         """
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-        resolved_literals_storage: Dict[SignedVar, BoundVal] # FIXME ? # Tuple[Literal,...]
+        resolved_literals_storage: Dict[SignedVar, BoundVal] #CHECKME ? # Tuple[Literal,...]
         """
         The resolved literals that participate in the conflict. Stored as a
         dictionary instead of a tuple of literals.
@@ -288,7 +288,7 @@ class SolverReasoner():
     specialized propagation / inference. Each of them processes newly accumulated
     bound updates / events, including those resulting from inference / propagation
     by other reasoners, until nothing new can be inferred. They also help the main
-    solver by providing it with an initial (FIXME?) explanation, when a conflict
+    solver by providing it with an initial (CHECKME?) explanation, when a conflict
     is found during their propagation. This explanation may be further refined
     by the main solver when doing conflict analysis.
     """
@@ -398,12 +398,12 @@ class Solver():
         Stores pairs consisting of a constraint (in elementary form) and a literal,
         stating that the literal must be true iff the constraint is true.
 
-        FIXME? Both "real" reified constraints that were defined in the problem
+        CHECKME? Both "real" reified constraints that were defined in the problem
         and "artificial"/"intermediary" constraints can be found here.
         Apart from pairs consisting of a (reified) constraint and its reification
         literal, there can be pairs where the constraint is simply the satisfaction
         of a reification literal of another constraint. This allows to enforce
-        a sort of "truth chain". FIXME?
+        a sort of "chain of constraints". CHECKME?
         """
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
         self.reifications: Dict[ConstraintElementaryExpression.AnyExpr, Lit] = {}
@@ -662,6 +662,7 @@ class Solver():
 
         Returns:
             Tuple[int, int]: The event index of the first event that makes `literal` true.
+            None: This means the given literal is the first event on its signed variable.
         
         This is done by walking in reverse order through events on the
         signed variable of the literal. The first event that makes the
@@ -671,7 +672,7 @@ class Solver():
 
         assert self.is_literal_entailed(literal)
 
-# FIXME?        prev_ev_index = self.bound_values_event_indices[literal.signed_var]
+# NOTE?        prev_ev_index = self.bound_values_event_indices[literal.signed_var]
         prev_ev_index = self.bound_values_event_indices.get(literal.signed_var, None)
         if prev_ev_index is None:
             return None
@@ -1006,7 +1007,7 @@ class Solver():
 
             cause (Solver.Cause):. TODO
 
-            explain_function (): TODO
+            explain_function (Callable[[List[Lit], Lit, SolverCauses.ReasonerInference, Solver], None]): TODO
 
         Side effects:
             Modifies `explanation_literals`.
@@ -1025,8 +1026,7 @@ class Solver():
 
         elif isinstance(cause, SolverCauses.PresenceOfEmptyDomain):
             # cause.literal & (not cause.literal) => "variable of cause.literal is absent"
-            #                                        (i.e. "not cause.literal.variable.presence_literal")
-            #                                        (i.e. literal) #FIXME: sure about that ?
+            #                                        (i.e. presence literal of cause.literal's variable is absent)
             explanation_literals.append(cause.literal.negation())
             if isinstance(cause.cause, SolverCauses.ReasonerInference):
                 # Ask the reasoner for an explanation clause (l_1 & ... & l_n) => cause.literal
@@ -1045,7 +1045,7 @@ class Solver():
     
     def explain_invalid_bound_update(self,
         invalid_bound_update: SolverConflictInfo.InvalidBoundUpdate,
-        reasoner: SolverReasoner,
+        explain_function: Callable[[List[Lit], Lit, SolverCauses.ReasonerInference, Solver], None],
     ) -> SolverConflictInfo.AnalysisResult:
         """
         Given an invalid bound update of a literal 'l',
@@ -1068,15 +1068,6 @@ class Solver():
         conflict analysis (the asserting clause and set of resolved literals).
         """
 
-        return self._explain_invalid_bound_update(invalid_bound_update, reasoner.explain)
-
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-    def _explain_invalid_bound_update(self,
-        invalid_bound_update: SolverConflictInfo.InvalidBoundUpdate,
-        explain_function: Callable[[List[Lit], Lit, SolverCauses.ReasonerInference, Solver], None],
-    ) -> SolverConflictInfo.AnalysisResult:
-
         # Remember that an update is invalid iff its negation holds AND
         # the affected variable is present.
 
@@ -1096,7 +1087,7 @@ class Solver():
 
         # The explanation clause 'not l' v 'l_1' v ... v 'l_n' must now be 
         # transformed into 1st Unique Implication Point form.
-        return self._refine_explanation(
+        return self.refine_explanation(
             explanation_literals,
             explain_function)
 
@@ -1104,7 +1095,7 @@ class Solver():
 
     def refine_explanation(self,
         explanation_literals: List[Lit],
-        reasoner: SolverReasoner,
+        explain_function: Callable[[List[Lit], Lit, SolverCauses.ReasonerInference, Solver], None],
     ) -> SolverConflictInfo.AnalysisResult:
         """
         Refines an explanation into an asserting clause.
@@ -1133,15 +1124,6 @@ class Solver():
         reasoner will be reset to 0 (at that decision level). As such, the partial backtracking
         that happens in this method doesn't cause any problem for reasoners.
         """
-
-        return self._refine_explanation(explanation_literals, reasoner.explain)
-
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-    def _refine_explanation(self,
-        explanation_literals: List[Lit],
-        explain_function: Callable[[List[Lit], Lit, SolverCauses.ReasonerInference, Solver], None],
-    ) -> SolverConflictInfo.AnalysisResult:
 
         # Literals falsified at the current decision level,
         # we need to proceed until there is a single one left (1UIP).
@@ -1172,7 +1154,6 @@ class Solver():
                     # So we can discard it.
                     if first_impl_ev_index is None:
                         continue
-# FIXME: ambiguity between "None" index or 0... Need to be sure whether 
                     (ev_i_dl, ev_i) = first_impl_ev_index
                     if ev_i_dl == 0:
                         continue
@@ -1201,14 +1182,13 @@ class Solver():
             # will be at decision levels earlier than the current ont.
             # This can happen if we are at the top decision level, or if we
             # had a lazy propagator that didn't immediately detect the 
-            # inconsistency # FIXME: needs to be better understand this.
+            # inconsistency # NOTE: need to be better understand this.
             #
             # Corollary: if dl is 0, the derived clause must be empty.
             if not prio_queue:
                 return SolverConflictInfo.AnalysisResult(
                     tighten_literals(asserting_clause_literals),
-                    resolved_literals,
-                )
+                    resolved_literals)
             
             # At this point, we haven't reached the 1st UIP yet.
 
@@ -1244,8 +1224,7 @@ class Solver():
                 asserting_clause_literals.append(lit.negation())
                 return SolverConflictInfo.AnalysisResult(
                     tighten_literals(asserting_clause_literals),
-                    resolved_literals,
-                )
+                    resolved_literals)
 
             # Now, we need to until the latest falsifying event. This
             # will undo some of the changes, but we will remain in the
@@ -1263,16 +1242,14 @@ class Solver():
 
             resolved_literals[lit.signed_var] = min(
                 resolved_literals.get(lit.signed_var, lit.bound_value),
-                lit.bound_value,
-            )
+                lit.bound_value)
 
             # Add a set of literals whose conjunction implies lit to explanation_literals
             self._add_implying_literals_to_explanation_literals(
                 explanation_literals,
                 lit,
                 cause,
-                explain_function,
-            )
+                explain_function)
 
     #############################################################################
     # CLAUSE LEARNING
