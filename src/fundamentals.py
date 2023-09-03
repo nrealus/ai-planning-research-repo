@@ -9,7 +9,7 @@ from dataclasses import dataclass
 #################################################################################
 #################################################################################
 #                                   CONTENTS:
-# - FUNDAMETALS:
+# - FUNDAMETALS I:
 #   - VARIABLES
 #   - SIGNED VARIABLES
 #   - BOUND VALUES
@@ -394,7 +394,7 @@ def tighten_literals(literals: Sequence[Lit]) -> Tuple[Lit,...]:
      
     Note that nowhere in the code is it "fundamentally required" for (a clause/disjunction of)
     literals to be tightened. (At least I think so... CHECKME). However, it is
-    desirable to tighten them, for example to reduce the size of clauses or explanations.
+    desirable to tighten them, for example to reduce the size of clauses.
     """
 
     lits: List[Lit] = sorted(literals)
