@@ -154,7 +154,8 @@ def _actually_post_reified_constraint(
     """
     
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-    def _add_clause_to_sat_reasoner(
+
+    def add_clause_to_sat_reasoner(
         clause_literals: Tuple[Lit,...],
         scope_literal: Lit,
         clause_literals_already_tightened: bool=False,
@@ -239,30 +240,29 @@ def _actually_post_reified_constraint(
             scope_literal,
             solver.vars_presence_literals[constr_elementary_expr.literal.signed_var.var])
 
-        _add_clause_to_sat_reasoner(
+        add_clause_to_sat_reasoner(
             (constr_literal.negation(), constr_elementary_expr.literal),
             scope_literal)
 
-        _add_clause_to_sat_reasoner(
+        add_clause_to_sat_reasoner(
             (constr_elementary_expr.literal.negation(), constr_literal),
             scope_literal)
 
     elif isinstance(constr_elementary_expr, ConstraintElementaryExpression.MaxDiffCnt):
         # TODO
-        # _add_reified_edge(
-        #     solver,
-        #     diff_reasoner,
+        # diff_reasoner.add_reified_edge(
         #     constr_literal,
         #     constr_.to_var,
         #     constr_.from_var,
         #     constr_.max_diff,
+        #     solver,
         # )
         raise NotImplementedError
 
     elif isinstance(constr_elementary_expr, ConstraintElementaryExpression.Or):
 
         if solver.is_literal_entailed(constr_literal):
-            _add_clause_to_sat_reasoner(
+            add_clause_to_sat_reasoner(
                 constr_elementary_expr.literals,
                 scope_literal,
             )
@@ -270,7 +270,7 @@ def _actually_post_reified_constraint(
         
         elif solver.is_literal_entailed(constr_literal.negation()):
             for lit in constr_elementary_expr.literals:
-                res = _add_clause_to_sat_reasoner(
+                res = add_clause_to_sat_reasoner(
                     (lit.negation(),),
                     scope_literal,
                 )
@@ -284,7 +284,7 @@ def _actually_post_reified_constraint(
                 (constr_literal.negation(),)+constr_elementary_expr.literals)
 
             if are_tightened_literals_tautological(clause_tightened_literals):
-                res = _add_clause_to_sat_reasoner(
+                res = add_clause_to_sat_reasoner(
                     clause_tightened_literals,
                     scope_literal,
                     True)
@@ -292,7 +292,7 @@ def _actually_post_reified_constraint(
                     return res
             
             for lit in constr_elementary_expr.literals:
-                res = _add_clause_to_sat_reasoner(
+                res = add_clause_to_sat_reasoner(
                     (lit.negation(), constr_literal),
                     scope_literal)
                 if isinstance(res, SolverConflictInfo.InvalidBoundUpdate):

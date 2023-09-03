@@ -296,20 +296,6 @@ class SolverReasoner():
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     @abstractmethod
-    def explain(self,
-        explanation_literals: List[Lit],
-        literal: Lit,
-        inference_cause: SolverCauses.ReasonerInference,
-        solver: Solver,
-    ) -> None:
-        """
-        TODO
-        """
-        pass
-
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-    @abstractmethod
     def on_solver_new_set_literal_decision(self,
         solver:Solver,
     ) -> None:
@@ -341,6 +327,18 @@ class SolverReasoner():
         pass
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+    @abstractmethod
+    def explain(self,
+        explanation_literals: List[Lit],
+        literal: Lit,
+        inference_cause: SolverCauses.ReasonerInference,
+        solver: Solver,
+    ) -> None:
+        """
+        TODO
+        """
+        pass
 
 #################################################################################
 # SOLVER
@@ -849,7 +847,7 @@ class Solver():
         raise NotImplementedError
 
     #############################################################################
-    # DECISION APPLICATION / DECISION LEVEL INCREMENTATION
+    # DECISION APPLICATION / DECISION LEVEL INCREMENTATION, BACKTRACING
     #############################################################################
 
     def increment_decision_level_and_perform_set_literal_decision(self,
@@ -886,9 +884,7 @@ class Solver():
             set_literal_decision.literal.bound_value,
             SolverCauses.Decision())
 
-    #############################################################################
-    # BACKTRACKING
-    #############################################################################
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     def _undo_and_return_last_event_at_current_decision_level(self) -> SolverEvent:
         """

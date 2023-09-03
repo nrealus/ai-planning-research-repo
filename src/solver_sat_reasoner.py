@@ -38,14 +38,6 @@ class SATReasoner(SolverReasoner):
     # CLAUSE ID, CLAUSE DATA 
     #############################################################################
     
-    class ClauseId(int):
-        """
-        Represents the ID of a clause in the database.
-        """
-        pass
-
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
     @dataclass
     class Clause():
         """
@@ -123,6 +115,14 @@ class SATReasoner(SolverReasoner):
             self.unwatched_indices = list(range(2, len_literals)) if len_literals > 2 else []
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+    class ClauseId(int):
+        """
+        Represents the ID of a clause in the database.
+        """
+        pass
+
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
  
     def __init__(self):
 
@@ -189,9 +189,9 @@ class SATReasoner(SolverReasoner):
         involving eager propagation of optional variables.
         """
         #########################################################################
-        self.earliest_unprocessed_solver_event_index: int = 0
+        self.next_unprocessed_solver_event_index: int = 0
         """
-        The index of the earliest unprocessed (i.e. not yet propagated) event in the
+        The index of the next unprocessed (i.e. not yet propagated) event in the
         main solver's events trail (in the current decision level).
         """
         
@@ -304,9 +304,9 @@ class SATReasoner(SolverReasoner):
         def priority_of_lit(lit: Lit) -> int:
             val = solver.get_literal_current_value(lit)
             if val is True:
-                return 1000 # FIXME: should be max int
+                return 2**64    # FIXME: should be max int
             elif val is None:
-                return 999  # FIXME: should be max int - 1
+                return 2**64-1  # FIXME: should be max int - 1
             elif val is False:
                 first_impl_ev_index = solver.get_index_of_first_event_implying_literal(lit.negation())
                 if first_impl_ev_index is None:
@@ -352,71 +352,30 @@ class SATReasoner(SolverReasoner):
         self.watches[literal.signed_var][literal.bound_value].remove(clause_id)
 
     #############################################################################
-    # DATABASE SCALING, ACTIVITIES
+    # MAIN SOLVER DECISION LEVEL INCREASE OR DECREASE CALLBACKS
     #############################################################################
-    
-    def _scale_database(self) -> None:
-        """
-        Scales the size of the clauses database.
 
-        The clauses database has a limited number of slots for learned clauses.
-        When all slots are occupied, this function ca:
-        - Expand the database with more slots. This occurs if a certain number of
-        conflicts occured since last expansion.
-        - Remove learned clauses from the database. This typically removes about half
-        of the learned clauses, making sure that clauses that are used to explain the 
-        current value of the literal are kept ("locked" clauses). The clauses to be
-        removed are those whose "activity" is the lowest.
-        """
-        
-        if self.num_allowed_learned_clauses == 0:
-            self.num_allowed_learned_clauses = (self.num_allowed_learned_clauses_base
-                + int(self.num_fixed_clauses*self.num_allowed_learned_clauses_ratio))
-
-        if self.num_learned_clauses - len(self.locked_clauses) >= self.num_allowed_learned_clauses:
-            
-            if (self.num_conflicts - self.num_conflicts_at_last_database_expansion
-                >= self.num_conflicts_allowed_before_database_expansion
-            ):
-                self.num_allowed_learned_clauses = int(self.num_allowed_learned_clauses*self.database_expansion_ratio)
-                self.num_conflicts_at_last_database_expansion = self.num_conflicts
-                self.num_conflicts_allowed_before_database_expansion = int(
-                    self.num_conflicts_allowed_before_database_expansion*self.increase_ratio_of_conflicts_before_db_expansion)
-
-            else:
-
-                clauses_to_remove_ids = [clause_id for clause_id, clause in self.clauses_database.items()
-                    if clause.learned and clause_id not in self.locked_clauses]
-                clauses_to_remove_ids.sort(key=lambda _: self.clauses_database[_].activity)
-                clauses_to_remove_ids = clauses_to_remove_ids[:int(len(clauses_to_remove_ids)/2)]
-
-                for clause_id in clauses_to_remove_ids:
-                    clause = self.clauses_database[clause_id]
-                    if clause.watch1_index == clause.watch2_index:
-                        self._remove_watch(clause_id, clause.literals[clause.watch1_index].negation())
-                    else:
-                        self._remove_watch(clause_id, clause.literals[clause.watch1_index].negation())
-                        self._remove_watch(clause_id, clause.literals[clause.watch2_index].negation())
-                    self.clauses_database.pop(clause_id)
-                    self.num_learned_clauses -= 1
-
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-    def _bump_activity(self,
-        clause_id: SATReasoner.ClauseId,
+    def on_solver_new_set_literal_decision(self,
+        solver: Solver
     ) -> None:
         
-        self.clauses_database[clause_id].activity += self.clause_activity_increase
-        if self.clauses_database[clause_id].activity > 1e100:
-            for clause in self.clauses_database.values():
-                clause.activity *= 1e-100
-            self.clause_activity_increase *= 1e-100
+        self.next_unprocessed_solver_event_index = 0
+
+        if len(self.locked_clauses_trail) == solver.dec_level:
+            self.locked_clauses_trail.append([])
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-    def _decay_activities(self) -> None:
-        self.clause_activity_increase /= self.clause_activity_decay
-    
+    def on_solver_backtrack_one_level(self,
+        solver: Solver
+    ) -> None:
+
+        for locked_clause in self.locked_clauses_trail[solver.dec_level]:
+            self.locked_clauses.remove(locked_clause)
+        self.locked_clauses_trail[solver.dec_level].clear()
+
+        self.next_unprocessed_solver_event_index = len(solver.events_trail[solver.dec_level-1])
+
     #############################################################################
     # PROPAGATION
     #############################################################################
@@ -468,11 +427,11 @@ class SATReasoner(SolverReasoner):
         # of its literals, to be used to build an explanation / asserting clause
 
         violated_clause = self.clauses_database[violated_clause_id]
-        explanation_literals_list = [lit.negation() for lit in violated_clause.literals]
+        explanation_literals = [lit.negation() for lit in violated_clause.literals]
         if violated_clause.scope_literal != TRUE_LIT:
-            explanation_literals_list.append(violated_clause.scope_literal)
+            explanation_literals.append(violated_clause.scope_literal)
             self._bump_activity(violated_clause_id)
-        return SolverConflictInfo.ReasonerExplanation(tuple(explanation_literals_list))
+        return SolverConflictInfo.ReasonerExplanation(tuple(explanation_literals))
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -607,9 +566,9 @@ class SATReasoner(SolverReasoner):
         working_watches: Dict[BoundVal, List[SATReasoner.ClauseId]] = {}
 
         # Loop through yet unprocessed events, accumulated since the last call to this function.
-        while self.earliest_unprocessed_solver_event_index < len(solver.events_trail[solver.dec_level]):
-            ev = solver.events_trail[solver.dec_level][self.earliest_unprocessed_solver_event_index]
-            self.earliest_unprocessed_solver_event_index += 1
+        while self.next_unprocessed_solver_event_index < len(solver.events_trail[solver.dec_level]):
+            ev = solver.events_trail[solver.dec_level][self.next_unprocessed_solver_event_index]
+            self.next_unprocessed_solver_event_index += 1
 
             # Select clauses with a literal that is 
             working_watches = self.watches.get(ev.signed_var, {})
@@ -734,7 +693,7 @@ class SATReasoner(SolverReasoner):
     #############################################################################
 
     def explain(self,
-        explanation_literals_list: List[Lit],
+        explanation_literals: List[Lit],
         literal: Lit,
         inference_cause: SolverCauses.ReasonerInference,
         solver: Solver,
@@ -751,29 +710,72 @@ class SATReasoner(SolverReasoner):
         # However, it is not necessarily the case with eager propagation of optionals.
         for lit in clause.literals:
             if not lit.entails(literal):
-                explanation_literals_list.append(lit)
+                explanation_literals.append(lit)
 
     #############################################################################
-    # MAIN SOLVER DECISION LEVEL INCREASE OR DECREASE CALLBACKS
+    # DATABASE SCALING, ACTIVITIES
     #############################################################################
+    
+    def _scale_database(self) -> None:
+        """
+        Scales the size of the clauses database.
 
-    def on_solver_new_set_literal_decision(self,
-        solver: Solver
-    ) -> None:
+        The clauses database has a limited number of slots for learned clauses.
+        When all slots are occupied, this function ca:
+        - Expand the database with more slots. This occurs if a certain number of
+        conflicts occured since last expansion.
+        - Remove learned clauses from the database. This typically removes about half
+        of the learned clauses, making sure that clauses that are used to explain the 
+        current value of the literal are kept ("locked" clauses). The clauses to be
+        removed are those whose "activity" is the lowest.
+        """
         
-        self.earliest_unprocessed_solver_event_index = 0
-        if len(self.locked_clauses_trail) == solver.dec_level:
-            self.locked_clauses_trail.append([])
+        if self.num_allowed_learned_clauses == 0:
+            self.num_allowed_learned_clauses = (self.num_allowed_learned_clauses_base
+                + int(self.num_fixed_clauses*self.num_allowed_learned_clauses_ratio))
+
+        if self.num_learned_clauses - len(self.locked_clauses) >= self.num_allowed_learned_clauses:
+            
+            if (self.num_conflicts - self.num_conflicts_at_last_database_expansion
+                >= self.num_conflicts_allowed_before_database_expansion
+            ):
+                self.num_allowed_learned_clauses = int(self.num_allowed_learned_clauses*self.database_expansion_ratio)
+                self.num_conflicts_at_last_database_expansion = self.num_conflicts
+                self.num_conflicts_allowed_before_database_expansion = int(
+                    self.num_conflicts_allowed_before_database_expansion*self.increase_ratio_of_conflicts_before_db_expansion)
+
+            else:
+
+                clauses_to_remove_ids = [clause_id for clause_id, clause in self.clauses_database.items()
+                    if clause.learned and clause_id not in self.locked_clauses]
+                clauses_to_remove_ids.sort(key=lambda _: self.clauses_database[_].activity)
+                clauses_to_remove_ids = clauses_to_remove_ids[:int(len(clauses_to_remove_ids)/2)]
+
+                for clause_id in clauses_to_remove_ids:
+                    clause = self.clauses_database[clause_id]
+                    if clause.watch1_index == clause.watch2_index:
+                        self._remove_watch(clause_id, clause.literals[clause.watch1_index].negation())
+                    else:
+                        self._remove_watch(clause_id, clause.literals[clause.watch1_index].negation())
+                        self._remove_watch(clause_id, clause.literals[clause.watch2_index].negation())
+                    self.clauses_database.pop(clause_id)
+                    self.num_learned_clauses -= 1
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-    def on_solver_backtrack_one_level(self,
-        solver: Solver
+    def _bump_activity(self,
+        clause_id: SATReasoner.ClauseId,
     ) -> None:
+        
+        self.clauses_database[clause_id].activity += self.clause_activity_increase
+        if self.clauses_database[clause_id].activity > 1e100:
+            for clause in self.clauses_database.values():
+                clause.activity *= 1e-100
+            self.clause_activity_increase *= 1e-100
 
-        for locked_clause in self.locked_clauses_trail[solver.dec_level]:
-            self.locked_clauses.remove(locked_clause)
-        self.locked_clauses_trail[solver.dec_level].clear()
-        self.earliest_unprocessed_solver_event_index = len(solver.events_trail[solver.dec_level-1])
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
+    def _decay_activities(self) -> None:
+        self.clause_activity_increase /= self.clause_activity_decay
+    
 #################################################################################
