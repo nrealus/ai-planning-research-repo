@@ -687,12 +687,12 @@ class DiffReasoner(SolverReasoner):
             (SignedVar(target, True),
             SignedVar(source, True),
             BoundVal(-weight-1),
-            DiffReasoner.Enabler(reification_literal, target_to_source_propagator_valid)),
+            DiffReasoner.Enabler(reification_literal.negation(), target_to_source_propagator_valid)),
 
             (SignedVar(source, False),
             SignedVar(target, False),
             BoundVal(-weight-1),
-            DiffReasoner.Enabler(reification_literal, source_to_target_propagator_valid)),
+            DiffReasoner.Enabler(reification_literal.negation(), source_to_target_propagator_valid)),
 
         ]
 
@@ -852,7 +852,7 @@ class DiffReasoner(SolverReasoner):
                 
                 # If a watched literal was newly entailed, check if makes enabling conditions of an edge / propagator
                 # group true. If so, enqueue such edges / propagator groups to pending active propagators.
-                for guard_bound_val in self.propagators_database.watches[ev.signed_var]:
+                for guard_bound_val in self.propagators_database.watches.setdefault(ev.signed_var, {}):
                     if ev.new_bound_value.is_stronger_than(guard_bound_val):
                         for (propagator_group_id, enabler) in self.propagators_database.watches[ev.signed_var][guard_bound_val]:
                             if solver.is_literal_entailed(enabler.active) and solver.is_literal_entailed(enabler.valid):
@@ -872,7 +872,7 @@ class DiffReasoner(SolverReasoner):
                     continue
 
                 # Propagate bound change
-                if ev.signed_var in self.propagators_active or len(self.propagators_active[ev.signed_var]) > 0:
+                if ev.signed_var in self.propagators_active and len(self.propagators_active[ev.signed_var]) > 0:
                     res = self.run_propagation_loop(ev.signed_var, False, solver)
                     if isinstance(res, SolverConflictInfo.InvalidBoundUpdate):
                         return res
@@ -914,7 +914,7 @@ class DiffReasoner(SolverReasoner):
 
                 res = solver.set_bound_value(
                     propagator_group.target,
-                    solver.bound_values[propagator_group.source],
+                    BoundVal(solver.bound_values[propagator_group.source]+propagator_group.weight),
                     SolverCauses.ReasonerInference(
                         self,
                         DiffReasoner.InferenceCauses.EdgePropagation(propagator_group_id)))
@@ -1008,13 +1008,20 @@ class DiffReasoner(SolverReasoner):
             # in `pending_bounds_to_update`, then it is also in `internal_pending_bounds_to_update_queue`.
             self.pending_bounds_to_update.remove(source)
 
+            if not source in self.propagators_active:
+                continue
+
             for target, weight, group_id in self.propagators_active[source]:
                 assert source != target
 
-                inference_cause = SolverCauses.ReasonerInference(self, DiffReasoner.InferenceCauses.EdgePropagation(group_id))
                 candidate = BoundVal(source_bound + weight)
 
-                res = solver.set_bound_value(target, candidate, inference_cause)
+                res = solver.set_bound_value(
+                    target,
+                    candidate,
+                    SolverCauses.ReasonerInference(
+                        self,
+                        DiffReasoner.InferenceCauses.EdgePropagation(group_id)))    # BUG
 
                 if isinstance(res, SolverConflictInfo.InvalidBoundUpdate):
                     return res
