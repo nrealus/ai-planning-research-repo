@@ -14,6 +14,7 @@ from fundamentals import (
 
 from solver import SolverDecisions, SolverCauses, SolverConflictInfo, Solver
 from solver_sat_reasoner import SATReasoner
+from solver_diff_reasoner import DiffReasoner
 
 #################################################################################
 #################################################################################
@@ -38,7 +39,7 @@ def search(
     """
 
     sat_reasoner: SATReasoner = SATReasoner()
-#    diff_reasoner: ,
+    diff_reasoner: DiffReasoner = DiffReasoner()
 
     reasoners = (sat_reasoner, )
 
@@ -71,6 +72,7 @@ def search(
             res = _actually_post_reified_constraint(
                 solver,
                 sat_reasoner,
+                diff_reasoner,
                 (constr_elementary_expr, constr_literal))
             if isinstance(res, SolverConflictInfo.InvalidBoundUpdate):
                 return "INCONSISTENT"
@@ -147,7 +149,7 @@ def search(
 def _actually_post_reified_constraint(
     solver: Solver,
     sat_reasoner: SATReasoner,
-#    diff_reasoner: ,
+    diff_reasoner: DiffReasoner,
     constraint: Tuple[ConstraintElementaryExpression.AnyExpr, Lit],
 ) -> Optional[SolverConflictInfo.InvalidBoundUpdate]:
     """
@@ -249,15 +251,12 @@ def _actually_post_reified_constraint(
             scope_literal)
 
     elif isinstance(constr_elementary_expr, ConstraintElementaryExpression.MaxDiffCnt):
-        # TODO
-        # diff_reasoner.add_reified_edge(
-        #     constr_literal,
-        #     constr_.to_var,
-        #     constr_.from_var,
-        #     constr_.max_diff,
-        #     solver,
-        # )
-        raise NotImplementedError
+        diff_reasoner.add_reified_difference_constraint(
+            constr_literal,
+            constr_elementary_expr.to_var,
+            constr_elementary_expr.from_var,
+            constr_elementary_expr.max_diff,
+            solver)
 
     elif isinstance(constr_elementary_expr, ConstraintElementaryExpression.Or):
 
@@ -305,6 +304,7 @@ def _actually_post_reified_constraint(
         return _actually_post_reified_constraint(
             solver,
             sat_reasoner,
+            diff_reasoner,
             (constr_elementary_expr.negation(), constr_literal.negation()),
         )
 
