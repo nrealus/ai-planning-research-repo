@@ -399,6 +399,8 @@ class DiffReasoner(SolverReasoner):
         self.propagators_pending_for_activation: List[Tuple[DiffReasoner.PropagatorGroupId, DiffReasoner.Enabler]] = []
         #########################################################################
         self.pending_bounds_to_update: Set[SignedVar] = set()
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+        self.internal_pending_bounds_to_update_queue: List[SignedVar] = []
         #########################################################################
         self.propagation_metadata_trail: List[List[Optional[DiffReasoner.PropagatorGroupId]]] = [[]]
         """
@@ -417,8 +419,6 @@ class DiffReasoner(SolverReasoner):
         #########################################################################
         self.next_unprocessed_solver_event_index: int = 0
         #########################################################################
-        self.internal_propagate_queue: List[SignedVar] = []
-        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 #        self.num_propagations: int = 0
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 #        self.num_distance_updates: int = 0
@@ -948,14 +948,14 @@ class DiffReasoner(SolverReasoner):
 
 #        self.num_propagations += 1
 
-        for vb in self.internal_propagate_queue:
+        for vb in self.internal_pending_bounds_to_update_queue:
             self.pending_bounds_to_update.remove(vb)
-        self.internal_propagate_queue.clear()
+        self.internal_pending_bounds_to_update_queue.clear()
 
         assert len(self.pending_bounds_to_update) == 0
 
         self.pending_bounds_to_update.add(original)
-        self.internal_propagate_queue.insert(0, original)
+        self.internal_pending_bounds_to_update_queue.insert(0, original)
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -994,8 +994,8 @@ class DiffReasoner(SolverReasoner):
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-        while self.internal_propagate_queue:
-            source = self.internal_propagate_queue.pop()
+        while self.internal_pending_bounds_to_update_queue:
+            source = self.internal_pending_bounds_to_update_queue.pop()
             source_bound = solver.bound_values[source]
 
             # If the bound was already updated, ignore and move on to next
@@ -1003,8 +1003,9 @@ class DiffReasoner(SolverReasoner):
                 continue
 
             # Remove immediately even if we are not done with the update yet.
-            # This allows to keep the `internal_propagate_queue` and `pending_bounds_to_update`
-            # in sync: if an element is in `pending_bounds_to_update`, then it is also in `internal_propagate_queue`.
+            # This allows to keep the `internal_pending_bounds_to_update_queue`
+            # and `pending_bounds_to_update` in sync: if an element is
+            # in `pending_bounds_to_update`, then it is also in `internal_pending_bounds_to_update_queue`.
             self.pending_bounds_to_update.remove(source)
 
             for target, weight, group_id in self.propagators_active[source]:
@@ -1022,7 +1023,7 @@ class DiffReasoner(SolverReasoner):
                     if cycle_on_update and target == original:
                         return SolverConflictInfo.ReasonerExplanation(extract_cycle(target))
                     
-                    self.internal_propagate_queue.insert(0, target)
+                    self.internal_pending_bounds_to_update_queue.insert(0, target)
                     self.pending_bounds_to_update.add(target)
 
         return None
