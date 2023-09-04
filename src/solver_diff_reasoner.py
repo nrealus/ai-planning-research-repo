@@ -218,7 +218,7 @@ class DiffReasoner(SolverReasoner):
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-    class InferenceCauses(ABC):
+    class InferenceCauses(ABC): # FIXME: rename to InferenceKinds ?
         """
         A container / "namespace" for structures describing the causes that can
         trigger an inference (i.e. bound value update, calling `set_bound_value`
@@ -357,7 +357,7 @@ class DiffReasoner(SolverReasoner):
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-        def reached_nodes_iterator(self) -> Iterable[Tuple[BoundVal, SignedVar]]:
+        def reached_nodes(self) -> Iterable[Tuple[BoundVal, SignedVar]]:
             """
             Returns an iterator over all nodes (and their distances from the origin) that were reached by the algorithm.
             """
@@ -418,8 +418,10 @@ class DiffReasoner(SolverReasoner):
         self.next_unprocessed_solver_event_index: int = 0
         #########################################################################
         self.internal_propagate_queue: List[SignedVar] = []
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+#        self.num_propagations: int = 0
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-        self.internal_dijkstra_states: Tuple[DiffReasoner.DijkstraState, DiffReasoner.DijkstraState] = (DiffReasoner.DijkstraState(), DiffReasoner.DijkstraState())
+#        self.num_distance_updates: int = 0
 
     #############################################################################
     #  ADD REIFIED CONSTRAINT
@@ -467,14 +469,14 @@ class DiffReasoner(SolverReasoner):
 
         3. Postprocess the integration of the new propagator. The two possibilities are the following:
             
-            - Either set the propagators of the group to which the new propagator was staged
-            as pending for propagation, if the enabling conditions of the new propagator
+            - Either set the propagators of the group (to which the new propagator was added)
+            as pending for activation, if the enabling conditions of the new propagator
             are satisfied (`active` and `valid` literals of its enabler are true).
             
             - Or set watch on the enabling conditions of the new propagator (the `active`
-            and `valid` literals of its enabler), if they arent' known to be true yet, so
-            that we're notified when one of them becomes true. (When both of them will be true,
-            the propagator group will be staged as pending for propagation).
+            and `valid` literals of its enabler), if they aren't known to be true yet, so
+            that we're notified when one of them becomes true. (If both of them are true,
+            the propagator group will be staged as pending for activation).
         """
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -777,7 +779,8 @@ class DiffReasoner(SolverReasoner):
         possible values for the edge). If not make its enablers false. This step is equivalent to "bound
         theory propagation", but needs to be done independenty because we do not have events for the initial
         domain bound values of variables.
-            (*) A newly added edge / propagator group can be active (see `add_reified_difference_constraint`),
+            (*) A newly added edge / propagator group can be ac        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+        self.num_learned_clauses: int = 0tive (see `add_reified_difference_constraint`),
             in which case it is added to pending propagator activations.
 
         (2):
@@ -825,6 +828,8 @@ class DiffReasoner(SolverReasoner):
                         DiffReasoner.TheoryPropagationCauses.Bounds(
                             Lit(propagator_group.source, solver.bound_values[propagator_group.source]), 
                             Lit(propagator_group.target.opposite_signed_var(), target_current_ub)))
+                    self.propagation_metadata_trail[solver.dec_level].append(None)
+                    
                     cause = SolverCauses.ReasonerInference(
                         self,
                         DiffReasoner.InferenceCauses.TheoryPropagation(len(self.theory_propagation_causes)-1))
@@ -938,10 +943,89 @@ class DiffReasoner(SolverReasoner):
         solver: Solver,
     ) -> Optional[SolverConflictInfo.InvalidBoundUpdate | SolverConflictInfo.ReasonerExplanation]:
         """
-        TODO
-        Incremental Bellman-Ford
+        TODO: ...Incremental Bellman-Ford...
         """
-        ... # TODO
+
+#        self.num_propagations += 1
+
+        for vb in self.internal_propagate_queue:
+            self.pending_bounds_to_update.remove(vb)
+        self.internal_propagate_queue.clear()
+
+        assert len(self.pending_bounds_to_update) == 0
+
+        self.pending_bounds_to_update.add(original)
+        self.internal_propagate_queue.insert(0, original)
+
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+        def extract_cycle(
+            vb: SignedVar
+        ) -> Tuple[Lit,...]:
+            
+            explanation_literals: List[Lit] = []
+            curr = vb
+
+            while True:
+                value = solver.bound_values[curr]
+                lit = Lit(curr, value)
+                assert solver.is_literal_entailed(lit)
+
+                ev_idx = solver.get_index_of_first_event_implying_literal(lit)
+                assert ev_idx is not None
+                ev = solver.events_trail[ev_idx[0]][ev_idx[1]]
+                assert ev_idx[0] == solver.dec_level
+
+                if not (isinstance(ev.cause, SolverCauses.ReasonerInference)
+                    and isinstance(ev.cause.inference_info, DiffReasoner.InferenceCauses.EdgePropagation)
+                ):
+                    assert False
+
+                edge = self.propagators_database.propagators[ev.cause.inference_info.propagator_group_id]
+                if edge.enabler is None:
+                    assert False
+                curr = edge.source
+
+                explanation_literals.append(edge.enabler.active)
+                explanation_literals.append(solver.vars_presence_literals[edge.enabler.active.signed_var.var])
+
+                if curr == vb:
+                    return tuple(explanation_literals)
+
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+        while self.internal_propagate_queue:
+            source = self.internal_propagate_queue.pop()
+            source_bound = solver.bound_values[source]
+
+            # If the bound was already updated, ignore and move on to next
+            if source not in self.pending_bounds_to_update:
+                continue
+
+            # Remove immediately even if we are not done with the update yet.
+            # This allows to keep the `internal_propagate_queue` and `pending_bounds_to_update`
+            # in sync: if an element is in `pending_bounds_to_update`, then it is also in `internal_propagate_queue`.
+            self.pending_bounds_to_update.remove(source)
+
+            for target, weight, group_id in self.propagators_active[source]:
+                assert source != target
+
+                inference_cause = SolverCauses.ReasonerInference(self, DiffReasoner.InferenceCauses.EdgePropagation(group_id))
+                candidate = BoundVal(source_bound + weight)
+
+                res = solver.set_bound_value(target, candidate, inference_cause)
+
+                if isinstance(res, SolverConflictInfo.InvalidBoundUpdate):
+                    return res
+                else:
+#                    self.num_distance_updates += 1
+                    if cycle_on_update and target == original:
+                        return SolverConflictInfo.ReasonerExplanation(extract_cycle(target))
+                    
+                    self.internal_propagate_queue.insert(0, target)
+                    self.pending_bounds_to_update.add(target)
+
+        return None
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -949,7 +1033,74 @@ class DiffReasoner(SolverReasoner):
         literal: Lit,
         solver: Solver,
     ) -> Optional[SolverConflictInfo.InvalidBoundUpdate | SolverConflictInfo.ReasonerExplanation]:
-        ... # TODO
+        """
+        Perform the theory propagation that follows from the addition of a new bound on a variable.
+
+        A bound on X indicates a shortest path O -> X in an STN (where 0 is a virtual timepoint that
+        represents the time origin in the STN). For any timepoint Y we also know the length of the
+        shortest path Y -> 0 (value of the symmetric bound / bound of the opposite signed variable).
+        Thus, we check that for each potential edge X -> Y that it would not create a negative
+        cycle 0 -> X -> Y -> O. If that's the case, we disable this X -> Y edge by setting its
+        enabler (or rather its `active` literal) to false.
+        """
+        
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+        def potential_out_edges(
+            src: SignedVar,
+        ) -> List[Tuple[SignedVar, BoundVal, Lit]]:
+            return self.propagators_database.intermittent_propagators.get(src, [])
+
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+        def dist_to_origin(
+            lit: Lit,
+        ) -> BoundVal:
+            return lit.bound_value #CHECKME
+        
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+        x = literal.signed_var
+        dist_o_x = dist_to_origin(literal)
+
+        for out_target, out_weight, out_presence in potential_out_edges(x):
+            
+            if solver.is_literal_entailed(out_presence.negation()):
+                continue
+
+            y, w = out_target, out_weight
+            y_neg_lit = Lit(y.opposite_signed_var(), solver.bound_values[y.opposite_signed_var()])
+            dist_y_o = dist_to_origin(y_neg_lit)
+            
+            cycle_length = dist_o_x + w + dist_y_o
+
+            if cycle_length >= 0:
+                continue
+
+            # If 0 -> X -> Y -> 0 forms a negative cycle, there is a contradiction and
+            # we record its cause so we can retrieve it if an explanation is needed.
+            # Here, we know that the update on the bound value of `literal`'s variable
+            # triggered the propagation. However, it is possible that a less constraint bound
+            # would have triggered the propagation as well. We thus replace `literal` with the
+            # smallest update that would have triggered the propagation.
+            # The consequence is that the clauses inferred through explanation will be stronger.
+            relaxed_literal = Lit(literal.signed_var, BoundVal(literal.bound_value - cycle_length - 1))
+            # The relaxed literal would have triggered a proapgation with the cycle having exactly length -1
+            assert dist_to_origin(relaxed_literal) + w + dist_y_o == -1
+
+            self.theory_propagation_causes.append(
+                DiffReasoner.TheoryPropagationCauses.Bounds(relaxed_literal, y_neg_lit))
+            self.propagation_metadata_trail[solver.dec_level].append(None)
+
+            # Disable the edge
+            solver.set_bound_value(
+                out_presence.negation().signed_var,
+                out_presence.negation().bound_value,
+                SolverCauses.ReasonerInference(
+                    self,
+                    DiffReasoner.InferenceCauses.TheoryPropagation(len(self.theory_propagation_causes)-1)))
+
+        return None
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -957,7 +1108,99 @@ class DiffReasoner(SolverReasoner):
         propagator_group_id: PropagatorGroupId,
         solver: Solver,
     ) -> Optional[SolverConflictInfo.InvalidBoundUpdate | SolverConflictInfo.ReasonerExplanation]:
-        ... # TODO
+        """
+        Perform the theory propagation that follows from the addition of the given (new) edge.
+
+        In essence, we find all shortest paths A -> B that contain the new edge.
+        Then we check if there exist an inactive edge BA where `weight(BA) + dist(AB) < 0`.
+        For each such edge, we set its enabler to false since its addition would result in a negative cycle.
+        """
+
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+        def potential_out_edges(
+            src: SignedVar,
+        ) -> List[Tuple[SignedVar, BoundVal, Lit]]:
+            return self.propagators_database.intermittent_propagators.get(src, [])
+
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+        edge = self.propagators_database.propagators[propagator_group_id]
+
+        source = edge.source
+        target = edge.target
+        
+        successors = DiffReasoner.DijkstraState()
+        predecessors = DiffReasoner.DijkstraState()
+
+        # Find all nodes reachable from target(edge), including itself
+        self.distances_from(target, successors, solver)
+
+        # Find all nodes that can reach source(edge), including itself
+        # predecessors nodes and edge are in the inverse direction.
+        self.distances_from(source.opposite_signed_var(), predecessors, solver)
+
+        # Iterate through all predecessors, they will constitute the source of our shortest paths
+        for (pred_dist, pred) in predecessors.reached_nodes():
+
+            # Find all potential edges that target this predecessor.
+            # Note that the predecessor is the inverse view (opposite signed variable),
+            # hence the potential out_edge are all inverse edges.
+            for potential_target, potential_weight, potential_presence in potential_out_edges(pred):
+
+                # potential is an edge W -> pred. Do we have X in the succesors ?
+                forward_dist = successors.distance(potential_target.opposite_signed_var())
+                if forward_dist is None:
+                    continue
+
+                back_dist = pred_dist + potential_weight
+                total_dist = back_dist + edge.weight + forward_dist
+
+                # If this edge would be violated and is not inactive yet:
+                if total_dist < 0 and not solver.is_literal_entailed(potential_presence.negation()):
+
+                    # careful: we are doing batched eager updates involving optional variable
+                    # When doing the shortest path computation, we followed any edge that was not proven inactive yet.
+                    # The current theory propagation, might have been preceded by an other affecting the network.
+                    # Here we thus check that the path we initially computed is still active, i.e., that
+                    # no other propagation made any of its edges inactive.
+                    # This is necessary because we need to be able to explain any change and explanation
+                    # would not follow any inactive edge when recreating the path.
+                    active = self.will_get_theory_propagation_path_succeed(
+                        pred.opposite_signed_var(),
+                        potential_target.opposite_signed_var(),
+                        propagator_group_id,
+                        successors,
+                        predecessors,
+                        solver)
+        
+                    # If the shortest path would be made inactive, ignore this update
+                    # Note that on a valid constraint network, making this change should be
+                    # either a noop or redundant with another constraint.
+                    if not active:
+                        continue
+
+                    # Record the cause so we can explain the
+                    # changes resulting from making the edge inactive.
+                    self.theory_propagation_causes.append(
+                        DiffReasoner.TheoryPropagationCauses.Path(
+                            pred.opposite_signed_var(),
+                            potential_target.opposite_signed_var(),
+                            propagator_group_id))
+                    self.propagation_metadata_trail[solver.dec_level].append(None)
+                    
+                    # Update to force this edge to be inactive
+                    res = solver.set_bound_value(
+                        potential_presence.negation().signed_var,
+                        potential_presence.negation().bound_value,
+                        SolverCauses.ReasonerInference(
+                            self,
+                            DiffReasoner.InferenceCauses.TheoryPropagation(len(self.theory_propagation_causes)-1)))
+
+                    if isinstance(res, SolverConflictInfo.InvalidBoundUpdate):
+                        return res
+
+        return None
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -1150,6 +1393,8 @@ class DiffReasoner(SolverReasoner):
         Complexity is linear in the length of the path to check.
         """
     
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
         # A path is active (i.e. findable by Dijkstra) if all nodes in it are not shown absent
         # We assume that the edges themselves are active (since it cannot be made inactive once activated).
         def path_active(src: SignedVar, tgt: SignedVar, dij: DiffReasoner.DijkstraState):
@@ -1165,6 +1410,8 @@ class DiffReasoner(SolverReasoner):
                     return False
             return True
         
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
         e = self.propagators_database.propagators[through_propagator_group_id]
 
         # The path is active if both its prefix and its postfix are active
@@ -1240,4 +1487,54 @@ class DiffReasoner(SolverReasoner):
                     dijkstra_state.enqueue(prop_target, BoundVal(reduced_dist), prop_id)
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+    def distances_from(self,
+        origin: SignedVar,
+        dijkstra_state: DiffReasoner.DijkstraState,
+        solver: Solver,
+    ) -> None:
+        """
+        Computes the one-to-all shortest paths in an STN.
+        The shortest paths are:
+        - in the forward graph if the origin is the upper bound of a variable
+        - in the backward graph is the origin is the lower bound of a variable
+        
+        The functions expects a `dijkstra_state` parameter that will be cleared and contains datastructures
+        that will be used to compute the result. The distances will be set in the `distances` field of this state.
+        
+        The distances returned are in the BoundVal format, which is agnostic of whether
+        we are computing backward or forward distances. The computed distance to a
+        node `A` is simply the sum of the edge weights over the shortest path.
+        
+        Assumptions:
+
+        The STN is consistent and fully propagated.
+        
+        Internals:
+        
+        To use Dijkstra's algorithm, we need to ensure that all edges are positive.
+        We do this by using the reduced costs of the edges.
+        Given a function `value(SignedVar)` that returns the current value of a variable bound, we define the
+        *reduced distance* `red_dist` of a path `source -- dist --> target`  as   
+        - `red_dist = dist - value(target) + value(source)`
+        - `dist = red_dist + value(target) - value(source)`
+        If the STN is fully propagated and consistent, the reduced distance is guaranteed to always be positive.
+        """
+
+        origin_bound = solver.bound_values[origin]
+
+        dijkstra_state.clear()
+        dijkstra_state.enqueue(origin, BoundVal(0), None)
+
+        # Run Dijkstra until exhaustion to find all reachable nodes
+        self.run_dijkstra(dijkstra_state, lambda _: False, solver)
+
+        # Convert all reduced distances to true distances.
+        for (dist, curr_node) in dijkstra_state.reached_nodes():
+            curr_bound = solver.bound_values[curr_node]
+            true_distance = dist + (curr_bound - origin_bound)
+            dijkstra_state.distances[curr_node] = (BoundVal(true_distance), dijkstra_state.distances[curr_node][1])
+            # FIXME line above: ugly...  direct modification of dijkstra_state.distances...
+            # in the original, a pointer is used... but those don't exist in python :'(
+
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
