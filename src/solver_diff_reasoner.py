@@ -118,7 +118,7 @@ class DiffReasoner(SolverReasoner):
 
         _propagator_group_id_counter: int = 0
         #########################################################################
-        propagators: Dict[DiffReasoner.PropagatorGroupId, DiffReasoner.PropagatorGroup] = {}
+        propagators: Dict[DiffReasoner.PropagatorGroupId, DiffReasoner.PropagatorGroup] = field(default_factory=dict)
         """
         Stores all propagators (both active and inactive) as groups or "bundles" of
         propagators sharing their source, target, and weight.
@@ -134,17 +134,17 @@ class DiffReasoner(SolverReasoner):
         None of them have the same source, target, and weight !
         """
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-        propagators_list: List[DiffReasoner.PropagatorGroupId] = []
+        propagators_list: List[DiffReasoner.PropagatorGroupId] = field(default_factory=list)
         """
         Ordered view of `propagators` (their IDs).
         """
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-        propagators_source_and_target: Dict[Tuple[SignedVar, SignedVar], List[DiffReasoner.PropagatorGroupId]] = {}
+        propagators_source_and_target: Dict[Tuple[SignedVar, SignedVar], List[DiffReasoner.PropagatorGroupId]] = field(default_factory=dict)
         """
         Associates (source, target) signed variable pairs to (IDs of) propagators defined between them.
         """
         #########################################################################
-        intermittent_propagators: Dict[SignedVar, List[Tuple[SignedVar, BoundVal, Lit]]] = {}
+        intermittent_propagators: Dict[SignedVar, List[Tuple[SignedVar, BoundVal, Lit]]] = field(default_factory=dict)
         """
         Stores propagators whose activity depends on the current state
         (i.e. which may or may not be active, depending on the current state).
@@ -158,13 +158,13 @@ class DiffReasoner(SolverReasoner):
         Note that handling of optional variables might allow an edge to propagate even if it is not known to be present yet.
         """
         #########################################################################
-        watches: Dict[SignedVar, Dict[BoundVal, List[Tuple[DiffReasoner.PropagatorGroupId, DiffReasoner.Enabler]]]] = {}
+        watches: Dict[SignedVar, Dict[BoundVal, List[Tuple[DiffReasoner.PropagatorGroupId, DiffReasoner.Enabler]]]] = field(default_factory=dict)
         """
         Associates literals to propagators (with an enabler) that should be activated when they become true.
         """
         #########################################################################
         # propagator_groups_events_trail: List[List[DiffReasoner.ConstraintsDatabase.PropagatorGroupEvents.AnyEvent]] = [[]]
-        propagator_groups_events_trail: List[List[Optional[Tuple[DiffReasoner.PropagatorGroupId, DiffReasoner.Enabler]]]] = [[]]
+        propagator_groups_events_trail: List[List[Optional[Tuple[DiffReasoner.PropagatorGroupId, DiffReasoner.Enabler]]]] = field(default_factory=lambda:[[]])
         """
         Holds the trail of "propagator groups events", i.e. updates on propagator groups:
         - A None element designates the addition of a new propagator group.
@@ -269,13 +269,13 @@ class DiffReasoner(SolverReasoner):
         change for the rest of the process.
         """
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-        distances: Dict[SignedVar, Tuple[BoundVal, Optional[DiffReasoner.PropagatorGroupId]]] = {}
+        distances: Dict[SignedVar, Tuple[BoundVal, Optional[DiffReasoner.PropagatorGroupId]]] = field(default_factory=dict)
         """
         Associates each vertex to its distance. If the node is not an origin, it also indicates
         the latest edge on the shortest path to this node.
         """
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-        queue: List[Tuple[BoundVal, SignedVar]] = []
+        queue: List[Tuple[BoundVal, SignedVar]] = field(default_factory=list)
         """
         Elements of the queue that have not been extracted yet.
         Note that a single node might appear several times in the queue,
