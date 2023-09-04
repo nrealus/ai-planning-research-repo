@@ -432,7 +432,7 @@ class DiffReasoner(SolverReasoner):
         reification_literal: Lit,
         source: Var,
         target: Var,
-        weight: BoundVal,
+        weight: int,
         solver: Solver,
     ) -> None:
         """
