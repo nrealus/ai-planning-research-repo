@@ -549,16 +549,16 @@ class DiffReasoner(SolverReasoner):
             # If the propagator couldn't be unified / integrated with an existing
             # propagator group, then just create a new propagator group for it.
 
-            existing_group_id = DiffReasoner.PropagatorGroupId(self.propagators_database._propagator_group_id_counter)
+            created_group_id = DiffReasoner.PropagatorGroupId(self.propagators_database._propagator_group_id_counter)
             self.propagators_database._propagator_group_id_counter += 1
 
-            self.propagators_database.propagators[existing_group_id] = DiffReasoner.PropagatorGroup(src, tgt, wgt, None, [eblr])
-            self.propagators_database.propagators_list.append(existing_group_id)
-            self.propagators_database.propagators_source_and_target.setdefault((src, tgt), []).append(existing_group_id)
+            self.propagators_database.propagators[created_group_id] = DiffReasoner.PropagatorGroup(src, tgt, wgt, None, [eblr])
+            self.propagators_database.propagators_list.append(created_group_id)
+            self.propagators_database.propagators_source_and_target.setdefault((src, tgt), []).append(created_group_id)
 
             self.propagators_database.propagator_groups_events_trail[solver.dec_level].append(None)
 
-            return (existing_group_id, "creating")
+            return (created_group_id, "creating")
             
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -593,10 +593,6 @@ class DiffReasoner(SolverReasoner):
                 # - If the enabling conditions hold (`enabler.valid` and `enabler.active` are true), then the propagator should be enabled
                 # - If the propagator is inconsistent, then the `enabler.active` should be made false
                 else:
-
-                    if solver.dec_level > 0:
-                        # FIXME: when backtracking, we should remove this edge (or at least ensure that it is definitely deactivated)
-                        print("WARNING: adding a dynamically enabled edge beyond the root decision level is unsupported.")
 
                     # Set a watch on both `enabler.active` and `enabler.valid` literals
                     # (when one of them becomes true, we will still have to check that the other one becomes true as well)
@@ -727,7 +723,7 @@ class DiffReasoner(SolverReasoner):
 
         self.propagators_pending_for_activation.clear()
 
-        for ev in self.propagation_metadata_trail[solver.dec_level]:
+        for ev in reversed(self.propagation_metadata_trail[solver.dec_level]):
             if ev is None:
                 self.theory_propagation_causes.pop()
             else:
@@ -738,16 +734,19 @@ class DiffReasoner(SolverReasoner):
 
         self.next_unprocessed_solver_event_index = len(solver.events_trail[solver.dec_level-1])
 
-        for ev in self.propagators_database.propagator_groups_events_trail[solver.dec_level]:
+        for ev in reversed(self.propagators_database.propagator_groups_events_trail[solver.dec_level]):
             if ev is None:
                 propagator_group_id = self.propagators_database.propagators_list.pop()
                 propagator_group = self.propagators_database.propagators.pop(propagator_group_id)
-                self.propagators_database.propagators_source_and_target.pop((propagator_group.source, propagator_group.target))
+                if ((propagator_group.source, propagator_group.target) in self.propagators_database.propagators_source_and_target
+                    and len(self.propagators_database.propagators_source_and_target[(propagator_group.source, propagator_group.target)]) > 0
+                ):
+                    self.propagators_database.propagators_source_and_target[(propagator_group.source, propagator_group.target)].pop()
                 # NOTE: no need to reset/update self.constraints_database.next_new_constraint_index !
             else:
                 (propagator_group_id, enabler) = ev
                 self.propagators_database.watches[enabler.active.signed_var][enabler.active.bound_value].remove((propagator_group_id, enabler))
-                self.propagators_database.watches[enabler.active.signed_var][enabler.active.bound_value].remove((propagator_group_id, enabler))
+                self.propagators_database.watches[enabler.valid.signed_var][enabler.valid.bound_value].remove((propagator_group_id, enabler))
                 propagator_group = self.propagators_database.propagators[propagator_group_id]
                 self.propagators_database.intermittent_propagators[propagator_group.source].pop()
         self.propagators_database.propagator_groups_events_trail[solver.dec_level].clear()
@@ -860,7 +859,7 @@ class DiffReasoner(SolverReasoner):
                 
                 if "bounds" in theory_propagation_levels:
                     res = self.theory_propagate_bound(Lit(ev.signed_var, ev.new_bound_value), solver)
-                    if isinstance(res, SolverConflictInfo.InvalidBoundUpdate):
+                    if res is not None:
                         return res
                 
                 if (isinstance(ev.cause, SolverCauses.ReasonerInference)
@@ -874,7 +873,7 @@ class DiffReasoner(SolverReasoner):
                 # Propagate bound change
                 if ev.signed_var in self.propagators_active and len(self.propagators_active[ev.signed_var]) > 0:
                     res = self.run_propagation_loop(ev.signed_var, False, solver)
-                    if isinstance(res, SolverConflictInfo.InvalidBoundUpdate):
+                    if res is not None:
                         return res
 
             # Step (2.2) (see function documentation).
@@ -923,14 +922,14 @@ class DiffReasoner(SolverReasoner):
                     return res
                 elif res is True:
                     res = self.run_propagation_loop(propagator_group.target, True, solver)
-                    if isinstance(res, SolverConflictInfo.InvalidBoundUpdate):
+                    if res is not None:
                         return res
 
                 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
                 if "edges" in theory_propagation_levels:
                     res = self.theory_propagate_edge(propagator_group_id, solver)
-                    if isinstance(res, SolverConflictInfo.InvalidBoundUpdate):
+                    if res is not None:
                         return res
 
         return None
@@ -965,13 +964,11 @@ class DiffReasoner(SolverReasoner):
             
             explanation_literals: List[Lit] = []
             curr = vb
-
+            cycle_length = 0
             while True:
                 value = solver.bound_values[curr]
-                lit = Lit(curr, value)
-                assert solver.is_literal_entailed(lit)
 
-                ev_idx = solver.get_index_of_first_event_implying_literal(lit)
+                ev_idx = solver.get_index_of_first_event_implying_literal(Lit(curr, value))
                 assert ev_idx is not None
                 ev = solver.events_trail[ev_idx[0]][ev_idx[1]]
                 assert ev_idx[0] == solver.dec_level
@@ -985,6 +982,7 @@ class DiffReasoner(SolverReasoner):
                 if edge.enabler is None:
                     assert False
                 curr = edge.source
+                cycle_length += edge.weight
 
                 explanation_literals.append(edge.enabler.active)
                 explanation_literals.append(solver.vars_presence_literals[edge.enabler.active.signed_var.var])
@@ -1021,11 +1019,11 @@ class DiffReasoner(SolverReasoner):
                     candidate,
                     SolverCauses.ReasonerInference(
                         self,
-                        DiffReasoner.InferenceCauses.EdgePropagation(group_id)))    # BUG
+                        DiffReasoner.InferenceCauses.EdgePropagation(group_id)))
 
                 if isinstance(res, SolverConflictInfo.InvalidBoundUpdate):
                     return res
-                else:
+                elif res is True:
 #                    self.num_distance_updates += 1
                     if cycle_on_update and target == original:
                         return SolverConflictInfo.ReasonerExplanation(extract_cycle(target))

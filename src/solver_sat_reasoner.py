@@ -370,7 +370,7 @@ class SATReasoner(SolverReasoner):
         solver: Solver
     ) -> None:
 
-        for locked_clause in self.locked_clauses_trail[solver.dec_level]:
+        for locked_clause in reversed(self.locked_clauses_trail[solver.dec_level]):
             self.locked_clauses.remove(locked_clause)
         self.locked_clauses_trail[solver.dec_level].clear()
 

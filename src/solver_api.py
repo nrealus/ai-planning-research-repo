@@ -294,7 +294,7 @@ def _get_conjunctive_scope_of_elementary_expr(
 
 def _flatten_conjunctive_scope_into_conjunctive_scope_literals(
     conj_scope: Tuple[Dict[SignedVar, BoundVal], Tuple[Lit,...]],
-    check_top_dec_level: bool,
+    check_entailed_at_top_dec_level: bool,
     solver: Solver,
 ) -> Tuple[Lit,...]:
     """
@@ -306,10 +306,14 @@ def _flatten_conjunctive_scope_into_conjunctive_scope_literals(
 
     def is_tautology(lit: Lit):
 
-        first_ev_idx = solver.get_index_of_first_event_implying_literal(lit)
-        return (solver.is_literal_entailed(lit)
-            and (not check_top_dec_level
-                or first_ev_idx is None or first_ev_idx[0] == 0))       # CHECKME
+        if solver.is_literal_entailed(lit):
+            if not check_entailed_at_top_dec_level:
+                return True
+            else:
+                first_ev_idx = solver.get_index_of_first_event_implying_literal(lit)
+                return first_ev_idx is None or first_ev_idx[0] == 0 # CHECKME
+        
+        return False
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
