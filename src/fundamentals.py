@@ -26,6 +26,7 @@ from typing import List, NamedTuple, Sequence, Tuple
 class Var(NamedTuple):
     """Represents a variable."""
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
     id: int
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -187,7 +188,7 @@ class Lit(NamedTuple):
         """
         Returns:
             bool: Whether this literal entails `other_literal`.
-        (i.e. it is on the same signed variable and has a stronger bound value).
+            (i.e. it is on the same signed variable and has a stronger bound value).
         """
         return (self.signed_var == other_literal.signed_var
             and self.bound_value.is_stronger_than(other_literal.bound_value))
@@ -219,7 +220,7 @@ the [ZERO_VAR >= 1] literal (i.e. [-ZERO_VAR <= -1]).
 
 def tighten_literals(literals: Sequence[Lit]) -> Tuple[Lit,...]:
     """
-    "Tightens" a set of (disjunctive) literals. This means sorting the literals
+    "Tightens" a (disjunctive) set of literals. This means sorting the literals
     (in lexicographic order - see `Lit` attributes) and, in case there were
     multiple literals on the same signed variable, only keeping the weakest one.
      
@@ -253,7 +254,7 @@ def are_tightened_literals_tautological(literals: Tuple[Lit,...]) -> bool:
     """
     Returns:
         bool: Whether the disjunction of given (tightened) literals is tautological.
-    (i.e. is always true, because of two literals [v<=x] and [v>=y] with y<=x).
+        (i.e. is always true, because of two literals [v<=x] and [v>=y] with y<=x).
 
     !!! Requires the given set of literals to have been tightened !!! Indeed, the
     function assumes that the literals are sorted and that there is only one literal

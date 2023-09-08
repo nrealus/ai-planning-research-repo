@@ -6,13 +6,18 @@ from typing import Dict, List, Optional, Tuple
 
 from fundamentals import (
     Var,
-    SignedVar, BoundVal, Lit, TRUE_LIT, FALSE_LIT,
+    SignedVar, BoundVal,
+    Lit, TRUE_LIT, FALSE_LIT,
 )
 from constraint_expressions import (
     ConstrExpr,
     ElemConstrExpr,    
 )
-from solver import Causes, InvalidBoundUpdateInfo, Solver
+from solver import (
+    Causes,
+    InvalidBoundUpdateInfo,
+    Solver,
+)
 
 #################################################################################
 #################################################################################
@@ -119,13 +124,14 @@ def add_constraint(
     solver: Solver,
 ) -> Tuple[ElemConstrExpr, Lit]:
     """
-    Adds a constraint defined by the given expression, in a scope defined by the given literals.
-    (i.e. the constraint must be true when all the literals defining the conjunctive scope are true)
+    Adds a constraint defined by the given expression, in a (conjunctive)
+    scope defined by the given literals (i.e. the constraint must be true
+    when all the literals defining the conjunctive scope are true)
 
-    Internally, the expression is transformed into elementary form, potentially
-    reifying some intermediate constraints. The expression in elementary form is
-    then reified to an optional literal that is true when the expression is
-    valid/well-defined and absent otherwise.
+    Internally, the expression is transformed into elementary form (i.e. ElemConstrExpr),
+    and potentially reifies some intermediate constraints. The expression in
+    elementary form is then reified to an optional literal that is true
+    when the expression is valid/well-defined and absent otherwise.
 
     Returns a reified constraint, formed by the elementary form expression
     as well as that optional literal.
@@ -153,7 +159,7 @@ def _preprocess_constr_expr_into_elem_form(
     (or constraint elementary expression).
 
     Also, may reify intermediate constraints, while preparing for
-    the reification of the whole constraint.
+    the reification of the constraint as a whole.
     """
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -250,7 +256,8 @@ def _preprocess_constr_expr_into_elem_form(
                     return ElemConstrExpr.from_lits_tighten_and_simplify_or(lits)
 
                 case ConstrExpr.Kind.AND:
-                    return ElemConstrExpr.from_lits_tighten_and_simplify_or(tuple(lit.negation() for lit in lits)).negation()
+                    return ElemConstrExpr.from_lits_tighten_and_simplify_or(tuple(lit.negation() 
+                                                                                  for lit in lits)).negation()
 
                 case ConstrExpr.Kind.IMPLY:
                     if len(terms) == 2:
@@ -369,8 +376,8 @@ def _get_or_make_new_scope_lit_from_scope_as_lits_conj(
         _bind_elem_constr_expr(or_elem_form, TRUE_LIT, solver)  # TRUE_LIT is the tautology of the "empty scope" 
                                                                 # (whose scope literal is TRUE_LIT as well)
         _insert_new_scope_from_scope_as_lits_conj_and_scope_lit(lits_of_scope,
-                                                                  scope_lit, 
-                                                                  solver)
+                                                                scope_lit, 
+                                                                solver)
         return scope_lit
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -510,7 +517,7 @@ def _flatten_scope_to_lits_conj(
             for lit in lits:
                 if (not is_tautology(lit)
                     and (lit.signed_var not in flattened_conj_scope
-                        or lit.bound_value.is_stronger_than(flattened_conj_scope[lit.signed_var])                   )
+                        or lit.bound_value.is_stronger_than(flattened_conj_scope[lit.signed_var]))
                 ):
                     flattened_conj_scope[lit.signed_var] = lit.bound_value
 
@@ -595,11 +602,11 @@ def _insert_implication_between_literals_on_non_optional_vars(
     # Otherwise, add the implication to the implication graph
     # (both from => to and (not to) => (not from))
     else:
-        solver.non_optional_vars_implication_graph.setdefault(
+        solver.non_optionals_implication_graph.setdefault(
             lit_from.signed_var, {}).setdefault(
             lit_from.bound_value, set()).add(lit_to)
 
-        solver.non_optional_vars_implication_graph.setdefault(
+        solver.non_optionals_implication_graph.setdefault(
             lit_to_neg.signed_var, {}).setdefault(
             lit_to_neg.bound_value, set()).add(lit_from_neg)
 

@@ -7,31 +7,47 @@ from typing import Dict, List, Optional, Set, Tuple
 from dataclasses import dataclass, field
 
 from fundamentals import (
-    SignedVar, BoundVal, Lit, TRUE_LIT
+    SignedVar, BoundVal,
+    Lit, TRUE_LIT
 )
 
-from solver import SolverCauses, SolverConflictInfo, SolverReasoner, Solver
+from solver import (
+    Causes,
+    ReasonerRawExplanation,
+    Reasoner,
+    Solver,
+)
 
 #################################################################################
 #################################################################################
 #                                   CONTENTS:
 # - SAT REASONER
+#   - CLAUSES & CLAUSES IDs
+#   - CLAUSE ADDITION / REGISTRATION
+#   - WATCHES (WATCHED LITERALS & WATCHLISTS)
+#   - MAIN SOLVER DECISION LEVEL INCREASE & DECREASE CALLBACKS
+#   - PROPAGATION
+#   - EXPLANATION
+#   - CLAUSE DATABASE SCALING, ACTIVITIES
 #################################################################################
 #################################################################################
 
-class SATReasoner(SolverReasoner):
+class SATReasoner(Reasoner):
     """
     Also called "Disjunctive Reasoner". It acts as a SAT solver. It
     maintains the database of clauses and performs unit propagation.
 
     In essence, for each clause in the database, we look for distinct 
     literals that are not falsified by the current domains:
-     - If all literals are false, the clause is violated and a conflict is
-       reported, which will cause the search to backtrack
-     - If all but one literal `l` are false, then the clause is unit and `l` is
-       enforced/set
-     - Otherwise, two non-false literals are selected and added to a watch list.
-       Once one of these literal is set, the clause will be reevaluated
+
+        - If all literals are false, the clause is violated and a conflict is 
+        reported, which will cause the search to backtrack
+     
+        - If all but one literal `l` are false, then the clause is unit and `l` is
+        enforced/set
+        
+        - Otherwise, two non-false literals are selected and added to a watch list.
+        Once one of these literal is set, the clause will be reevaluated
     """
     
     #############################################################################
@@ -40,10 +56,9 @@ class SATReasoner(SolverReasoner):
     
     @dataclass
     class Clause():
-        """
-        Contains the data of a clause registered in the clause database.
-        """
+        """Contains the data of a clause registered in the clause database."""
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
         literals: Tuple[Lit,...]
         """
         The literals of the clause (without the scope literal).
@@ -51,7 +66,7 @@ class SATReasoner(SolverReasoner):
         They are sorted and with only one literal per signed variable
         (i.e. they form a "tight" set of literals)
         """
-        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
         scope_literal: Lit
         """
         A literal that describes whether the clause is "active" or not.
@@ -61,32 +76,30 @@ class SATReasoner(SolverReasoner):
         Note that a clause that is known to be violated but also inactive is not
         considered to be a conflict.
         """
+
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
         learned: bool
-        """
-        Whether the clause is learned or not.
-        """
+        """Whether the clause is learned or not."""
+
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
         watch1_index: int = field(init=False)
-        """
-        Index of the first watched literal.
-        """        
-        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+        """Index of the first watched literal."""
+
         watch2_index: int = field(init=False)
-        """
-        Index of the second watched literal.
-        """
-        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+        """Index of the second watched literal."""
+
         unwatched_indices: List[int] = field(init=False)
-        """
-        List of the indices of unwatched literals.
-        """
+        """List of the indices of unwatched literals."""
+
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
         activity: float = field(init=False)
         """
         TODO
         """
-        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
         # lbd: float = field(init=False)
         # """
         # TODO
@@ -127,36 +140,43 @@ class SATReasoner(SolverReasoner):
     def __init__(self):
 
         self._clauses_id_counter: int = 0
-        #########################################################################
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
         self.clauses_database: Dict[SATReasoner.ClauseId, SATReasoner.Clause] = {}
-        """
-        The clauses database.
-        """
-        #########################################################################
+        """The clauses database."""
+
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
         self.clause_activity_increase: float = 1
-        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
         self.clause_activity_decay: float = 0.999
-        #########################################################################
+
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
         self.num_fixed_clauses: int = 0
-        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
         self.num_learned_clauses: int = 0
-        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
         self.num_allowed_learned_clauses: int = 0
-        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
         self.num_allowed_learned_clauses_base: int = 1000
-        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
         self.num_allowed_learned_clauses_ratio: float = 1/3
-        #########################################################################
+
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
         self.num_conflicts: int = 0
-        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
         self.num_conflicts_at_last_database_expansion: int = 0
-        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
         self.num_conflicts_allowed_before_database_expansion: int = 0
-        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
         self.database_expansion_ratio: float = 1.05
-        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
         self.increase_ratio_of_conflicts_before_db_expansion: float = 1.5
-        #########################################################################
+
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
         self.locked_clauses: Set[SATReasoner.ClauseId] = set()
         """
         All locked clauses (at all decision levels).
@@ -165,18 +185,25 @@ class SATReasoner(SolverReasoner):
         clause as locked is necessary when that clause may be needed for explanation
         mechanisms.
         """
-        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
         self.locked_clauses_trail: List[List[SATReasoner.ClauseId]] = [[]]
         """
         Trail of locked clauses. Outer list index: decision level.
         Inner list content: clauses locked while at that decision level.
         """
-        #########################################################################
+
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
         self.watches: Dict[SignedVar, Dict[BoundVal, List[SATReasoner.ClauseId]]] = {}
         """
-        Represents watched literals and their watch lists.
+        Represents watched literals and their watchlists.
+
+        A watched literal [svar <= u] 's watchlist (of clauses) is represented as:
+        { svar : { u : [clause1_id, clause2_id, ...] }}
         """
-        #########################################################################
+
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
         self.pending_clauses_info: List[Tuple[SATReasoner.ClauseId, Optional[Lit]]] = []
         """
         Stores clauses that have been recorded to the database, but not processed yet.
@@ -188,7 +215,7 @@ class SATReasoner(SolverReasoner):
         This situation might happen when the clause was learned from a conflict
         involving eager propagation of optional variables.
         """
-        #########################################################################
+
         self.next_unprocessed_solver_event_index: int = 0
         """
         The index of the next unprocessed (i.e. not yet propagated) event in the
@@ -248,14 +275,13 @@ class SATReasoner(SolverReasoner):
 
         clause_id = SATReasoner.ClauseId(self._clauses_id_counter)
         self._clauses_id_counter += 1
-        self.clauses_database[clause_id] = SATReasoner.Clause(
-            clause_literals,
-            scope_literal,
-            learned)
+        self.clauses_database[clause_id] = SATReasoner.Clause(clause_literals,
+                                                              scope_literal,
+                                                              learned)
         return clause_id
 
     #############################################################################
-    # WATCHES / WATCHED LITERALS
+    # WATCHES (WATCHED LITERALS & WATCHLISTS)
     #############################################################################
 
     def _swap_watch1_and_watch2(self,
@@ -302,19 +328,16 @@ class SATReasoner(SolverReasoner):
         """
 
         def priority_of_lit(lit: Lit) -> int:
-            val = solver.get_literal_current_value(lit)
-            if val is True:
-                return 2**64    # FIXME: should be max int
-            elif val is None:
-                return 2**64-1  # FIXME: should be max int - 1
-            elif val is False:
-                first_impl_ev_index = solver.get_index_of_first_event_implying_literal(lit.negation())
-                if first_impl_ev_index is None:
-                    return 0
-                (_p1, _p2) = first_impl_ev_index
-                return _p1+_p2
-            else:
-                assert False
+            match solver.get_literal_value(lit):
+                case True:
+                    return 2**64    # FIXME: should be max int
+                case None:
+                    return 2**64-1  # FIXME: should be max int - 1
+                case False:
+                    first_impl_ev = solver.get_first_event_implying_literal(lit.negation())
+                    if first_impl_ev is None:
+                        return 0
+                    return first_impl_ev.index[0]+first_impl_ev.index[1]
 
         clause = self.clauses_database[clause_id]
 
@@ -327,9 +350,11 @@ class SATReasoner(SolverReasoner):
 
         for i in range(len(clause.unwatched_indices)):
             lvl = priority_of_lit(clause.literals[clause.unwatched_indices[i]])
+
             if lvl > lvl1:
                 lvl1 = lvl
                 self._swap_watch2_and_unwatched_i(clause_id, i)
+
                 if lvl > lvl0:
                     lvl1 = lvl0
                     lvl0 = lvl
@@ -352,16 +377,16 @@ class SATReasoner(SolverReasoner):
         self.watches[literal.signed_var][literal.bound_value].remove(clause_id)
 
     #############################################################################
-    # MAIN SOLVER DECISION LEVEL INCREASE OR DECREASE CALLBACKS
+    # MAIN SOLVER DECISION LEVEL INCREASE & DECREASE CALLBACKS
     #############################################################################
 
-    def on_solver_new_set_literal_decision(self,
+    def on_solver_increment_decision_level(self,
         solver: Solver
     ) -> None:
         
         self.next_unprocessed_solver_event_index = 0
 
-        if len(self.locked_clauses_trail) == solver.dec_level:
+        if len(self.locked_clauses_trail) == solver.decision_level:
             self.locked_clauses_trail.append([])
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -370,11 +395,11 @@ class SATReasoner(SolverReasoner):
         solver: Solver
     ) -> None:
 
-        for locked_clause in reversed(self.locked_clauses_trail[solver.dec_level]):
+        for locked_clause in reversed(self.locked_clauses_trail[solver.decision_level]):
             self.locked_clauses.remove(locked_clause)
-        self.locked_clauses_trail[solver.dec_level].clear()
+        self.locked_clauses_trail[solver.decision_level].clear()
 
-        self.next_unprocessed_solver_event_index = len(solver.events_trail[solver.dec_level-1])
+        self.next_unprocessed_solver_event_index = len(solver.events_trail[solver.decision_level-1])
 
     #############################################################################
     # PROPAGATION
@@ -382,7 +407,7 @@ class SATReasoner(SolverReasoner):
 
     def propagate(self,
         solver:Solver,
-    )-> Optional[SolverConflictInfo.InvalidBoundUpdate | SolverConflictInfo.ReasonerExplanation]:
+    ) -> Optional[ReasonerRawExplanation]:
         """
         Main propagation method of the SAT reasoner.
         Performs unit propagation (aka boolean constraint propagation).
@@ -428,10 +453,12 @@ class SATReasoner(SolverReasoner):
 
         violated_clause = self.clauses_database[violated_clause_id]
         explanation_literals = [lit.negation() for lit in violated_clause.literals]
+
         if violated_clause.scope_literal != TRUE_LIT:
             explanation_literals.append(violated_clause.scope_literal)
             self._bump_activity(violated_clause_id)
-        return SolverConflictInfo.ReasonerExplanation(tuple(explanation_literals))
+
+        return ReasonerRawExplanation(tuple(explanation_literals))
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -453,23 +480,18 @@ class SATReasoner(SolverReasoner):
             lit = clause.literals[clause.watch1_index]
             self._add_watch(clause_id, lit.negation())
 
-            lit_value: Optional[bool] = solver.get_literal_current_value(lit)
-            
-            # If the literal is known to be true, the clause is satisfied.
-            if lit_value is True:
-                return None
-
-            # If the literal is known to be false, the clause is violated.
-            elif lit_value is False:
-                return self._process_violated_clause(clause_id, solver)
-
-            # If the literal is unbound, it must be set to true (because it's the only literal of the clause).
-            elif lit_value is None:
-                self._set_from_unit_propagation(lit, clause_id, solver)
-                return None
-            
-            else:
-                assert False
+            match solver.get_literal_value(lit):
+                # If the literal is known to be true, the clause is satisfied.
+                case True:
+                    return None 
+                # If the literal is known to be false, the clause is violated.
+                case False:
+                    return self._process_violated_clause(clause_id, solver)
+                # If the literal is unbound, it must be set to true
+                # (because it's the only literal of the clause).
+                case None:
+                    self._set_from_unit_propagation(lit, clause_id, solver)
+                    return None
         
         # If the clause has 2 or more literals
 
@@ -479,9 +501,9 @@ class SATReasoner(SolverReasoner):
         # Determine whether a watch should indeed be set on the new 1st
         # and 2nd watched literals (based on the priority values - see `_move_watches_front()`)
 
-        lit1_value: Optional[bool] = solver.get_literal_current_value(
+        lit1_value: Optional[bool] = solver.get_literal_value(
             clause.literals[clause.watch1_index])
-        lit2_value: Optional[bool] = solver.get_literal_current_value(
+        lit2_value: Optional[bool] = solver.get_literal_value(
             clause.literals[clause.watch2_index])
 
         # If the 1st watched literal is true, the clause is satisfied.
@@ -527,25 +549,19 @@ class SATReasoner(SolverReasoner):
         if possible (i.e. setting its scope literal to False) to avoid a conflict.
         If it's impossible, we are at conflict.
 
-        Returns None if the clause was made deactivated (or if it already was
-        deactivated), or clause_id if the clause is known to be active (i.e. cannot be deactivated).
+        Returns None if the clause was made deactivated (or if it already was deactivated),
+        or clause_id if the clause is known to be active (i.e. cannot be deactivated).
         """
         
         scope_literal = self.clauses_database[clause_id].scope_literal
-        scope_literal_value: Optional[bool] = solver.get_literal_current_value(scope_literal)
-
-        if scope_literal_value is True:
-            return clause_id
-
-        elif scope_literal_value is False:
-            return None
-        
-        elif scope_literal_value is None:
-            self._set_from_unit_propagation(scope_literal.negation(), clause_id, solver)
-            return None
-
-        else:
-            assert False
+        match solver.get_literal_value(scope_literal):
+            case True:
+                return clause_id
+            case False:
+                return None
+            case None:
+                self._set_from_unit_propagation(scope_literal.negation(), clause_id, solver)
+                return None
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -566,8 +582,8 @@ class SATReasoner(SolverReasoner):
         working_watches: Dict[BoundVal, List[SATReasoner.ClauseId]] = {}
 
         # Loop through yet unprocessed events, accumulated since the last call to this function.
-        while self.next_unprocessed_solver_event_index < len(solver.events_trail[solver.dec_level]):
-            ev = solver.events_trail[solver.dec_level][self.next_unprocessed_solver_event_index]
+        while self.next_unprocessed_solver_event_index < len(solver.events_trail[solver.decision_level]):
+            ev = solver.events_trail[solver.decision_level][self.next_unprocessed_solver_event_index]
             self.next_unprocessed_solver_event_index += 1
 
             # Select clauses with a literal that is 
@@ -587,7 +603,9 @@ class SATReasoner(SolverReasoner):
                         and ev.new_bound_value.is_stronger_than(watched_literal.bound_value)
                         and not ev.previous_bound_value.is_stronger_than(watched_literal.bound_value)
                     ):
-                        if not self._propagate_clause(clause_id, Lit(ev.signed_var, ev.new_bound_value), solver):
+                        if not self._propagate_clause(clause_id,
+                                                      Lit(ev.signed_var, ev.new_bound_value),
+                                                      solver):
                             contradicting_clause_id = clause_id
 
                     # Otherwise, the watch must be restored.
@@ -675,13 +693,12 @@ class SATReasoner(SolverReasoner):
         Indeed, this is necessary as the clause may be needed to provide an explanation.
         """
 
-        is_bound_changed = solver.set_bound_value(
-            literal.signed_var,
-            literal.bound_value,
-            SolverCauses.ReasonerInference(self, propagating_clause_id))
+        is_bound_changed = solver.set_bound_value(literal.signed_var,
+                                                  literal.bound_value,
+                                                  Causes.ReasonerInference(self, propagating_clause_id))
 
         if is_bound_changed is True:
-            self.locked_clauses_trail[solver.dec_level].append(propagating_clause_id)
+            self.locked_clauses_trail[solver.decision_level].append(propagating_clause_id)
             self.locked_clauses.add(propagating_clause_id)
             # FIXME:
             # if solver.clauses_db.clauses[propagating_clause_id].learned:
@@ -695,14 +712,16 @@ class SATReasoner(SolverReasoner):
     def explain(self,
         explanation_literals: List[Lit],
         literal: Lit,
-        inference_cause: SolverCauses.ReasonerInference,
+        inference_cause_data: Tuple[Reasoner, object],
         solver: Solver,
     ) -> None:
         """
         TODO
         """
 
-        clause_id = typing.cast(SATReasoner.ClauseId, inference_cause.inference_info)
+        _, inference_info = inference_cause_data
+
+        clause_id = typing.cast(SATReasoner.ClauseId, inference_info)
         self._bump_activity(clause_id)
         clause = self.clauses_database[clause_id]
 
@@ -713,7 +732,7 @@ class SATReasoner(SolverReasoner):
                 explanation_literals.append(lit)
 
     #############################################################################
-    # DATABASE SCALING, ACTIVITIES
+    # CLAUSE DATABASE SCALING, ACTIVITIES
     #############################################################################
     
     def _scale_database(self) -> None:

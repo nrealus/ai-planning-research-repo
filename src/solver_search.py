@@ -16,9 +16,9 @@ from constraint_expressions import (
 from solver import (
     Decisions, 
     Causes,
+    ConflictAnalysisResult, 
     InvalidBoundUpdateInfo, 
     ReasonerRawExplanation, 
-    ConflictAnalysisResult, 
     Solver,
 )
 
@@ -115,20 +115,20 @@ def search(
             if len(conflict_analysis_info.asserting_clause_literals) == 0:
                 return "INCONSISTENT"
 
+            tightened_asserting_clause_literals = tighten_literals(conflict_analysis_info.asserting_clause_literals)
+
             # CLAUSE LEARNING
 
             (is_clause_conflicting_at_top_level,
             backtrack_level,
-            asserted_literal) = solver.get_decision_level_to_backtrack_to(
-                conflict_analysis_info.asserting_clause_literals)
+            asserted_literal) = solver.get_decision_level_to_backtrack_to(tightened_asserting_clause_literals)
 
             if is_clause_conflicting_at_top_level:
                 return "INCONSISTENT"
 
             solver.backtrack_to_decision_level(backtrack_level, reasoners)
-            sat_reasoner.add_new_learned_clause(
-                conflict_analysis_info.asserting_clause_literals,
-                asserted_literal)
+            sat_reasoner.add_new_learned_clause(tightened_asserting_clause_literals,
+                                                asserted_literal)
 
         else:
 
@@ -145,8 +145,9 @@ def search(
                     
                 case Decisions.SetLiteral(lit):
                     solver.increment_decision_level(reasoners)
-                    solver.set_bound_value(lit.signed_var, lit.bound_value, Causes.Decision())
-
+                    solver.set_bound_value(lit.signed_var,
+                                           lit.bound_value, 
+                                           Causes.Decision())
                 case _:
                     assert False
 
@@ -160,7 +161,7 @@ def _actually_post_reified_constraint(
     solver: Solver,
     sat_reasoner: SATReasoner,
     diff_reasoner: DiffReasoner,
-) -> Optional[Tuple[Lit, Causes.AnyCause]]:
+) -> Optional[InvalidBoundUpdateInfo]:
     """
     """
     
@@ -169,10 +170,10 @@ def _actually_post_reified_constraint(
     def add_clause_to_sat_reasoner(
         clause_lits: Tuple[Lit,...],
         scope_lits: Lit,
-        clause_literals_already_tightened: bool=False,
-    ) -> bool | InvalidBoundUpdateInfo:
+        clause_literals_already_known_to_be_tightened: bool,
+    ) -> Optional[InvalidBoundUpdateInfo]:
 
-        if clause_literals_already_tightened:
+        if clause_literals_already_known_to_be_tightened:
             clause_tightened_lits = tighten_literals(clause_lits)
         else:
             clause_tightened_lits = clause_lits
@@ -209,24 +210,26 @@ def _actually_post_reified_constraint(
 
             processed_scope_literal_neg = processed_scope_lit.negation()
 
-            return solver.set_bound_value(processed_scope_literal_neg.signed_var,
-                                          processed_scope_literal_neg.bound_value,
-                                          Causes.Encoding()) 
+            res = solver.set_bound_value(processed_scope_literal_neg.signed_var,
+                                         processed_scope_literal_neg.bound_value,
+                                         Causes.Encoding()) 
+            if isinstance(res, InvalidBoundUpdateInfo):
+                return res
 
-        elif all(solver.is_implication_true(
-            solver.vars_presence_literals[lit.signed_var.var],processed_scope_lit)
-            for lit in clause_tightened_lits
+        elif all(solver.is_implication_true(solver.vars_presence_literals[lit.signed_var.var],
+                                            processed_scope_lit)
+                                            for lit in clause_tightened_lits
         ):
             pass
         
         else:
             clause_tightened_lits = tighten_literals(clause_tightened_lits
-                                                         +(processed_scope_lit.negation(),))
+                                                     +(processed_scope_lit.negation(),))
             processed_scope_lit = TRUE_LIT
 
         sat_reasoner.add_new_fixed_clause_with_scope(clause_tightened_lits,
                                                      processed_scope_lit)
-        return True
+        return None
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -246,13 +249,12 @@ def _actually_post_reified_constraint(
 
             assert solver.is_implication_true(scope_lit, solver.vars_presence_literals[lit.signed_var.var])
 
-            add_clause_to_sat_reasoner((constr_lit.negation(), lit), scope_lit)
-            add_clause_to_sat_reasoner((lit.negation(), constr_lit), scope_lit)
+            add_clause_to_sat_reasoner((constr_lit.negation(), lit), scope_lit, False)
+            add_clause_to_sat_reasoner((lit.negation(), constr_lit), scope_lit, False)
 
         case (ElemConstrExpr.Kind.MAX_DIFFERENCE,
               (Var() as from_var, Var() as to_var, int() as max_diff)
         ):
-
             diff_reasoner.add_reified_difference_constraint(constr_lit,
                                                             from_var, to_var, max_diff,
                                                             solver)
@@ -261,15 +263,15 @@ def _actually_post_reified_constraint(
 
             if solver.is_literal_entailed(constr_lit):
 
-                add_clause_to_sat_reasoner(lits, scope_lit)
+                add_clause_to_sat_reasoner(lits, scope_lit, False)
                 return None
             
             elif solver.is_literal_entailed(constr_lit.negation()):
 
                 for lit in lits:
 
-                    res = add_clause_to_sat_reasoner((lit.negation(),), scope_lit)
-                    if isinstance(res, InvalidBoundUpdateInfo):
+                    res = add_clause_to_sat_reasoner((lit.negation(),), scope_lit, False)
+                    if res is not None:
                         return res
 
                 return None
@@ -280,13 +282,13 @@ def _actually_post_reified_constraint(
                 if are_tightened_literals_tautological(clause_tightened_lits):
 
                     res = add_clause_to_sat_reasoner(clause_tightened_lits, scope_lit, True)
-                    if isinstance(res, InvalidBoundUpdateInfo):
+                    if res is not None:
                         return res
                 
                 for lit in lits:
 
-                    res = add_clause_to_sat_reasoner((lit.negation(), constr_lit), scope_lit)
-                    if isinstance(res, InvalidBoundUpdateInfo):
+                    res = add_clause_to_sat_reasoner((lit.negation(), constr_lit), scope_lit, False)
+                    if res is not None:
                         return res
 
                 return None
@@ -297,7 +299,6 @@ def _actually_post_reified_constraint(
                                                      solver,
                                                      sat_reasoner,
                                                      diff_reasoner)
-
         case _:
             assert False
 
