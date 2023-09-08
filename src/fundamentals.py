@@ -2,28 +2,20 @@ from __future__ import annotations
 
 #################################################################################
 
-from typing import List, NamedTuple, Sequence, Tuple, Union
-from abc import ABC
-from dataclasses import dataclass
+from typing import List, NamedTuple, Sequence, Tuple
 
 #################################################################################
 #################################################################################
 #                                   CONTENTS:
-# - FUNDAMETALS I:
+# - FUNDAMETAL CLASSES:
 #   - VARIABLES
 #   - SIGNED VARIABLES
 #   - BOUND VALUES
 #   - LITERALS
 #
-# - FUNDAMETALS II:
-#   - CONSTRAINT EXPRESSION ATOMS
-#   - CONSTRAINT EXPRESSIONS
-#
-# - FUNDAMETALS III:
-#   - CONSTRAINT ELEMENTARY EXPRESSIONS
-#
 # - HELPER FUNCTIONS:
 #   - TIGHTENING OF (DISJUNCTIONS OF) LITERALS
+#
 #################################################################################
 #################################################################################
 
@@ -32,19 +24,14 @@ from dataclasses import dataclass
 #################################################################################
 
 class Var(NamedTuple):
-    """
-    Represents a variable.
-    """
-
+    """Represents a variable."""
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     id: int
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 ZERO_VAR = Var(0)
-"""
-A special Zero variable whose domain will always be equal to the {0} singleton.
-"""
+"""A special Zero variable whose domain will always be equal to the {0} singleton."""
 
 #################################################################################
 # SIGNED VARIABLES
@@ -56,19 +43,37 @@ class SignedVar(NamedTuple):
     
     Simply put, a variable v can have two signed variables (+v and -v).
     """
-
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
     var: Var
-    """
-    The variable of this signed variable.
-    """
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-    plus_sign: bool
-    """
-    The sign of the signed variable.
+    """The variable of this signed variable."""
 
-    +: True, -: False
-    """
+    plus_sign: bool
+    """The sign of the signed variable. (+: True, -: False)"""
+
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+    @classmethod
+    def plus(cls,
+        var: Var,
+    ) -> SignedVar:
+        """
+        Returns:
+            SignedVar: "-v" signed variable of variable v.
+        """
+        return SignedVar(var, True)
+
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+    @classmethod
+    def minus(cls,
+        var: Var,
+    ) -> SignedVar:
+        """
+        Returns:
+            SignedVar: "-v" signed variable of variable v.
+        """
+        return SignedVar(var, False)
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -89,6 +94,21 @@ class BoundVal(int):
 
     This allows to represent both upper and lower bound values of variables in an identical way.
     """
+
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+    def __neg__(self) -> BoundVal:
+        return BoundVal(-int(self))
+
+    def __add__(self,
+        other_bound_val: BoundVal
+    ) -> BoundVal:
+        return BoundVal(int(self)+other_bound_val)
+
+    def __sub__(self,
+        other_bound_val: BoundVal
+    ) -> BoundVal:
+        return BoundVal(int(self)-other_bound_val)
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -116,17 +136,13 @@ class Lit(NamedTuple):
     To deal with the cases of lower and upper bounds in identical ways, a literal
     actually represents an expression on the upper bound of a signed variable.
     """
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     signed_var: SignedVar
-    """
-    The signed variable of the literal.
-    """
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+    """The signed variable of the literal."""
+
     bound_value: BoundVal
-    """
-    The (upper) bound value of the literal.
-    """
+    """The (upper) bound value of the literal."""
     
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -139,7 +155,7 @@ class Lit(NamedTuple):
         Returns:
             Lit: A [`var` <= `value`] literal (i.e. [+`var` <= +`value`]).
         """
-        return Lit(SignedVar(var, True), BoundVal(value))
+        return Lit(SignedVar.plus(var), BoundVal(value))
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -152,7 +168,7 @@ class Lit(NamedTuple):
         Returns:
             Lit: A [`var` >= `value`] literal (i.e. [-`var` <= -`value`]).
         """
-        return Lit(SignedVar(var, False), BoundVal(-value))
+        return Lit(SignedVar.minus(var), BoundVal(-value))
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     
@@ -161,7 +177,7 @@ class Lit(NamedTuple):
         Returns:
             Lit: The negation of the literal.
         """
-        return Lit(self.signed_var.opposite_signed_var(), BoundVal(-self.bound_value-1))
+        return Lit(self.signed_var.opposite_signed_var(), -self.bound_value-BoundVal(1))
     
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     
@@ -198,189 +214,6 @@ the [ZERO_VAR >= 1] literal (i.e. [-ZERO_VAR <= -1]).
 """
 
 #################################################################################
-# CONSTRAINT EXPRESSION ATOMS
-#################################################################################
-
-class ConstraintExpressionAtoms(ABC):
-    """
-    TODO
-    """
-
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-    class Bool(NamedTuple):
-        var: Var
-
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-    class Int(NamedTuple):
-        var: Var
-        offset: int
-
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-    class Sym(NamedTuple):
-        var: Var
-        sym_type: None #FIXME
-
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-    AnyAtom = Union[
-        Bool,
-        Int,
-#        Ratio,
-        Sym,
-    ]
-
-#################################################################################
-# CONSTRAINT EXPRESSIONS
-#################################################################################
-
-class ConstraintExpression(ABC):
-    """
-    TODO
-    """
-
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-    class Leq(NamedTuple):
-        left_atom: ConstraintExpressionAtoms.Int
-        right_atom: ConstraintExpressionAtoms.Int
-
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-    class Lt(NamedTuple):
-        left_atom: ConstraintExpressionAtoms.Int
-        right_atom: ConstraintExpressionAtoms.Int
-
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-    class Geq(NamedTuple):
-        left_atom: ConstraintExpressionAtoms.Int
-        right_atom: ConstraintExpressionAtoms.Int
-
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-    class Gt(NamedTuple):
-        left_atom: ConstraintExpressionAtoms.Int
-        right_atom: ConstraintExpressionAtoms.Int
-
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-    class Eq(NamedTuple):
-        atom1: ConstraintExpressionAtoms.AnyAtom
-        atom2: ConstraintExpressionAtoms.AnyAtom
-
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-    class Neq(NamedTuple):
-        atom1: ConstraintExpressionAtoms.AnyAtom
-        atom2: ConstraintExpressionAtoms.AnyAtom
-
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-    class Or(NamedTuple):
-        literals: Tuple[Lit,...]
-
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-    class And(NamedTuple):
-        literals: Tuple[Lit,...]
-
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-    class Imply(NamedTuple):
-        from_literal: Lit
-        to_literal: Lit
-
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-    AnyExpr = Union[
-        Leq,
-        Lt,
-        Geq,
-        Gt,
-        Eq,
-        Neq,
-        Or,
-        And,
-        Imply,
-    ]
-
-#################################################################################
-# CONSTRAINT ELEMENTARY EXPRESSIONS
-#################################################################################
-
-class ConstraintElementaryExpression(ABC):
-    """
-    TODO
-    """
-
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-    class LitExpr(NamedTuple):
-        literal: Lit
-
-        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-        def negation(self) -> ConstraintElementaryExpression.LitExpr:
-            return ConstraintElementaryExpression.LitExpr(self.literal.negation())
-
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-    class Or(NamedTuple):
-        literals: Tuple[Lit,...]
-
-        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-        def negation(self) -> ConstraintElementaryExpression.And:
-            return ConstraintElementaryExpression.And(tuple(lit.negation() for lit in self.literals))
-
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-    class And(NamedTuple):
-        literals: Tuple[Lit,...]
-
-        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-        def negation(self) -> ConstraintElementaryExpression.Or:
-#            return ConstraintElementaryExpression.Or(tighten_literals(tuple(lit.negation() for lit in self.literals)))
-            return ConstraintElementaryExpression.Or(tuple(lit.negation() for lit in self.literals))
-
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-    class MaxDiffCnt(NamedTuple):
-        from_var: Var
-        to_var: Var
-        max_diff: int
-
-        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-        def negation(self) -> ConstraintElementaryExpression.MaxDiffCnt:
-            return ConstraintElementaryExpression.MaxDiffCnt(self.to_var, self.from_var, -self.max_diff-1)
-
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-    #def MaxDiffCtg(NamedTuple):
-    #    from_var: Var
-    #    to_var: Var
-    #    max_diff: int
-
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-    #def Linear(NamedTuple):
-    #    ...
-
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-    AnyExpr = Union[
-        LitExpr,
-        Or,
-        And,
-        MaxDiffCnt,
-    ]
-
-#################################################################################
 # TIGHTENING OF (DISJUNCTIONS OF) LITERALS
 #################################################################################
 
@@ -411,6 +244,7 @@ def tighten_literals(literals: Sequence[Lit]) -> Tuple[Lit,...]:
             j += 1
         else:
             i += 1
+
     return tuple(lits)
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -436,6 +270,7 @@ def are_tightened_literals_tautological(literals: Tuple[Lit,...]) -> bool:
             if literals[i].bound_value - literals[i+1].bound_value <= 0:
                 return True
         i += 1
+
     return False
 
 #################################################################################
