@@ -18,6 +18,8 @@ from solver import (
     Solver,
 )
 
+MAX_INT = 2**64
+
 #################################################################################
 #################################################################################
 #                                   CONTENTS:
@@ -330,9 +332,9 @@ class SATReasoner(Reasoner):
         def priority_of_lit(lit: Lit) -> int:
             match solver.get_literal_value(lit):
                 case True:
-                    return 2**64    # FIXME: should be max int
+                    return MAX_INT
                 case None:
-                    return 2**64-1  # FIXME: should be max int - 1
+                    return MAX_INT-1
                 case False:
                     first_impl_ev = solver.get_first_event_implying_literal(lit.negation())
                     if first_impl_ev is None:

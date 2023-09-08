@@ -20,6 +20,8 @@ from solver import (
     Solver,
 )
 
+MAX_INT = 2**64
+
 #################################################################################
 #################################################################################
 #                                   CONTENTS:
@@ -171,7 +173,7 @@ class DiffReasoner(Reasoner):
         - The value for that key / propagator source is a list of (target, weight, presence), for each encoded propagator.
 
         Here, "presence" corresponds to a literal that is true iff the edge / propagator must be present.
-        CHECKME: same thing as "valid" or not ?
+        REVIEW: same thing as "valid" or not ?
         Note that handling of optional variables might allow an edge to propagate even if it is not known to be present yet.
         """
 
@@ -328,7 +330,7 @@ class DiffReasoner(Reasoner):
             """
             prev = self.distances.get(node, None)
             if prev is None:
-                previous_dist = 2**64  # FIXME: should be max int
+                previous_dist = MAX_INT  # FIXME: should be max int
             else:
                 previous_dist = prev[0]
 
@@ -624,7 +626,7 @@ class DiffReasoner(Reasoner):
                 or propagator_integrated_by == "merging"
             ):
                 # If the propagator can never be active/present, do nothing.
-                edge_valid = solver.vars_presence_literals[eblr.active.signed_var.var]
+                edge_valid = solver.presence_literals[eblr.active.signed_var.var]
                 if (solver.is_literal_entailed(eblr.active.negation())
                     or solver.is_literal_entailed(edge_valid.negation())
                 ):
@@ -686,9 +688,9 @@ class DiffReasoner(Reasoner):
         # 
         # As such, the edge is valid / well-defined iff its reification literal is
         # present (iff the source and target variables of the edge are both present)
-        edge_valid = solver.vars_presence_literals[reification_literal.signed_var.var]
-        assert solver.is_implication_true(edge_valid, solver.vars_presence_literals[source])
-        assert solver.is_implication_true(edge_valid, solver.vars_presence_literals[target])
+        edge_valid = solver.presence_literals[reification_literal.signed_var.var]
+        assert solver.is_implication_true(edge_valid, solver.presence_literals[source])
+        assert solver.is_implication_true(edge_valid, solver.presence_literals[target])
 
         # The edge will be decomposed into 4 propagators:
         # 2 "canonical", and 2 "negated" (or "inverted": swapped source and target for them).
@@ -701,19 +703,19 @@ class DiffReasoner(Reasoner):
         # is valid, as well as a literal that is true iff a "negated" (target-to-source) propagator is valid.
 
         # "Canonical" propagator case.
-        if solver.is_implication_true(solver.vars_presence_literals[target], edge_valid):
+        if solver.is_implication_true(solver.presence_literals[target], edge_valid):
             # If it is statically known that `presence(target) => edge_valid`, the propagator is always valid
             source_to_target_propagator_valid = TRUE_LIT
         else:
             # Given that `presence(source) & presence(target) <=> edge_valid`, we can infer that the propagator becomes valid
             # (i.e. `presence(target) => edge_valid` holds) when `presence(source)` becomes true
-            source_to_target_propagator_valid = solver.vars_presence_literals[source]
+            source_to_target_propagator_valid = solver.presence_literals[source]
 
         # "Negated" propagator case (analogous).
-        if solver.is_implication_true(solver.vars_presence_literals[source], edge_valid):
+        if solver.is_implication_true(solver.presence_literals[source], edge_valid):
             target_to_source_propagator_valid = TRUE_LIT
         else:
-            target_to_source_propagator_valid = solver.vars_presence_literals[target]
+            target_to_source_propagator_valid = solver.presence_literals[target]
 
         propagators = [
 
@@ -858,7 +860,7 @@ class DiffReasoner(Reasoner):
                     self.propagators_database.propagators_list[self.propagators_database.next_new_constraint_index]]
                 self.propagators_database.next_new_constraint_index += 1
                 
-                assert propagator_group.enabler is None # CHECKME
+                assert propagator_group.enabler is None #REVIEW
                 if propagator_group.enabler is not None:
                     continue
 
@@ -932,7 +934,7 @@ class DiffReasoner(Reasoner):
                 (propagator_group_id, enabler) = self.propagators_pending_for_activation.pop()
                 propagator_group = self.propagators_database.propagators[propagator_group_id]
 
-                assert propagator_group.enabler is None # CHECKME
+                assert propagator_group.enabler is None # REVIEWw
                 if propagator_group.enabler is not None:
                     continue
                 propagator_group.enabler = enabler
@@ -944,7 +946,7 @@ class DiffReasoner(Reasoner):
                         continue    # positive self-loop: useless / can be ignored
                     else:
                         return ReasonerRawExplanation((propagator_group.enabler.active,
-                                                                  solver.vars_presence_literals[propagator_group.enabler.active.signed_var.var]))
+                                                                  solver.presence_literals[propagator_group.enabler.active.signed_var.var]))
 
                 # The edge / propagator group is not a self loop:
 
@@ -1037,7 +1039,7 @@ class DiffReasoner(Reasoner):
                 cycle_length += edge.weight
 
                 explanation_literals.append(edge.enabler.active)
-                explanation_literals.append(solver.vars_presence_literals[edge.enabler.active.signed_var.var])
+                explanation_literals.append(solver.presence_literals[edge.enabler.active.signed_var.var])
 
                 if curr == vb:
                     return tuple(explanation_literals)
@@ -1115,7 +1117,7 @@ class DiffReasoner(Reasoner):
         def dist_to_origin(
             lit: Lit,
         ) -> BoundVal:
-            return lit.bound_value #CHECKME
+            return lit.bound_value #REVIEW
         
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -1323,7 +1325,7 @@ class DiffReasoner(Reasoner):
         assert enabler is not None
 
         explanation_literals.append(enabler.active)
-        explanation_literals.append(solver.vars_presence_literals[enabler.active.signed_var.var])
+        explanation_literals.append(solver.presence_literals[enabler.active.signed_var.var])
 
         cause_lit = Lit(propagator_group.source, BoundVal(val-propagator_group.weight))
 
@@ -1350,7 +1352,7 @@ class DiffReasoner(Reasoner):
                 assert enabler is not None
 
                 explanation_literals.append(enabler.active)
-                explanation_literals.append(solver.vars_presence_literals[enabler.active.signed_var.var])
+                explanation_literals.append(solver.presence_literals[enabler.active.signed_var.var])
 
         elif isinstance(cause, DiffReasoner.TheoryPropCauses.Bounds):
 
@@ -1453,14 +1455,14 @@ class DiffReasoner(Reasoner):
         # We assume that the edges themselves are active (since it cannot be made inactive once activated).
         def path_active(src: SignedVar, tgt: SignedVar, dij: DiffReasoner.DijkstraState):
             curr = tgt
-            if solver.is_literal_entailed(solver.vars_presence_literals[curr.var].negation()):
+            if solver.is_literal_entailed(solver.presence_literals[curr.var].negation()):
                 return False
             while curr != src:
                 pred_edge = dij.predecessor(curr)
                 assert pred_edge is not None
                 ee = self.propagators_database.propagators[pred_edge]
                 curr = ee.source
-                if solver.is_literal_entailed(solver.vars_presence_literals[curr.var].negation()):
+                if solver.is_literal_entailed(solver.presence_literals[curr.var].negation()):
                     return False
             return True
         
@@ -1472,7 +1474,7 @@ class DiffReasoner(Reasoner):
         active = (path_active(e.target, target, successors)
             and path_active(e.source.opposite_signed_var(), source.opposite_signed_var(), predecessors))
 
-        # CHECKME assert not active or self.get_theory_propagation_path(source, target, through_propagator_group_id, solver)
+        # REVIEW assert not active or self.get_theory_propagation_path(source, target, through_propagator_group_id, solver)
 
         return active
 
@@ -1505,7 +1507,7 @@ class DiffReasoner(Reasoner):
             if stop_condition(curr_node):
                 return
             
-            if solver.is_literal_entailed(solver.vars_presence_literals[curr_node.var].negation()):
+            if solver.is_literal_entailed(solver.presence_literals[curr_node.var].negation()):
                 continue
                 
             curr_bound = solver.bound_values[curr_node]
@@ -1523,7 +1525,7 @@ class DiffReasoner(Reasoner):
                 # To properly fix this, we should index the active propagators backward and make this dijkstra pass
                 # aware of whether it is traversing backward or forward.
                 if (dijkstra_state.is_final(prop_target)
-                    and solver.is_literal_entailed(solver.vars_presence_literals[prop_target.var])
+                    and solver.is_literal_entailed(solver.presence_literals[prop_target.var])
                 ):
                     
                     # We do not have a shortest path to this node yet, so compute a the reduced cost of the edge.
