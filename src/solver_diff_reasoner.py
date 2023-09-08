@@ -2,23 +2,15 @@ from __future__ import annotations
 
 #################################################################################
 
-from typing import Callable, Dict, Iterable, List, NamedTuple, Optional, Set, Tuple, Union
-from dataclasses import dataclass, field
-from abc import ABC
-
 import heapq
+from abc import ABC
+from dataclasses import dataclass, field
+from typing import (Callable, Dict, Iterable, List, NamedTuple, Optional, Set,
+                    Tuple, Union)
 
-from fundamentals import (
-    Var, SignedVar, BoundVal, Lit, TRUE_LIT
-)
-
-from solver import (
-    Causes,
-    InvalidBoundUpdateInfo,
-    ReasonerRawExplanation,
-    Reasoner,
-    Solver,
-)
+from fundamentals import TRUE_LIT, BoundVal, Lit, SignedVar, Var
+from solver import (Causes, InvalidBoundUpdateInfo, Reasoner,
+                    ReasonerRawExplanation, Solver)
 
 MAX_INT = 2**64
 

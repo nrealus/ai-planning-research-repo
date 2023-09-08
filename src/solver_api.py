@@ -4,20 +4,9 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional, Tuple
 
-from fundamentals import (
-    Var,
-    SignedVar, BoundVal,
-    Lit, TRUE_LIT, FALSE_LIT,
-)
-from constraint_expressions import (
-    ConstrExpr,
-    ElemConstrExpr,    
-)
-from solver import (
-    Causes,
-    InvalidBoundUpdateInfo,
-    Solver,
-)
+from fundamentals import FALSE_LIT, TRUE_LIT, BoundVal, Lit, SignedVar, Var
+from constraint_expressions import ConstrExpr, ElemConstrExpr
+from solver import Causes, InvalidBoundUpdateInfo, Solver
 
 #################################################################################
 #################################################################################

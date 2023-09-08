@@ -2,14 +2,12 @@ from __future__ import annotations
 
 #################################################################################
 
-from typing import NamedTuple, Tuple, Union
 from enum import Enum, auto
+from typing import NamedTuple, Tuple, Union
 
-from fundamentals import (
-    Var, ZERO_VAR,
-    Lit, TRUE_LIT, FALSE_LIT,
-    tighten_literals, are_tightened_literals_tautological,
-)
+from fundamentals import (FALSE_LIT, TRUE_LIT, ZERO_VAR, Lit, Var,
+                          are_tightened_literals_tautological,
+                          tighten_literals)
 
 #################################################################################
 #################################################################################

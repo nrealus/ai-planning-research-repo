@@ -2,19 +2,14 @@ from __future__ import annotations
 
 #################################################################################
 
-from typing import Dict, List, NamedTuple, Optional, Set, Tuple, Union, Callable
-from abc import abstractmethod, ABC
-
-from fundamentals import (
-    Var, ZERO_VAR,
-    SignedVar, BoundVal, 
-    Lit, TRUE_LIT, FALSE_LIT,
-)
-from constraint_expressions import (
-    ElemConstrExpr
-)
-
 import heapq
+from abc import ABC, abstractmethod
+from typing import (Callable, Dict, List, NamedTuple, Optional, Set, Tuple,
+                    Union)
+
+from fundamentals import (FALSE_LIT, TRUE_LIT, ZERO_VAR, BoundVal, Lit,
+                          SignedVar, Var)
+from constraint_expressions import ElemConstrExpr
 
 #################################################################################
 #################################################################################

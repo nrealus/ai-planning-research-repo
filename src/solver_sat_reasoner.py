@@ -3,20 +3,11 @@ from __future__ import annotations
 #################################################################################
 
 import typing
-from typing import Dict, List, Optional, Set, Tuple
 from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Set, Tuple
 
-from fundamentals import (
-    SignedVar, BoundVal,
-    Lit, TRUE_LIT
-)
-
-from solver import (
-    Causes,
-    ReasonerRawExplanation,
-    Reasoner,
-    Solver,
-)
+from fundamentals import TRUE_LIT, BoundVal, Lit, SignedVar
+from solver import Causes, Reasoner, ReasonerRawExplanation, Solver
 
 MAX_INT = 2**64
 

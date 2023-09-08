@@ -2,28 +2,16 @@ from __future__ import annotations
 
 #################################################################################
 
-from typing import Dict, List, NamedTuple, Optional, Set, Tuple, Union
+from typing import List, Optional, Tuple
 
-from fundamentals import (
-    Var,
-    Lit, TRUE_LIT,
-    tighten_literals,
-    are_tightened_literals_tautological,
-)
-from constraint_expressions import (
-    ElemConstrExpr,
-)
-from solver import (
-    Decisions, 
-    Causes,
-    ConflictAnalysisResult, 
-    InvalidBoundUpdateInfo, 
-    ReasonerRawExplanation, 
-    Solver,
-)
-
-from solver_sat_reasoner import SATReasoner
+from fundamentals import (TRUE_LIT, Lit, Var,
+                          are_tightened_literals_tautological,
+                          tighten_literals)
+from constraint_expressions import ElemConstrExpr
+from solver import (Causes, ConflictAnalysisResult, Decisions,
+                    InvalidBoundUpdateInfo, ReasonerRawExplanation, Solver)
 from solver_diff_reasoner import DiffReasoner
+from solver_sat_reasoner import SATReasoner
 
 #################################################################################
 #################################################################################
