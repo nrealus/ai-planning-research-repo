@@ -5,14 +5,23 @@ from __future__ import annotations
 from typing import Dict, List, NamedTuple, Optional, Set, Tuple, Union
 
 from fundamentals import (
+    Var,
     Lit, TRUE_LIT,
-    ConstraintElementaryExpression,
-#    ReifiedConstraint,
     tighten_literals,
     are_tightened_literals_tautological,
 )
+from constraint_expressions import (
+    ElemConstrExpr,
+)
+from solver import (
+    Decisions, 
+    Causes,
+    InvalidBoundUpdateInfo, 
+    ReasonerRawExplanation, 
+    ConflictAnalysisResult, 
+    Solver,
+)
 
-from solver import SolverDecisions, SolverCauses, SolverConflictInfo, Solver
 from solver_sat_reasoner import SATReasoner
 from solver_diff_reasoner import DiffReasoner
 
@@ -69,14 +78,14 @@ def search(
             pass
         
         else:
-            res = _actually_post_reified_constraint(
-                solver,
-                sat_reasoner,
-                diff_reasoner,
-                (constr_elementary_expr, constr_literal))
-            if isinstance(res, SolverConflictInfo.InvalidBoundUpdate):
-                return "INCONSISTENT"
 
+            res = _actually_post_reified_constraint((constr_elementary_expr, constr_literal),
+                                                    solver,
+                                                    sat_reasoner,
+                                                    diff_reasoner)
+            if res is not None:
+                return "INCONSISTENT"
+                                
     while True:
 
         # PROPAGATION
@@ -86,24 +95,22 @@ def search(
         if propagation_result is not None:
             (contradiction, reasoner) = propagation_result
 
-            if solver.dec_level == 0:
+            if solver.decision_level == 0:
                 return "INCONSISTENT"
 
             # CONFLICT ANALYSIS
 
-            conflict_analysis_info: SolverConflictInfo.AnalysisResult
-            if isinstance(contradiction, SolverConflictInfo.InvalidBoundUpdate):
-                conflict_analysis_info = solver.explain_invalid_bound_update(
-                    contradiction,
-                    reasoner.explain)
+            conflict_analysis_info: ConflictAnalysisResult
 
-            elif isinstance(contradiction, SolverConflictInfo.ReasonerExplanation):
-                conflict_analysis_info = solver.refine_explanation(
-                    list(contradiction.explanation_literals),
-                    reasoner.explain)
-
-            else:
-                assert False
+            match contradiction:
+                case InvalidBoundUpdateInfo():
+                    conflict_analysis_info = solver.explain_invalid_bound_update(contradiction,
+                                                                                 reasoner.explain)
+                case ReasonerRawExplanation():
+                    conflict_analysis_info = solver.refine_explanation(list(contradiction.literals),
+                                                                       reasoner.explain)
+                case _:
+                    assert False
 
             if len(conflict_analysis_info.asserting_clause_literals) == 0:
                 return "INCONSISTENT"
@@ -125,21 +132,23 @@ def search(
 
         else:
 
-            if solver.is_vars_assignment_complete():
+            if solver.is_assignment_complete():
                 return "CONSISTENT, SOLUTION FOUND"
 
             # DECISION
 
             decision = solver.choose_next_decision()
 
-            if isinstance(decision, SolverDecisions.Restart):
-                solver.backtrack_to_decision_level(0, reasoners)
+            match decision:
+                case Decisions.Restart():
+                    solver.backtrack_to_decision_level(0, reasoners)
+                    
+                case Decisions.SetLiteral(lit):
+                    solver.increment_decision_level(reasoners)
+                    solver.set_bound_value(lit.signed_var, lit.bound_value, Causes.Decision())
 
-            elif isinstance(decision, SolverDecisions.SetLiteral):
-                solver.increment_decision_level_and_perform_set_literal_decision(decision, reasoners)
-
-            else:
-                assert False
+                case _:
+                    assert False
 
 #################################################################################
 # 
@@ -147,30 +156,30 @@ def search(
 
 # aka initially propagate a constraint
 def _actually_post_reified_constraint(
+    constraint: Tuple[ElemConstrExpr, Lit],
     solver: Solver,
     sat_reasoner: SATReasoner,
     diff_reasoner: DiffReasoner,
-    constraint: Tuple[ConstraintElementaryExpression.AnyExpr, Lit],
-) -> Optional[SolverConflictInfo.InvalidBoundUpdate]:
+) -> Optional[Tuple[Lit, Causes.AnyCause]]:
     """
     """
     
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     def add_clause_to_sat_reasoner(
-        clause_literals: Tuple[Lit,...],
-        scope_literal: Lit,
+        clause_lits: Tuple[Lit,...],
+        scope_lits: Lit,
         clause_literals_already_tightened: bool=False,
-    ) -> bool | SolverConflictInfo.InvalidBoundUpdate:
+    ) -> bool | InvalidBoundUpdateInfo:
 
         if clause_literals_already_tightened:
-            clause_tightened_literals = tighten_literals(clause_literals)
+            clause_tightened_lits = tighten_literals(clause_lits)
         else:
-            clause_tightened_literals = clause_literals
+            clause_tightened_lits = clause_lits
 
         # Remove clause literals that are guaranteed to not become true
         # (i.e. whose value is False / whose negation literal is entailed)
-        lits: List[Lit] = list(clause_tightened_literals)
+        lits: List[Lit] = list(clause_tightened_lits)
         n: int = len(lits)
         i: int = 0
         j: int = 0
@@ -181,9 +190,9 @@ def _actually_post_reified_constraint(
             else:
                 i += 1
 
-        clause_tightened_literals = tuple(lits)
+        clause_tightened_lits = tuple(lits)
 
-        processed_scope_literal: Lit = scope_literal
+        processed_scope_lit: Lit = scope_lits
 
         # Analyze processed clause literals and scope.
         #
@@ -196,119 +205,100 @@ def _actually_post_reified_constraint(
         #
         # NOTE: this could be generalized to look at literals in the clause as potential scopes
 
-        if len(clause_tightened_literals) == 0:
+        if len(clause_tightened_lits) == 0:
 
-            processed_scope_literal_neg = processed_scope_literal.negation()
+            processed_scope_literal_neg = processed_scope_lit.negation()
 
-            scope_negation_enforcement_result = solver.set_bound_value(
-                processed_scope_literal_neg.signed_var,
-                processed_scope_literal_neg.bound_value,
-                SolverCauses.Encoding()) 
-            if isinstance(scope_negation_enforcement_result, SolverConflictInfo.InvalidBoundUpdate):
-                return scope_negation_enforcement_result
-            else:
-                return True
+            return solver.set_bound_value(processed_scope_literal_neg.signed_var,
+                                          processed_scope_literal_neg.bound_value,
+                                          Causes.Encoding()) 
 
-        elif all(solver._is_implication_true(
-            solver.vars_presence_literals[lit.signed_var.var],processed_scope_literal)
-            for lit in clause_tightened_literals
+        elif all(solver.is_implication_true(
+            solver.vars_presence_literals[lit.signed_var.var],processed_scope_lit)
+            for lit in clause_tightened_lits
         ):
             pass
         
         else:
-            clause_tightened_literals = tighten_literals(
-                clause_tightened_literals+(processed_scope_literal.negation(),))
-            processed_scope_literal = TRUE_LIT
+            clause_tightened_lits = tighten_literals(clause_tightened_lits
+                                                         +(processed_scope_lit.negation(),))
+            processed_scope_lit = TRUE_LIT
 
-        sat_reasoner.add_new_fixed_clause_with_scope(
-            clause_tightened_literals,
-            processed_scope_literal)
+        sat_reasoner.add_new_fixed_clause_with_scope(clause_tightened_lits,
+                                                     processed_scope_lit)
         return True
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-    assert solver.dec_level == 0
+    assert solver.decision_level == 0
 
-    (constr_elementary_expr, constr_literal) = constraint
-    scope_literal = solver.vars_presence_literals[constr_literal.signed_var.var]
+    (elem_constr_expr, constr_lit) = constraint
+    scope_lit = solver.vars_presence_literals[constr_lit.signed_var.var]
 
     # If the scope is False, then the constraint is absent: we thus ignore it.
-    if solver.is_literal_entailed(scope_literal.negation()):
+    if solver.is_literal_entailed(scope_lit.negation()):
         return None
 
-    if isinstance(constr_elementary_expr, ConstraintElementaryExpression.LitExpr):
+    kind, terms = elem_constr_expr.kind, elem_constr_expr.terms
 
-        assert solver._is_implication_true(
-            scope_literal,
-            solver.vars_presence_literals[constr_elementary_expr.literal.signed_var.var])
+    match kind, terms:
+        case ElemConstrExpr.Kind.LIT, Lit() as lit:
 
-        add_clause_to_sat_reasoner(
-            (constr_literal.negation(), constr_elementary_expr.literal),
-            scope_literal)
+            assert solver.is_implication_true(scope_lit, solver.vars_presence_literals[lit.signed_var.var])
 
-        add_clause_to_sat_reasoner(
-            (constr_elementary_expr.literal.negation(), constr_literal),
-            scope_literal)
+            add_clause_to_sat_reasoner((constr_lit.negation(), lit), scope_lit)
+            add_clause_to_sat_reasoner((lit.negation(), constr_lit), scope_lit)
 
-    elif isinstance(constr_elementary_expr, ConstraintElementaryExpression.MaxDiffCnt):
-        diff_reasoner.add_reified_difference_constraint(
-            constr_literal,
-            constr_elementary_expr.to_var,
-            constr_elementary_expr.from_var,
-            constr_elementary_expr.max_diff,
-            solver)
+        case (ElemConstrExpr.Kind.MAX_DIFFERENCE,
+              (Var() as from_var, Var() as to_var, int() as max_diff)
+        ):
 
-    elif isinstance(constr_elementary_expr, ConstraintElementaryExpression.Or):
+            diff_reasoner.add_reified_difference_constraint(constr_lit,
+                                                            from_var, to_var, max_diff,
+                                                            solver)
 
-        if solver.is_literal_entailed(constr_literal):
-            add_clause_to_sat_reasoner(
-                constr_elementary_expr.literals,
-                scope_literal,
-            )
-            return None
-        
-        elif solver.is_literal_entailed(constr_literal.negation()):
-            for lit in constr_elementary_expr.literals:
-                res = add_clause_to_sat_reasoner(
-                    (lit.negation(),),
-                    scope_literal,
-                )
-                if isinstance(res, SolverConflictInfo.InvalidBoundUpdate):
-                    return res
-            return None
-        
-        else:
+        case ElemConstrExpr.Kind.OR, [Lit(), *_] as lits:
 
-            clause_tightened_literals = tighten_literals(
-                (constr_literal.negation(),)+constr_elementary_expr.literals)
+            if solver.is_literal_entailed(constr_lit):
 
-            if are_tightened_literals_tautological(clause_tightened_literals):
-                res = add_clause_to_sat_reasoner(
-                    clause_tightened_literals,
-                    scope_literal,
-                    True)
-                if isinstance(res, SolverConflictInfo.InvalidBoundUpdate):
-                    return res
+                add_clause_to_sat_reasoner(lits, scope_lit)
+                return None
             
-            for lit in constr_elementary_expr.literals:
-                res = add_clause_to_sat_reasoner(
-                    (lit.negation(), constr_literal),
-                    scope_literal)
-                if isinstance(res, SolverConflictInfo.InvalidBoundUpdate):
-                    return res
+            elif solver.is_literal_entailed(constr_lit.negation()):
 
-            return None
+                for lit in lits:
 
-    elif isinstance(constr_elementary_expr, ConstraintElementaryExpression.And):
+                    res = add_clause_to_sat_reasoner((lit.negation(),), scope_lit)
+                    if isinstance(res, InvalidBoundUpdateInfo):
+                        return res
 
-        return _actually_post_reified_constraint(
-            solver,
-            sat_reasoner,
-            diff_reasoner,
-            (constr_elementary_expr.negation(), constr_literal.negation()),
-        )
+                return None
+            
+            else:
+                clause_tightened_lits = tighten_literals((constr_lit.negation(),)+lits)
 
-    else:
-        assert False
+                if are_tightened_literals_tautological(clause_tightened_lits):
+
+                    res = add_clause_to_sat_reasoner(clause_tightened_lits, scope_lit, True)
+                    if isinstance(res, InvalidBoundUpdateInfo):
+                        return res
+                
+                for lit in lits:
+
+                    res = add_clause_to_sat_reasoner((lit.negation(), constr_lit), scope_lit)
+                    if isinstance(res, InvalidBoundUpdateInfo):
+                        return res
+
+                return None
+
+        case ElemConstrExpr.Kind.AND, [Lit(), *_] as lits:
+
+            return _actually_post_reified_constraint((elem_constr_expr.negation(), constr_lit.negation()),
+                                                     solver,
+                                                     sat_reasoner,
+                                                     diff_reasoner)
+
+        case _:
+            assert False
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
