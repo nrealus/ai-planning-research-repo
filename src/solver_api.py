@@ -98,7 +98,7 @@ def _add_new_variable(
     Helper function for higher level functions that add a new variable.
     """
 
-    if solver.vars_presence_literals[presence_literal.signed_var.var] != TRUE_LIT:
+    if solver.presence_literals[presence_literal.signed_var.var] != TRUE_LIT:
         raise ValueError("""The presence literal of an optional variable must not be based on an optional variable.""")
 
     solver._vars_id_counter += 1
@@ -106,7 +106,7 @@ def _add_new_variable(
     var = Var(solver._vars_id_counter)
 
     solver.vars[controllable].add(var)
-    solver.vars_presence_literals[var] = presence_literal
+    solver.presence_literals[var] = presence_literal
     
     solver.bound_values[SignedVar.minus(var)] = BoundVal(-initial_domain[0])
     solver.bound_values[SignedVar.plus(var)] = BoundVal(initial_domain[1])
@@ -406,7 +406,7 @@ def _bind_elem_constr_expr(
             solver.constraints.append((ElemConstrExpr.from_lit(reif_lit), lit))
     
     # Otherwise and if the scopes are compatible, suggest literal to be the reified literal.
-    elif scope_lit == solver.vars_presence_literals[lit.signed_var.var]:
+    elif scope_lit == solver.presence_literals[lit.signed_var.var]:
         solver.reifications[elem_constr_expr] = lit
         solver.reifications[elem_constr_expr.negation()] = lit.negation()
         solver.constraints.append((elem_constr_expr, lit))
@@ -440,32 +440,32 @@ def _get_scope_of_elem_constr_expr(
     match kind, terms:
         case ElemConstrExpr.Kind.LIT, Lit() as lit:
 
-            prez_lit = solver.vars_presence_literals[lit.signed_var.var]
+            prez_lit = solver.presence_literals[lit.signed_var.var]
 
             return ({ prez_lit.signed_var: prez_lit.bound_value },
                     ())
 
         case ElemConstrExpr.Kind.OR, [Lit(), *_] as lits:
 
-            prez_lits = [solver.vars_presence_literals[lit.signed_var.var] for lit in lits]
+            prez_lits = [solver.presence_literals[lit.signed_var.var] for lit in lits]
 
             return ({ prez_lit.signed_var: prez_lit.bound_value for prez_lit in prez_lits },
                     tuple(lit for lit in lits
-                          if solver.vars_presence_literals[lit.signed_var.var] == TRUE_LIT))
+                          if solver.presence_literals[lit.signed_var.var] == TRUE_LIT))
 
         case ElemConstrExpr.Kind.AND, [Lit(), *_] as lits:
 
-            prez_lits = [solver.vars_presence_literals[lit.signed_var.var] for lit in lits]
+            prez_lits = [solver.presence_literals[lit.signed_var.var] for lit in lits]
 
             return ({ prez_lit.signed_var: prez_lit.bound_value for prez_lit in prez_lits }, 
                     tuple(lit.negation() for lit in lits
-                          if solver.vars_presence_literals[lit.negation().signed_var.var] == TRUE_LIT))
+                          if solver.presence_literals[lit.negation().signed_var.var] == TRUE_LIT))
                 
         case (ElemConstrExpr.Kind.MAX_DIFFERENCE,
               (Var() as var_from, Var() as var_to, int())
         ):
-            prez_lit_var_from = solver.vars_presence_literals[var_from]
-            prez_lit_var_to = solver.vars_presence_literals[var_to]
+            prez_lit_var_from = solver.presence_literals[var_from]
+            prez_lit_var_to = solver.presence_literals[var_to]
 
             return ({ prez_lit_var_from.signed_var: prez_lit_var_from.bound_value,
                      prez_lit_var_to.signed_var: prez_lit_var_to.bound_value },
@@ -495,7 +495,7 @@ def _flatten_scope_to_lits_conj(
                 return True
             else:
                 first_ev_idx = solver.get_first_event_implying_literal(lit)
-                return first_ev_idx is None or first_ev_idx[0] == 0 # CHECKME
+                return first_ev_idx is None or first_ev_idx[0] == 0 #REVIEW
         
         return False
 
@@ -584,8 +584,8 @@ def _insert_implication_between_literals_on_non_optional_vars(
     Adds an implication between two literals (defined on non-optional variables) to the solver.
     """
 
-    if (solver.vars_presence_literals[lit_from.signed_var.var] != TRUE_LIT
-        or solver.vars_presence_literals[lit_to.signed_var.var] != TRUE_LIT
+    if (solver.presence_literals[lit_from.signed_var.var] != TRUE_LIT
+        or solver.presence_literals[lit_to.signed_var.var] != TRUE_LIT
     ):
         raise ValueError("Only implications between non-optional variables are supported")
 

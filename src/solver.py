@@ -246,7 +246,7 @@ class ConflictAnalysisResult(NamedTuple):
     To avoid the conflict, at least one of the literals will have to be true.
     """
 
-    resolved_literals_storage: Dict[SignedVar, BoundVal] #CHECKME ? # Tuple[Literal,...]
+    resolved_literals_storage: Dict[SignedVar, BoundVal] #REVIEW ? # Tuple[Literal,...]
     """
     The resolved literals that participate in the conflict.
     Stored as a dictionary instead of a tuple of literals.
@@ -272,7 +272,7 @@ class Reasoner():
     specialized propagation / inference. Each of them processes newly accumulated
     bound updates / events, including those resulting from inference / propagation
     by other reasoners, until nothing new can be inferred. They also help the main
-    solver by providing it with an initial (CHECKME?) explanation, when a conflict
+    solver by providing it with an initial (REVIEW?) explanation, when a conflict
     is found during their propagation. This explanation may be further refined
     by the main solver when doing conflict analysis.
     """
@@ -350,7 +350,7 @@ class Solver():
         and the uncontrollable ones are in the set under key False.
         """
 
-        self.vars_presence_literals: Dict[Var, Lit] = {}
+        self.presence_literals: Dict[Var, Lit] = {}
         """
         Maps variables to their presence literals.
 
@@ -433,12 +433,12 @@ class Solver():
         Stores pairs consisting of a constraint (in elementary form) and a literal,
         stating that the literal must be true iff the constraint is true.
 
-        CHECKME? Both "real" reified constraints that were defined in the problem
+        REVIEW? Both "real" reified constraints that were defined in the problem
         and "artificial"/"intermediary" constraints can be found here.
         Apart from pairs consisting of a (reified) constraint and its reification
         literal, there can be pairs where the constraint is simply the satisfaction
         of a reification literal of another constraint. This allows to enforce
-        a sort of "chain of constraints". CHECKME?
+        a sort of "chain of constraints". REVIEW?
         """
 
         self.reifications: Dict[ElemConstrExpr, Lit] = {}
@@ -450,7 +450,7 @@ class Solver():
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
         self.vars[False].add(ZERO_VAR)
-        self.vars_presence_literals[ZERO_VAR] = TRUE_LIT
+        self.presence_literals[ZERO_VAR] = TRUE_LIT
 
         self.bound_values[SignedVar.plus(ZERO_VAR)] = BoundVal(0)
         self.bound_values[SignedVar.minus(ZERO_VAR)] = BoundVal(0)
@@ -674,7 +674,7 @@ class Solver():
         empty domain for any variable, True is returned.
         """
 
-        prez_lit = self.vars_presence_literals[signed_var.var]
+        prez_lit = self.presence_literals[signed_var.var]
 
         # If variable is proven absent (i.e. the negation of its presence
         # literal is entailed), we return False as there is no update to 

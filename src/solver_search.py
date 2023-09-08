@@ -70,7 +70,7 @@ def search(
     while last_unposted_constraint_index < len(solver.constraints):
         (constr_elementary_expr, constr_literal) = solver.constraints[last_unposted_constraint_index]
 
-        scope_literal = solver.vars_presence_literals[constr_literal.signed_var.var]
+        scope_literal = solver.presence_literals[constr_literal.signed_var.var]
         
         # If the scope of the constraint is false, it means
         # the constraint is absent. So it is ignored.
@@ -216,7 +216,7 @@ def _actually_post_reified_constraint(
             if isinstance(res, InvalidBoundUpdateInfo):
                 return res
 
-        elif all(solver.is_implication_true(solver.vars_presence_literals[lit.signed_var.var],
+        elif all(solver.is_implication_true(solver.presence_literals[lit.signed_var.var],
                                             processed_scope_lit)
                                             for lit in clause_tightened_lits
         ):
@@ -236,7 +236,7 @@ def _actually_post_reified_constraint(
     assert solver.decision_level == 0
 
     (elem_constr_expr, constr_lit) = constraint
-    scope_lit = solver.vars_presence_literals[constr_lit.signed_var.var]
+    scope_lit = solver.presence_literals[constr_lit.signed_var.var]
 
     # If the scope is False, then the constraint is absent: we thus ignore it.
     if solver.is_literal_entailed(scope_lit.negation()):
@@ -247,7 +247,7 @@ def _actually_post_reified_constraint(
     match kind, terms:
         case ElemConstrExpr.Kind.LIT, Lit() as lit:
 
-            assert solver.is_implication_true(scope_lit, solver.vars_presence_literals[lit.signed_var.var])
+            assert solver.is_implication_true(scope_lit, solver.presence_literals[lit.signed_var.var])
 
             add_clause_to_sat_reasoner((constr_lit.negation(), lit), scope_lit, False)
             add_clause_to_sat_reasoner((lit.negation(), constr_lit), scope_lit, False)
