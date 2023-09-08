@@ -275,7 +275,7 @@ class ElemConstrExpr(NamedTuple):
                 return ElemConstrExpr.from_lits_and(tuple(lit.negation() for lit in lits))
 
             case ElemConstrExpr.Kind.AND, [Lit(), *_] as lits:
-                return ElemConstrExpr.from_lits_and(tuple(lit.negation() for lit in lits))
+                return ElemConstrExpr(ElemConstrExpr.Kind.OR, tuple(lit.negation() for lit in lits))
 
             case (ElemConstrExpr.Kind.MAX_DIFFERENCE,
                   (Var() as from_var, Var() as to_var, int() as max_diff)
