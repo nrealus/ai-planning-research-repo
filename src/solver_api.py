@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional, Tuple
 
-from fundamentals import FALSE_LIT, TRUE_LIT, BoundVal, Lit, SignedVar, Var
-from constraint_expressions import ConstrExpr, ElemConstrExpr
-from solver import Causes, InvalidBoundUpdateInfo, Solver
+from .fundamentals import FALSE_LIT, TRUE_LIT, BoundVal, Lit, SignedVar, Var
+from .constraint_expressions import ConstrExpr, ElemConstrExpr
+from .solver import Causes, InvalidBoundUpdateInfo, Solver
 
 #################################################################################
 #################################################################################
@@ -88,7 +88,8 @@ def _add_new_variable(
     """
 
     if solver.presence_literals[presence_literal.signed_var.var] != TRUE_LIT:
-        raise ValueError("""The presence literal of an optional variable must not be based on an optional variable.""")
+        raise ValueError(("The presence literal of an optional variable must", 
+                         "not be based on an optional variable."))
 
     solver._vars_id_counter += 1
 
@@ -144,11 +145,20 @@ def _preprocess_constr_expr_into_elem_form(
     solver: Solver,
 ) -> ElemConstrExpr:
     """
-    Transforms a constraint expression into elementary form
-    (or constraint elementary expression).
+    Preprocess a constraint expression by:
 
-    Also, may reify intermediate constraints, while preparing for
-    the reification of the constraint as a whole.
+        - First, decomposing it into *elementary* constraint expressions that
+        are reified into reification literals.
+    
+        - Second, returning an elementary constraint expression incorporating
+        these reification literals.
+
+    For example, an equality constraint expression is interpeted as two "leq"
+    constraint expressions, each of which is transformed into elementary form (i.e.
+    either single literal, a disjunction of literals, or a max difference constraint
+    between). Both of these elementary constraint expressions are then reified
+    resulting in two reification literals. Finally, an "AND" elementary constraint
+    expression, composed of the negation of these two reification literals, is returned.
     """
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -170,8 +180,7 @@ def _preprocess_constr_expr_into_elem_form(
         leq12_reif_lit = _reify_elem_constr_expr(leq12_elem_form, solver)
         leq21_reif_lit = _reify_elem_constr_expr(leq21_elem_form, solver)
 
-        return ElemConstrExpr.from_lits_tighten_and_simplify_or((leq12_reif_lit.negation(),
-                                                                 leq21_reif_lit.negation())).negation()
+        return ElemConstrExpr.from_lits_simplify_and((leq12_reif_lit, leq21_reif_lit))
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     
@@ -186,14 +195,13 @@ def _preprocess_constr_expr_into_elem_form(
         lit1 = Lit.geq(var1, 1)
         lit2 = Lit.geq(var2, 1)
 
-        imply12_elem_form = ElemConstrExpr.from_lits_tighten_and_simplify_or((lit1.negation(), lit2))
-        imply21_elem_form = ElemConstrExpr.from_lits_tighten_and_simplify_or((lit2.negation(), lit1))
+        imply12_elem_form = ElemConstrExpr.from_lits_simplify_or((lit1.negation(), lit2))
+        imply21_elem_form = ElemConstrExpr.from_lits_simplify_or((lit2.negation(), lit1))
 
         imply12_reif_lit = _reify_elem_constr_expr(imply12_elem_form, solver)
         imply21_reif_lit = _reify_elem_constr_expr(imply21_elem_form, solver)
 
-        return ElemConstrExpr.from_lits_tighten_and_simplify_or((imply12_reif_lit.negation(),
-                                                                 imply21_reif_lit.negation())).negation()
+        return ElemConstrExpr.from_lits_simplify_and((imply12_reif_lit, imply21_reif_lit))
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -224,7 +232,9 @@ def _preprocess_constr_expr_into_elem_form(
                     return _preprocess_eq_int_atoms(var_left, offset_left,
                                                     var_right, offset_right).negation()
                 case _:
-                    raise ValueError("""Incompatible constraint type and terms: for pairs of integer atoms (variable + offset), only LEQ, LT, GEQ, GT, EQ and NEQ constraints are defined.""")
+                    raise ValueError(("Incompatible constraint type and terms: for pairs" ,
+                                     "of integer atoms (variable + offset), only LEQ, LT, ",
+                                     "GEQ, GT, EQ and NEQ constraints are defined."))
 
         case Var() as var1, Var() as var2:
 
@@ -236,27 +246,29 @@ def _preprocess_constr_expr_into_elem_form(
                     return _preprocess_eq_bool_vars(var1, var2).negation()
 
                 case _:
-                    raise ValueError("""Incompatible constraint type and terms: for pairs of boolean variables, only EQ, and NEQ constraints are defined.""")
+                    raise ValueError(("Incompatible constraint type and terms: ",
+                                      "for pairs of boolean variables, only EQ, and ",
+                                      "NEQ constraints are defined."""))
 
         case [Lit(), *_] as lits: 
 
             match kind:
                 case ConstrExpr.Kind.OR:
-                    return ElemConstrExpr.from_lits_tighten_and_simplify_or(lits)
+                    return ElemConstrExpr.from_lits_simplify_or(lits)
 
                 case ConstrExpr.Kind.AND:
-                    return ElemConstrExpr.from_lits_tighten_and_simplify_or(tuple(lit.negation() 
-                                                                                  for lit in lits)).negation()
+                    return ElemConstrExpr.from_lits_simplify_and(tuple(lit.negation() for lit in lits))
 
                 case ConstrExpr.Kind.IMPLY:
                     if len(terms) == 2:
                         lit_from, lit_to = lits[0], lits[1]
-                        return ElemConstrExpr.from_lits_tighten_and_simplify_or((lit_from.negation(), lit_to))
+                        return ElemConstrExpr.from_lits_simplify_or((lit_from.negation(), lit_to))
                     else:
-                        raise ValueError("""Incorrect number of terms: IMPLY constraints require exactly two literals.""")
-
+                        raise ValueError(("Incorrect number of terms: ",
+                                          "IMPLY constraints require exactly two literals."""))
                 case _:
-                    raise ValueError("""Incompatible constraint type and terms: OR, AND, and IMPLY constraints require a sequence of literals.""")
+                    raise ValueError(("Incompatible constraint type and terms: OR, AND, and ",
+                                      "IMPLY constraints require a sequence of literals."""))
 
     raise ValueError("""Constraint expression could not be interpreted.""")
 
@@ -297,8 +309,9 @@ def _get_or_make_new_scope_lit_from_scope_as_lits_conj(
     solver: Solver,
 ) -> Lit:
     """
-    Return a literal corresponding to the scope defined by the literals of a conjunctive scope.
-    If there isn't already a scope literal like that, add it to the solver.
+    Return a literal corresponding to the scope defined by the literals of a
+    conjunctive scope. If there isn't already a scope literal like that, add
+    it to the solver.
 
     In other words, return a literal l such that l <=> l1 & l2 & ... & ln
     """
@@ -360,7 +373,7 @@ def _get_or_make_new_scope_lit_from_scope_as_lits_conj(
             _insert_implication_between_literals_on_non_optional_vars(scope_lit, l, solver)
             lits.append(l.negation())
 
-        or_elem_form = ElemConstrExpr.from_lits_tighten_and_simplify_or(tuple(lits))
+        or_elem_form = ElemConstrExpr.from_lits_simplify_or(lits)
 
         _bind_elem_constr_expr(or_elem_form, TRUE_LIT, solver)  # TRUE_LIT is the tautology of the "empty scope" 
                                                                 # (whose scope literal is TRUE_LIT as well)

@@ -3,9 +3,9 @@ from __future__ import annotations
 #################################################################################
 
 from enum import Enum, auto
-from typing import NamedTuple, Tuple, Union
+from typing import NamedTuple, Sequence, Tuple, Union
 
-from fundamentals import (FALSE_LIT, TRUE_LIT, ZERO_VAR, Lit, Var,
+from .fundamentals import (FALSE_LIT, TRUE_LIT, ZERO_VAR, Lit, Var,
                           are_tightened_literals_tautological,
                           tighten_literals)
 
@@ -192,7 +192,7 @@ class ElemConstrExpr(NamedTuple):
         offset_diff = offset_right - offset_left
 
         if var_left == var_right:
-            if 0 <= offset_diff:
+            if offset_diff >= 0:
                 return ElemConstrExpr.from_lit(TRUE_LIT)
             else:
                 return ElemConstrExpr.from_lit(FALSE_LIT)
@@ -217,38 +217,43 @@ class ElemConstrExpr(NamedTuple):
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     @classmethod
-    def from_lits_tighten_and_simplify_or(cls,
-        literals: Tuple[Lit,...],
+    def from_lits_simplify_or(cls,
+        literals: Sequence[Lit],
     ) -> ElemConstrExpr:
+
+        if len(literals) == 0:
+            return ElemConstrExpr.from_lit(FALSE_LIT)
 
         tightened_literals = tighten_literals(literals)
 
-        if are_tightened_literals_tautological(tightened_literals):
-            return ElemConstrExpr.from_lit(TRUE_LIT)
-
-        elif len(tightened_literals) == 0:
-            return ElemConstrExpr.from_lit(FALSE_LIT)
-
-        elif len(tightened_literals) == 1:
+        if len(tightened_literals) == 1:
             return ElemConstrExpr.from_lit(tightened_literals[0])
+
+        elif are_tightened_literals_tautological(tightened_literals):
+            return ElemConstrExpr.from_lit(TRUE_LIT)
 
         return ElemConstrExpr(ElemConstrExpr.Kind.OR, tightened_literals)
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-#
-#    @classmethod
-#    def or_from_lits(cls,
-#        literals: Tuple[Lit,...],
-#    ) -> ElemConstrExpr:
-#        return ElemConstrExpr(ElemConstrExpr.Kind.OR, literals)
-#
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     @classmethod
-    def from_lits_and(cls,
-        literals: Tuple[Lit,...]
+    def from_lits_simplify_and(cls,
+        literals: Sequence[Lit]
     ) -> ElemConstrExpr:
-        return ElemConstrExpr(ElemConstrExpr.Kind.AND, literals)
+
+        if len(literals) == 0:
+            return ElemConstrExpr.from_lit(TRUE_LIT)
+
+        tightened_neg_literals = tighten_literals(tuple(lit.negation()
+                                                        for lit in literals))
+        if len(tightened_neg_literals) == 1:
+            return ElemConstrExpr.from_lit(tightened_neg_literals[0].negation())
+
+        elif are_tightened_literals_tautological(tightened_neg_literals):
+            return ElemConstrExpr.from_lit(FALSE_LIT)
+
+        return ElemConstrExpr(ElemConstrExpr.Kind.AND, tuple(lit.negation()
+                                                        for lit in tightened_neg_literals))
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -267,20 +272,20 @@ class ElemConstrExpr(NamedTuple):
         match self.kind, self.terms:
 
             case ElemConstrExpr.Kind.LIT, Lit() as lit:
-                return ElemConstrExpr.from_lit(lit.negation())
+                return ElemConstrExpr(ElemConstrExpr.Kind.LIT, lit.negation())
 
             case ElemConstrExpr.Kind.OR, [Lit(), *_] as lits:
-                return ElemConstrExpr.from_lits_and(tuple(lit.negation() for lit in lits))
-
+                return ElemConstrExpr(ElemConstrExpr.Kind.AND, tuple(lit.negation()
+                                                                     for lit in lits))
             case ElemConstrExpr.Kind.AND, [Lit(), *_] as lits:
-                return ElemConstrExpr(ElemConstrExpr.Kind.OR, tuple(lit.negation() for lit in lits))
-
+                return ElemConstrExpr(ElemConstrExpr.Kind.OR, tuple(lit.negation()
+                                                                    for lit in lits))
             case (ElemConstrExpr.Kind.MAX_DIFFERENCE,
                   (Var() as from_var, Var() as to_var, int() as max_diff)
             ):
-                return ElemConstrExpr.from_max_diff(to_var, from_var, -max_diff-1)
-
+                return ElemConstrExpr(ElemConstrExpr.Kind.MAX_DIFFERENCE,
+                                      (to_var, from_var, -max_diff-1))
             case _:
-                raise ValueError("""ElemConstrExpr could not be interpreted: negation failed.""")
+                raise ValueError("ElemConstrExpr could not be interpreted: negation failed.")
 
 #################################################################################
