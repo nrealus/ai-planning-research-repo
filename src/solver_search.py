@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from typing import List, Optional, Tuple
 
-from fundamentals import (TRUE_LIT, Lit, Var,
-                          are_tightened_literals_tautological,
-                          tighten_literals)
-from constraint_expressions import ElemConstrExpr
-from solver import (Causes, ConflictAnalysisResult, Decisions,
+from .fundamentals import (TRUE_LIT, Lit, Var,
+                          are_tightened_disj_literals_tautological,
+                          tighten_disj_literals)
+from .constraint_expressions import ElemConstrExpr
+from .solver import (Causes, ConflictAnalysisResult, Decisions,
                     InvalidBoundUpdateInfo, ReasonerRawExplanation, Solver)
-from solver_diff_reasoner import DiffReasoner
-from solver_sat_reasoner import SATReasoner
+from .solver_diff_reasoner import DiffReasoner
+from .solver_sat_reasoner import SATReasoner
 
 #################################################################################
 #################################################################################
@@ -103,7 +103,7 @@ def search(
             if len(conflict_analysis_info.asserting_clause_literals) == 0:
                 return "INCONSISTENT"
 
-            tightened_asserting_clause_literals = tighten_literals(conflict_analysis_info.asserting_clause_literals)
+            tightened_asserting_clause_literals = tighten_disj_literals(conflict_analysis_info.asserting_clause_literals)
 
             # CLAUSE LEARNING
 
@@ -162,7 +162,7 @@ def _actually_post_reified_constraint(
     ) -> Optional[InvalidBoundUpdateInfo]:
 
         if clause_literals_already_known_to_be_tightened:
-            clause_tightened_lits = tighten_literals(clause_lits)
+            clause_tightened_lits = tighten_disj_literals(clause_lits)
         else:
             clause_tightened_lits = clause_lits
 
@@ -211,7 +211,7 @@ def _actually_post_reified_constraint(
             pass
         
         else:
-            clause_tightened_lits = tighten_literals(clause_tightened_lits
+            clause_tightened_lits = tighten_disj_literals(clause_tightened_lits
                                                      +(processed_scope_lit.negation(),))
             processed_scope_lit = TRUE_LIT
 
@@ -265,9 +265,9 @@ def _actually_post_reified_constraint(
                 return None
             
             else:
-                clause_tightened_lits = tighten_literals((constr_lit.negation(),)+lits)
+                clause_tightened_lits = tighten_disj_literals((constr_lit.negation(),)+lits)
 
-                if are_tightened_literals_tautological(clause_tightened_lits):
+                if are_tightened_disj_literals_tautological(clause_tightened_lits):
 
                     res = add_clause_to_sat_reasoner(clause_tightened_lits, scope_lit, True)
                     if res is not None:

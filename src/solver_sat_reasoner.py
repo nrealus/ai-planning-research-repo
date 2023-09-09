@@ -6,8 +6,8 @@ import typing
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Tuple
 
-from fundamentals import TRUE_LIT, BoundVal, Lit, SignedVar
-from solver import Causes, Reasoner, ReasonerRawExplanation, Solver
+from .fundamentals import TRUE_LIT, BoundVal, Lit, SignedVar
+from .solver import Causes, Reasoner, ReasonerRawExplanation, Solver
 
 MAX_INT = 2**64
 

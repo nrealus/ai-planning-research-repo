@@ -8,8 +8,8 @@ from dataclasses import dataclass, field
 from typing import (Callable, Dict, Iterable, List, NamedTuple, Optional, Set,
                     Tuple, Union)
 
-from fundamentals import TRUE_LIT, BoundVal, Lit, SignedVar, Var
-from solver import (Causes, InvalidBoundUpdateInfo, Reasoner,
+from .fundamentals import TRUE_LIT, BoundVal, Lit, SignedVar, Var
+from .solver import (Causes, InvalidBoundUpdateInfo, Reasoner,
                     ReasonerRawExplanation, Solver)
 
 MAX_INT = 2**64

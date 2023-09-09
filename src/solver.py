@@ -7,9 +7,9 @@ from abc import ABC, abstractmethod
 from typing import (Callable, Dict, List, NamedTuple, Optional, Set, Tuple,
                     Union)
 
-from fundamentals import (FALSE_LIT, TRUE_LIT, ZERO_VAR, BoundVal, Lit,
+from .fundamentals import (FALSE_LIT, TRUE_LIT, ZERO_VAR, BoundVal, Lit,
                           SignedVar, Var)
-from constraint_expressions import ElemConstrExpr
+from .constraint_expressions import ElemConstrExpr
 
 #################################################################################
 #################################################################################
