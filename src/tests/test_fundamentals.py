@@ -44,13 +44,13 @@ class TestFundamentals(unittest.TestCase):
                          (Lit.geq(A, 0), Lit.geq(B, 0)))
 
         self.assertEqual(tighten_disj_literals([Lit.leq(A, 0),
-                                           Lit.leq(B, 1),
-                                           Lit.leq(A, 1),
-                                           Lit.leq(B, 0),
-                                           Lit.geq(A, 0),
-                                           Lit.geq(B, 1),
-                                           Lit.geq(A, 1),
-                                           Lit.geq(B, 0)]),
+                                                Lit.leq(B, 1),
+                                                Lit.leq(A, 1),
+                                                Lit.leq(B, 0),
+                                                Lit.geq(A, 0),
+                                                Lit.geq(B, 1),
+                                                Lit.geq(A, 1),
+                                                Lit.geq(B, 0)]),
                         (Lit.geq(A, 0), Lit.leq(A, 1), Lit.geq(B, 0), Lit.leq(B, 1)))
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -61,18 +61,18 @@ class TestFundamentals(unittest.TestCase):
         B = Var(2)
 
         self.assertTrue(are_tightened_disj_literals_tautological(tighten_disj_literals((Lit.leq(A, 0), 
-                                                                              Lit.leq(A, 0).negation()))))
+                                                                                        Lit.leq(A, 0).negation()))))
 
         self.assertTrue(are_tightened_disj_literals_tautological(tighten_disj_literals((Lit.leq(A, 0), 
-                                                                              Lit.geq(A, 0)))))
+                                                                                        Lit.geq(A, 0)))))
 
         self.assertTrue(are_tightened_disj_literals_tautological(tighten_disj_literals((Lit.leq(A, 0), 
-                                                                              Lit.geq(A, 1)))))
+                                                                                        Lit.geq(A, 1)))))
 
         self.assertTrue(are_tightened_disj_literals_tautological(tighten_disj_literals((Lit.leq(A, 0), 
-                                                                              Lit.leq(B, 0), 
-                                                                              Lit.leq(B, 2), 
-                                                                              Lit.leq(A, 0).negation()))))
+                                                                                        Lit.leq(B, 0), 
+                                                                                        Lit.leq(B, 2), 
+                                                                                        Lit.leq(A, 0).negation()))))
         self.assertRaisesRegex(ValueError, ".* is not tightened.",
                                are_tightened_disj_literals_tautological,(Lit.leq(A, 0), Lit.leq(B, 0), Lit.leq(B, 2)))
 

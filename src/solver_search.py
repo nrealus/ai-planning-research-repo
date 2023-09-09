@@ -212,7 +212,7 @@ def _actually_post_reified_constraint(
         
         else:
             clause_tightened_lits = tighten_disj_literals(clause_tightened_lits
-                                                     +(processed_scope_lit.negation(),))
+                                                          +(processed_scope_lit.negation(),))
             processed_scope_lit = TRUE_LIT
 
         sat_reasoner.add_new_fixed_clause_with_scope(clause_tightened_lits,

@@ -275,7 +275,8 @@ def are_tightened_disj_literals_tautological(
     while i < n-1:
 
         if not (literals[i] < literals[i+1] and literals[i].signed_var != literals[i+1].signed_var):
-            raise ValueError("The set of literals given to `are_tightened_literals_tautological` is not tightened.")
+            raise ValueError(("The set of literals given to ",
+                             "`are_tightened_literals_tautological` is not tightened."))
 
         if literals[i].signed_var.opposite_signed_var() == literals[i+1].signed_var:
             if literals[i].bound_value - literals[i+1].bound_value <= 0:
