@@ -6,8 +6,8 @@ from enum import Enum, auto
 from typing import NamedTuple, Sequence, Tuple, Union
 
 from .fundamentals import (FALSE_LIT, TRUE_LIT, ZERO_VAR, Lit, Var,
-                          are_tightened_literals_tautological,
-                          tighten_literals)
+                          are_tightened_disj_literals_tautological,
+                          tighten_disj_literals)
 
 #################################################################################
 #################################################################################
@@ -224,12 +224,12 @@ class ElemConstrExpr(NamedTuple):
         if len(literals) == 0:
             return ElemConstrExpr.from_lit(FALSE_LIT)
 
-        tightened_literals = tighten_literals(literals)
+        tightened_literals = tighten_disj_literals(literals)
 
         if len(tightened_literals) == 1:
             return ElemConstrExpr.from_lit(tightened_literals[0])
 
-        elif are_tightened_literals_tautological(tightened_literals):
+        elif are_tightened_disj_literals_tautological(tightened_literals):
             return ElemConstrExpr.from_lit(TRUE_LIT)
 
         return ElemConstrExpr(ElemConstrExpr.Kind.OR, tightened_literals)
@@ -244,12 +244,12 @@ class ElemConstrExpr(NamedTuple):
         if len(literals) == 0:
             return ElemConstrExpr.from_lit(TRUE_LIT)
 
-        tightened_neg_literals = tighten_literals(tuple(lit.negation()
+        tightened_neg_literals = tighten_disj_literals(tuple(lit.negation()
                                                         for lit in literals))
         if len(tightened_neg_literals) == 1:
             return ElemConstrExpr.from_lit(tightened_neg_literals[0].negation())
 
-        elif are_tightened_literals_tautological(tightened_neg_literals):
+        elif are_tightened_disj_literals_tautological(tightened_neg_literals):
             return ElemConstrExpr.from_lit(FALSE_LIT)
 
         return ElemConstrExpr(ElemConstrExpr.Kind.AND, tuple(lit.negation()

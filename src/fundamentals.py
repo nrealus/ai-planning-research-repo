@@ -15,7 +15,6 @@ from typing import List, NamedTuple, Sequence, Tuple
 #
 # - HELPER FUNCTIONS:
 #   - TIGHTENING OF (DISJUNCTIONS OF) LITERALS
-#
 #################################################################################
 #################################################################################
 
@@ -218,7 +217,9 @@ the [ZERO_VAR >= 1] literal (i.e. [-ZERO_VAR <= -1]).
 # TIGHTENING OF (DISJUNCTIONS OF) LITERALS
 #################################################################################
 
-def tighten_literals(literals: Sequence[Lit]) -> Tuple[Lit,...]:
+def tighten_disj_literals(
+    literals: Sequence[Lit]
+) -> Tuple[Lit,...]:
     """
     "Tightens" a (disjunctive) set of literals. This means sorting the literals
     (in lexicographic order - see `Lit` attributes) and, in case there were
@@ -238,8 +239,8 @@ def tighten_literals(literals: Sequence[Lit]) -> Tuple[Lit,...]:
     j = 0
     while i < n-1-j:
         # Because the literals are now lexicographically sorted,
-        # we know that if two literals are on the same signed variable,
-        # the weaker one is necessarily the next one.
+        # we know that if two literals are on the same signed
+        # variable, the weaker one is necessarily the next one.
         if lits[i].entails(lits[i+1]):
             lits.pop(i)
             j += 1
@@ -250,7 +251,9 @@ def tighten_literals(literals: Sequence[Lit]) -> Tuple[Lit,...]:
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-def are_tightened_literals_tautological(literals: Tuple[Lit,...]) -> bool:
+def are_tightened_disj_literals_tautological(
+    literals: Tuple[Lit,...]
+) -> bool:
     """
     Returns:
         bool: Whether the disjunction of given (tightened) literals is tautological.
@@ -262,10 +265,17 @@ def are_tightened_literals_tautological(literals: Tuple[Lit,...]) -> bool:
     """
 
     n = len(literals)
+
+    if n == 0:
+        raise ValueError(("Attempt to check whether an empty set of literals is tautological. "
+                          "Technically, an empty set of literals is indeed tautological. However, "
+                          "at no point do we want a set of literals passed to this method "
+                          "to be empty, so we raise an error to further enforce that."))
     i = 0
     while i < n-1:
 
-        assert literals[i] < literals[i+1] and literals[i].signed_var != literals[i+1].signed_var
+        if not (literals[i] < literals[i+1] and literals[i].signed_var != literals[i+1].signed_var):
+            raise ValueError("The set of literals given to `are_tightened_literals_tautological` is not tightened.")
 
         if literals[i].signed_var.opposite_signed_var() == literals[i+1].signed_var:
             if literals[i].bound_value - literals[i+1].bound_value <= 0:
