@@ -492,7 +492,7 @@ def _flatten_scope_to_lits_conj(                                    # BUG (detec
 
     def is_tautology(lit: Lit):
 
-        if solver.is_literal_entailed(lit):
+        if solver.is_entailed(lit):
             if not check_entailed_at_top_dec_level:
                 return True
             else:
@@ -616,7 +616,7 @@ def _insert_implication_between_literals_on_non_optional_vars(
 
     # If from_literal is true, to_literal needs to be enforced as true.
     # (Indeed (from => to) <=> ((not from) or to))
-    if solver.is_literal_entailed(lit_from):
+    if solver.is_entailed(lit_from):
 
         bound_update_result = solver.set_bound_value(lit_to.signed_var,
                                                      lit_to.bound_value,
@@ -628,7 +628,7 @@ def _insert_implication_between_literals_on_non_optional_vars(
 
     # If to_literal is false, from_literal needs to be enforced as false.
     # (Indeed ((not to) => (not from)) <=> (to or (not from)))
-    if solver.is_literal_entailed(lit_to_neg):
+    if solver.is_entailed(lit_to_neg):
 
         bound_update_result = solver.set_bound_value(lit_from_neg.signed_var,
                                                      lit_from_neg.bound_value,

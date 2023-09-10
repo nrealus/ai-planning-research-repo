@@ -271,9 +271,9 @@ class TestSolverBasics(unittest.TestCase):
             lb = -solver.bound_values[SignedVar.minus(v)]
             ub = solver.bound_values[SignedVar.plus(v)]
 
-            if solver.is_literal_entailed(solver.presence_literals[v]):
+            if solver.is_entailed(solver.presence_literals[v]):
                 return (True, (lb, ub))
-            elif solver.is_literal_entailed(solver.presence_literals[v].negation()):
+            elif solver.is_entailed(solver.presence_literals[v].negation()):
                 return None
             else:
                 return (False, (lb, ub))
@@ -293,11 +293,11 @@ class TestSolverBasics(unittest.TestCase):
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
         
         def propag():
-            if solver.is_literal_entailed(a):
+            if solver.is_entailed(a):
                 res = solver.set_bound_value(SignedVar.plus(n), BoundVal(4), cause_a)
                 if isinstance(res, InvalidBoundUpdateInfo):
                     return res
-            if solver.is_literal_entailed(b):
+            if solver.is_entailed(b):
                 res = solver.set_bound_value(SignedVar.minus(n), BoundVal(-5), cause_b)
                 if isinstance(res, InvalidBoundUpdateInfo):
                     return res

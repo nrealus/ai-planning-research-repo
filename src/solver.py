@@ -43,7 +43,7 @@ class Decisions(ABC):
     class SetLiteral(NamedTuple):
         """
         Represents a decision to increment the decision level and
-        to set / entail / enforce a certain literal as true.
+        to set / entail / enforce a certain literal.
         """
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -71,16 +71,19 @@ class Causes(ABC):
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     class Decision(NamedTuple):
-        """This cause corresponds to a ("set literal") decision to attempt to update a bound."""
+        """
+        This cause corresponds to a decision to update a bound
+        (i.e. a "set literal" decision).
+        """
         pass
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     class Encoding(NamedTuple):
         """
-        This cause corresponds to the posting (or "activation") of a constraint,
-        i.e. an attempt to set a reification literal of a constraint (i.e. set the
-        lower bound of the reification literal's variable to 1).
+        This cause corresponds to the deactivation / forbiddance of a scope in which an
+        (already reified) constraint, found to be impossible to satisfy, is defined.
+        In other words, this means setting the corresponding scope literal as false.
         """
         pass
 
@@ -88,13 +91,12 @@ class Causes(ABC):
 
     class ImplicationPropagation(NamedTuple):
         """
-        This cause corresponds to an attempt to perform of implication propagation.
+        This cause corresponds to an implication propagation.
 
         Implication propagations are triggered on bound updates of non-optional
-        variables (notably presence variables) and concern literals that are
-        "directly implied" by the newly entailed literal. Indeed, the solver has
-        an implication graph, on non-optional variables' literals. It stores
-        implications that must be satisfied.
+        variables (notably presence variables) and concern literals that are implied
+        by the newly entailed literal. This possible thanks to the implication
+        graph on non-optional variables' literals maintained by the solver.
         """
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -105,21 +107,21 @@ class Causes(ABC):
 
     class PresenceOfEmptyDomain(NamedTuple):
         """
-        This cause corresponds to an attempt to set an optional variable's presence
-        variable/literal to false, because its domain became empty.
-        
-        Recall that an optional variables is allowed to have empty domain (lower
-        bound strictly greater than upper bound) iff it is "absent" from the model,
-        i.e its presence variable's (which is always non optional) domain is reduced
-        to 0 (i.e. the negation of the optional variable's presence literal is entailed).
+        This cause corresponds to the prevention of an optional variable's domain
+        becoming empty, by setting its presence variable / literal to false.
+
+        Note that presence variables are non-optional by definition.
         """
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
         literal: Lit
-        """The literal whose entailment made its variable's domain become empty."""
+        """The literal whose entailment would make its variable's domain empty."""
 
         cause: Causes.AnyCause
-        """The cause of literal's entailment."""
+        """
+        The cause of the attempt to entail the literal that would make its
+        variable's domain empty.
+        """
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -147,7 +149,10 @@ class Causes(ABC):
 #################################################################################
 
 class Event(NamedTuple):
-    """Represents an event, i.e. (meta)data on a bound update of a signed variable."""
+    """
+    Represents an event, i.e. (meta)data of bound update of a signed variable 
+    (i.e. entailment of a literal).
+    """
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     signed_var: SignedVar
@@ -156,7 +161,11 @@ class Event(NamedTuple):
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     new_bound_value: BoundVal
-    """The new (updated) value of the signed variable's bound."""
+    """
+    The new value of the signed variable's bound.
+
+    Note that it is necessarily strictly stronger than its previous bound value.
+    """
     
     previous_bound_value: BoundVal
     """The previous value that the signed variable's bound had, before this event."""
@@ -165,7 +174,7 @@ class Event(NamedTuple):
 
     index: Tuple[int, int]
     """
-    The index of this event (in the solver's `events_trail`).
+    The position / index of this event (in the solver's `events_trail`).
     
     It is a "double index": the first int of the tuple corresponds to the decision
     level, and the second one corresponds to the event's index in that decision level.
@@ -173,8 +182,8 @@ class Event(NamedTuple):
     
     previous_bound_value_event_index: Optional[Tuple[int, int]]
     """
-    The index of the event (in the event trail) that set the signed variable's
-    previous bound value.
+    The position / index of the event (in the solver's `events_trail`) that set
+    the signed variable's previous bound value.
     
     It is a "double index": the first int of the tuple corresponds to the decision
     level, and the second one corresponds to the event's index in that decision level.
@@ -193,29 +202,35 @@ class Event(NamedTuple):
 
 class InvalidBoundUpdateInfo(NamedTuple):
     """
-    Represents a contradiction corresponding to an invalid bound update (i.e. to
-    an empty domain for an non-optional variable).
+    Represents an encountered conflict, corresponding to an invalid bound
+    update. (i.e. an attempt to entail a literal which would cause its
+    variable's domain to become empty).
+
+    It will be analyzed as part of conflict analysis, to produce a clause
+    for the solver to "learn".
     """
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     literal: Lit
-    """The literal whose entailment caused its variable's domain to become empty."""
+    """The literal whose entailment would cause its variable's domain to become empty."""
 
     cause: Causes.AnyCause
-    """The cause for the entailment of the literal."""
+    """The cause for the attempt to make the invalid bound update."""
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-class ReasonerRawExplanation(NamedTuple):
+class ReasonerBaseExplanation(NamedTuple):
     """
-    Represents the "raw" or "starting point" explanation that a reasoner may make
-    of an encountered contradiction. It is refined into a "full" explanation by
-    (the main component of) the solver.
+    Represents a base / "starting point" explanation for a conflict encountered
+    by a reasoner.
+
+    It will be refined into a full explanation as part of conflict analysis,
+    to produce a clause for the solver to "learn".
     """
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     literals: Tuple[Lit,...]
-    """The literals of the "raw" or "starting" point explanation made by the reasoner."""
+    """The literals of the base / "starting point" explanation made by the reasoner."""
 
 #################################################################################
 # CONFLICT ANALYSIS RESULT
@@ -223,22 +238,20 @@ class ReasonerRawExplanation(NamedTuple):
 
 class ConflictAnalysisResult(NamedTuple):
     """
-    Represents information obtained after explanation / conflict analysis.
-
-    Conflicts happen when propagation fails / leads to / encounters a conflict / contradiction.
-    They need to be explained into a new clause for the solver to "learn" to
-    prevent it from happening again in the search. This is done by adding this
-    clause to the clause database of the solver (or rather the `SATReasoner`'s), 
-    after backtracking to an appropriate backtrack level (in our case, the 1st Unique Implication Point / 1UIP).
+    Represents the results of conflict analysis, namely the clause for the solver
+    to "learn" (i.e. integrate in a SATReasoner after backtracking to an appropriate
+    earlier decision level - in our case, the 1st Unique Implication Point (1UIP))
+    to prevent the analyzed conflict from being encountered again.
     """
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     asserting_clause_literals: Tuple[Lit,...]
     """
-    The asserting clause (as a set of literals). Not yet learned (i.e. not yet
-    in the clause database). They are tightened before this structure's instantiation.
+    The literals composing the asserting clause obtained as a result of conflict analysis.
 
-    To avoid the conflict, at least one of the literals will have to be true.
+    Should be tightened.
+
+    TODO: explain what an asserting clause is.
     """
 
     resolved_literals_storage: Dict[SignedVar, BoundVal] #REVIEW ? # Tuple[Literal,...]
@@ -265,11 +278,11 @@ class Reasoner():
     Reasoners are specialized inference engines / "modules" of the (main) solver.
     They are queried by the solver's propagation method one by one, to perform
     specialized propagation / inference. Each of them processes newly accumulated
-    bound updates / events, including those resulting from inference / propagation
-    by other reasoners, until nothing new can be inferred. They also help the main
-    solver by providing it with an initial (REVIEW?) explanation, when a conflict
-    is found during their propagation. This explanation may be further refined
-    by the main solver when doing conflict analysis.
+    events (bound updates), including those resulting from inference / propagation
+    by other reasoners, until nothing new can be inferred.
+    
+    When a reasoner encounters a conflict, it returns an
+    initial / base / "starting point" explanation.
     """
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -279,7 +292,8 @@ class Reasoner():
         solver:Solver,
     ) -> None:
         """
-        TODO
+        Updates the internal state of the reasoner when the decision level is
+        incremented by the solver by 1.
         """
         pass
 
@@ -290,7 +304,8 @@ class Reasoner():
         solver: Solver,
     ) -> None:
         """
-        TODO
+        Updates the internal state of the reasoner when the solver backtracks (i.e.
+        decrements the decision level by 1).
         """
         pass
 
@@ -299,9 +314,10 @@ class Reasoner():
     @abstractmethod
     def propagate(self,
         solver: Solver,
-    ) -> Optional[InvalidBoundUpdateInfo | ReasonerRawExplanation]:
+    ) -> Optional[InvalidBoundUpdateInfo | ReasonerBaseExplanation]:
         """
-        TODO
+        Propagates the accumulated events to the reasoner (namely to its
+        specialized constraints) and performs specialized inference.
         """
         pass
 
@@ -314,8 +330,9 @@ class Reasoner():
         inference_cause: Causes.ReasonerInference,
         solver: Solver,
     ) -> None:
-        """
-        TODO
+        """REVIEW
+        Contributes to building a "full" explanation by adding to it
+        literals l_1, ... l_n, such that l_1 & ... & l_n => literal.
         """
         pass
 
@@ -339,7 +356,7 @@ class Solver():
 
         self.vars: Dict[bool, Set[Var]] = { False: set(), True: set() }
         """
-        Stores the variables of the problem.
+        Stores the variables all the variables added to the solver.
 
         The controllable variables are in the set under key True,
         and the uncontrollable ones are in the set under key False.
@@ -355,7 +372,8 @@ class Solver():
 
         self.non_optionals_implication_graph: Dict[SignedVar, Dict[BoundVal, Set[Lit]]] = {}
         """
-        Represents an implication graph on literals of non-optional variables.
+        Represents an implication graph on literals of non-optional variables
+        (namedly presence literals).
 
         Can be seen as a set of "guarded" adjacency sets. Indeed, a signed variable is
         mapped to a dictionary, with keys "guarding" the values, which are adjacency sets.
@@ -390,7 +408,7 @@ class Solver():
         The trail of events.
 
         Uses double indices: the index in outer list is the decision level of the event.
-        The index in the inner list is the position of the event in that decision level.
+        The index in the inner list is the index of the event in that decision level.
         """
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -458,7 +476,7 @@ class Solver():
     # UTILITY METHODS
     #############################################################################
 
-    def is_literal_entailed(self,
+    def is_entailed(self,
         literal: Lit,
     ) -> bool:
         """
@@ -490,9 +508,9 @@ class Solver():
             None otherwise (i.e. `literal` is unbound: it isn't yet known to be true or false).
         """ 
 
-        if self.is_literal_entailed(literal):
+        if self.is_entailed(literal):
             return True
-        elif self.is_literal_entailed(literal.negation()):
+        elif self.is_entailed(literal.negation()):
             return False
         else:
             return None
@@ -527,8 +545,8 @@ class Solver():
         if (literal_to == TRUE_LIT
             or literal_from == FALSE_LIT
             or literal_from.entails(literal_to)
-            or self.is_literal_entailed(literal_from.negation())
-            or self.is_literal_entailed(literal_to)
+            or self.is_entailed(literal_from.negation())
+            or self.is_entailed(literal_to)
         ):
             return True 
 
@@ -550,34 +568,34 @@ class Solver():
         visited: Dict[SignedVar, BoundVal] = {}
 
         while stack:
-            lit = stack.pop()
+            literal = stack.pop()
 
             # If the current literal entails `literal_to`, then
             # we won: `literal_to` is reachable from `literal_from`, 
             # thus `literal_from` does imply `literal_to`
-            if lit.entails(literal_to):
+            if literal.entails(literal_to):
                 return True
 
-            if lit.signed_var not in visited:
-                visited[lit.signed_var] = lit.bound_value
+            if literal.signed_var not in visited:
+                visited[literal.signed_var] = literal.bound_value
             
             # If we have already visited a literal that entails the current
             # one, then there is no hope in pursuing the search further in
             # this path (because the search is depth-first).
-            elif lit.bound_value.is_stronger_than(visited[lit.signed_var]):
+            elif literal.bound_value.is_stronger_than(visited[literal.signed_var]):
                 continue                                                    
 
             # If the current literal doesn't imply anything, then it can't
             # imply possibly `literal_to`: no hope in pursuing the search
             # further in this path (because the search is depth-first).
-            if not lit.signed_var in self.non_optionals_implication_graph:
+            if literal.signed_var not in self.non_optionals_implication_graph:
                 continue
             
             # Push literals known to be "directly implied" by
             # the current literal to the search stack.
-            for guard_bound, adjacency_set in self.non_optionals_implication_graph[lit.signed_var].items():
+            for guard_bound, adjacency_set in self.non_optionals_implication_graph[literal.signed_var].items():
 
-                if lit.bound_value.is_stronger_than(guard_bound):
+                if literal.bound_value.is_stronger_than(guard_bound):
                     stack.extend(adjacency_set)
 
         return False
@@ -606,7 +624,7 @@ class Solver():
         (i.e. the literal wasn't entailed before this event).
         """
 
-        assert self.is_literal_entailed(literal)
+        assert self.is_entailed(literal)
 
         ev_index = self.bound_values_event_indices.get(literal.signed_var, None)
 
@@ -676,7 +694,7 @@ class Solver():
         # the domain. Note that non optional variables are always present
         # (i.e. their presence literal is TRUE_LIT) so this indeed doesn't
         # apply to them.
-        if self.is_literal_entailed(prez_lit.negation()):
+        if self.is_entailed(prez_lit.negation()):
             return False
 
         # If the new candidate bound value is weaker than the
@@ -786,7 +804,7 @@ class Solver():
                                self.bound_values[implied_lit.signed_var],
                                (self.decision_level, j+1),
                                self.bound_values_event_indices.get(implied_lit.signed_var, None),
-                               Causes.ImplicationPropagation(implied_lit))
+                               Causes.ImplicationPropagation(pending_lit))
 
                     self.events_trail[self.decision_level].append(ev)
 
@@ -916,7 +934,7 @@ class Solver():
 
     def propagate(self,
         reasoners:Tuple[Reasoner,...],
-    ) -> Optional[Tuple[InvalidBoundUpdateInfo | ReasonerRawExplanation, Reasoner]]:
+    ) -> Optional[Tuple[InvalidBoundUpdateInfo | ReasonerBaseExplanation, Reasoner]]:
         """
         The propagation method of the solver.
 
@@ -984,7 +1002,7 @@ class Solver():
 
         # In this function, the literal shouldn't be true yet,
         # but it should be immediately implied.
-        assert not self.is_literal_entailed(literal)
+        assert not self.is_entailed(literal)
 
         match cause:
 
@@ -1121,7 +1139,7 @@ class Solver():
 
             for lit in explanation_literals:
 
-                if self.is_literal_entailed(lit):
+                if self.is_entailed(lit):
 
                     first_impl_ev = self.get_first_event_implying_literal(lit)
 

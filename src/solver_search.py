@@ -9,7 +9,7 @@ from .fundamentals import (TRUE_LIT, Lit, Var,
                           tighten_disj_literals)
 from .constraint_expressions import ElemConstrExpr
 from .solver import (Causes, ConflictAnalysisResult, Decisions,
-                    InvalidBoundUpdateInfo, ReasonerRawExplanation, Solver)
+                    InvalidBoundUpdateInfo, ReasonerBaseExplanation, Solver)
 from .solver_diff_reasoner import DiffReasoner
 from .solver_sat_reasoner import SATReasoner
 
@@ -62,7 +62,7 @@ def search(
         
         # If the scope of the constraint is false, it means
         # the constraint is absent. So it is ignored.
-        if solver.is_literal_entailed(scope_literal.negation()):
+        if solver.is_entailed(scope_literal.negation()):
             pass
         
         else:
@@ -94,7 +94,7 @@ def search(
                 case InvalidBoundUpdateInfo():
                     conflict_analysis_info = solver.explain_invalid_bound_update(contradiction,
                                                                                  reasoner.explain)
-                case ReasonerRawExplanation():
+                case ReasonerBaseExplanation():
                     conflict_analysis_info = solver.refine_explanation(list(contradiction.literals),
                                                                        reasoner.explain)
                 case _:
@@ -220,7 +220,7 @@ def _actually_post_reified_constraint(
         i = 0
         j = 0
         while i < n-j:
-            if solver.is_literal_entailed(true_or_unbounded_lits[i].negation()):
+            if solver.is_entailed(true_or_unbounded_lits[i].negation()):
                 true_or_unbounded_lits.pop(i)
                 j += 1
             else:
@@ -254,7 +254,7 @@ def _actually_post_reified_constraint(
     scope_lit = solver.presence_literals[constr_lit.signed_var.var]
 
     # If the scope is False, then the constraint is absent: we thus ignore it.
-    if solver.is_literal_entailed(scope_lit.negation()):
+    if solver.is_entailed(scope_lit.negation()):
         return None
 
     kind, terms = elem_constr_expr.kind, elem_constr_expr.terms
@@ -284,14 +284,14 @@ def _actually_post_reified_constraint(
 
         case ElemConstrExpr.Kind.OR, [Lit(), *_] as lits:
 
-            if solver.is_literal_entailed(constr_lit):
+            if solver.is_entailed(constr_lit):
 
                 preprocess_then_add_scoped_clause_to_sat_reasoner(lits, 
                                                                   scope_lit, 
                                                                   False)
                 return None
             
-            elif solver.is_literal_entailed(constr_lit.negation()):
+            elif solver.is_entailed(constr_lit.negation()):
 
                 for lit in lits:
 

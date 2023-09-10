@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Tuple
 
 from .fundamentals import TRUE_LIT, BoundVal, Lit, SignedVar
-from .solver import Causes, Reasoner, ReasonerRawExplanation, Solver
+from .solver import Causes, Reasoner, ReasonerBaseExplanation, Solver
 
 MAX_INT = 2**64
 
@@ -400,7 +400,7 @@ class SATReasoner(Reasoner):
 
     def propagate(self,
         solver:Solver,
-    ) -> Optional[ReasonerRawExplanation]:
+    ) -> Optional[ReasonerBaseExplanation]:
         """
         Main propagation method of the SAT reasoner.
         Performs unit propagation (aka boolean constraint propagation).
@@ -430,7 +430,7 @@ class SATReasoner(Reasoner):
                 break
 
             if asserted_literal is not None:
-                if not solver.is_literal_entailed(asserted_literal):
+                if not solver.is_entailed(asserted_literal):
                     self._set_from_unit_propagation(asserted_literal, clause_id, solver)
 
         # If no violated clause was detected above, process/propagate new events/bound updates.
@@ -451,7 +451,7 @@ class SATReasoner(Reasoner):
             explanation_literals.append(violated_clause.scope_literal)
             self._bump_activity(violated_clause_id)
 
-        return ReasonerRawExplanation(tuple(explanation_literals))
+        return ReasonerBaseExplanation(tuple(explanation_literals))
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -638,14 +638,14 @@ class SATReasoner(Reasoner):
             self._swap_watch1_and_watch2(clause_id)
         
         # If the 1st watched literal is true, the clause is satisfied. The watch is restored.
-        if solver.is_literal_entailed(clause.literals[clause.watch1_index]):
+        if solver.is_entailed(clause.literals[clause.watch1_index]):
             self._add_watch(clause_id, clause.literals[clause.watch2_index].negation())
             return True
 
         # Search for a true or unbounded literal in the other literals of the clause to set a watch on it.
         for i in range(len(clause.unwatched_indices)):
             lit_neg = clause.literals[clause.unwatched_indices[i]].negation()
-            if not solver.is_literal_entailed(lit_neg):
+            if not solver.is_entailed(lit_neg):
                 self._swap_watch2_and_unwatched_i(clause_id, i)
                 self._add_watch(clause_id, lit_neg)
                 return True
@@ -656,11 +656,11 @@ class SATReasoner(Reasoner):
 
         watch1 = clause.literals[clause.watch1_index]
 
-        if solver.is_literal_entailed(watch1):
+        if solver.is_entailed(watch1):
             return True
 
         # If the clause is violated, deactivate it if possible
-        elif solver.is_literal_entailed(watch1.negation()):
+        elif solver.is_entailed(watch1.negation()):
             return self._process_violated_clause(clause_id, solver) is None
 
         else:

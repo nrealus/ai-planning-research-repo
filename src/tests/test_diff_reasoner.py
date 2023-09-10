@@ -6,7 +6,7 @@ import unittest
 from typing import Optional, Tuple
 
 from src.fundamentals import TRUE_LIT, BoundVal, Lit, SignedVar, Var
-from src.solver import Causes, InvalidBoundUpdateInfo, ReasonerRawExplanation, Solver
+from src.solver import Causes, InvalidBoundUpdateInfo, ReasonerBaseExplanation, Solver
 from src.solver_api import (_flatten_scope_to_lits_conj,
                             _get_or_make_new_scope_lit_from_scope_as_lits_conj,
                             _get_or_make_tautology_of_scope_from_scope_lit,
@@ -199,7 +199,7 @@ class TestDiffReasonerBasics(unittest.TestCase):
         x = self._add_inactive_edge(A, A, -1, solver, diff_reasoner)
         self._mark_edge_active(x, solver)
 
-        self.assertIsInstance(diff_reasoner.propagate(solver), ReasonerRawExplanation)
+        self.assertIsInstance(diff_reasoner.propagate(solver), ReasonerBaseExplanation)
 
         solver.backtrack_to_decision_level(solver.decision_level-1,
                                            (diff_reasoner,))
@@ -209,7 +209,7 @@ class TestDiffReasonerBasics(unittest.TestCase):
         self._add_active_edge(A, B, 2, solver, diff_reasoner)
         self._add_active_edge(B, A, -3, solver, diff_reasoner)
 
-        self.assertIsInstance(diff_reasoner.propagate(solver), ReasonerRawExplanation)
+        self.assertIsInstance(diff_reasoner.propagate(solver), ReasonerBaseExplanation)
         
         solver.backtrack_to_decision_level(solver.decision_level-1,
                                            (diff_reasoner,))
@@ -223,7 +223,7 @@ class TestDiffReasonerBasics(unittest.TestCase):
 
         self._add_active_edge(B, A, -3, solver, diff_reasoner)
 
-        self.assertIsInstance(diff_reasoner.propagate(solver), ReasonerRawExplanation)
+        self.assertIsInstance(diff_reasoner.propagate(solver), ReasonerBaseExplanation)
         
         solver.backtrack_to_decision_level(solver.decision_level-1,
                                            (diff_reasoner,))
@@ -238,7 +238,7 @@ class TestDiffReasonerBasics(unittest.TestCase):
 
         self._add_active_edge(C, A, -5, solver, diff_reasoner)
 
-        self.assertIsInstance(diff_reasoner.propagate(solver), ReasonerRawExplanation)
+        self.assertIsInstance(diff_reasoner.propagate(solver), ReasonerBaseExplanation)
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -321,7 +321,7 @@ class TestDiffReasonerBasics(unittest.TestCase):
                 self.assertEqual((-solver.bound_values[SignedVar.minus(var)], solver.bound_values[SignedVar.plus(var)]), 
                                 (i, 20))
             else:
-                self.assertTrue(solver.is_literal_entailed(solver.presence_literals[var].negation()))
+                self.assertTrue(solver.is_entailed(solver.presence_literals[var].negation()))
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
