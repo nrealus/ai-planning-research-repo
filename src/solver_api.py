@@ -478,7 +478,7 @@ def _get_scope_of_elem_constr_expr(
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-def _flatten_scope_to_lits_conj(
+def _flatten_scope_to_lits_conj(                                    # BUG (detected in test_optionals_chain in test_diff_reasoner.py)
     conj_scope: Tuple[Dict[SignedVar, BoundVal], Tuple[Lit,...]],
     check_entailed_at_top_dec_level: bool,
     solver: Solver,
