@@ -748,6 +748,9 @@ class Solver():
                 # Propagation is done exactly like in the first part of the function, simply
                 # taking into account the fact that the implied literal's variable can't be optional.
 
+                if pending_lit.signed_var not in self.non_optionals_implication_graph:
+                    continue
+
                 literals_directly_implied_by_pending_literal = []
                 for guard_bound, adjacency_set in self.non_optionals_implication_graph[pending_lit.signed_var].items():
 
@@ -826,7 +829,7 @@ class Solver():
             updates them internally to account for the decision level incrementation.
         """
 
-        assert len(self.events_trail[self.decision_level]) > 0
+        assert self.decision_level == 0 or len(self.events_trail[self.decision_level]) > 0
 
         self.decision_level += 1
 
