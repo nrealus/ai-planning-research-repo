@@ -1,22 +1,12 @@
+"""
+This module defines the basic, fundamental building blocks used in the project.
+"""
+
 from __future__ import annotations
 
 #################################################################################
 
 from typing import List, NamedTuple, Sequence, Tuple
-
-#################################################################################
-#################################################################################
-#                                   CONTENTS:
-# - FUNDAMETAL CLASSES:
-#   - VARIABLES
-#   - SIGNED VARIABLES
-#   - BOUND VALUES
-#   - LITERALS
-#
-# - HELPER FUNCTIONS:
-#   - TIGHTENING OF (DISJUNCTIONS OF) LITERALS
-#################################################################################
-#################################################################################
 
 #################################################################################
 # VARIABLES
@@ -26,12 +16,14 @@ class Var(NamedTuple):
     """Represents a variable."""
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-    id: int
+    var_id: int
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 ZERO_VAR = Var(0)
-"""A special Zero variable whose domain will always be equal to the {0} singleton."""
+"""
+A special instance of `Var` whose domain we'll assume to be reduced to the value 0.
+"""
 
 #################################################################################
 # SIGNED VARIABLES
@@ -39,9 +31,11 @@ ZERO_VAR = Var(0)
 
 class SignedVar(NamedTuple):
     """
-    Represents a "signed variable", which is a positive or negative "view" of a variable.
+    Represents so-called signed variables. A `SignedVar` is a positive or negative
+    view on a `Var`.
     
-    Simply put, a variable v can have two signed variables (+v and -v).
+    The positive (resp. negative) signed variable for variable `var` is defined
+    as `SignedVar(var, True)` (resp. `SignedVar(var, False)`).
     """
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -49,7 +43,7 @@ class SignedVar(NamedTuple):
     """The variable of this signed variable."""
 
     plus_sign: bool
-    """The sign of the signed variable. (+: True, -: False)"""
+    """The sign of the signed variable (+: True, -: False)."""
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -57,10 +51,7 @@ class SignedVar(NamedTuple):
     def plus(cls,
         var: Var,
     ) -> SignedVar:
-        """
-        Returns:
-            SignedVar: "-v" signed variable of variable v.
-        """
+        """Syntactic sugar for `SignedVar(var, True)`."""
         return SignedVar(var, True)
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -69,10 +60,7 @@ class SignedVar(NamedTuple):
     def minus(cls,
         var: Var,
     ) -> SignedVar:
-        """
-        Returns:
-            SignedVar: "-v" signed variable of variable v.
-        """
+        """Syntactic sugar for `SignedVar(var, False)`."""
         return SignedVar(var, False)
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -80,7 +68,7 @@ class SignedVar(NamedTuple):
     def opposite_signed_var(self) -> SignedVar:
         """
         Returns:
-            SignedVar: The opposite signed variable.
+            The opposite signed variable.
         """
         return SignedVar(self.var, not self.plus_sign)
 
@@ -90,11 +78,8 @@ class SignedVar(NamedTuple):
 
 class BoundVal(int):
     """
-    Represents signed variables' (upper) bound values.
-
-    This allows to represent both upper and lower bound values of variables in an identical way.
+    Represents the values of a `SignedVar`'s upper bounds / of a `Var`'s lower and upper bounds.
     """
-
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     def __neg__(self) -> BoundVal:
@@ -117,10 +102,10 @@ class BoundVal(int):
     ) -> bool:
         """
         Args:
-            other_bound_value (BoundVal): Other bound value to compare to.
+            other_bound_value: Other bound value to compare to.
         
         Returns:
-            bool: Whether the bound value is stronger (i.e. equal or less) than `other_bound_value`.
+            Whether the bound value is stronger (i.e. equal or less) than `other_bound_value`.
         """
         return self <= other_bound_value
 
@@ -130,11 +115,14 @@ class BoundVal(int):
 
 class Lit(NamedTuple):
     """
-    Represents a literal (aka "bound-literal"), which is an expression on the
-    lower or upper bound of a variable.
-        
-    To deal with the cases of lower and upper bounds in identical ways, a literal
-    actually represents an expression on the upper bound of a signed variable.
+    Represents comparison expressions on `SignedVar`s' upper bounds. For example,
+    `Lit(SignedVar(var, True), BoundVal(5))` (which we sometimes write `[var<=5]`
+    as a shortcut in text) represents the expression "the value of variable `var`
+    is less than or equal to 5".
+
+    By definition of a `SignedVar`, we can represent expressions on both the upper
+    and lower bounds of `Var`s. For example `Lit(SignedVar(var, False), BoundVal(-5))`
+    represents the expression "the value of variable `var` is greater than or equal to 5".
     """
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -153,7 +141,7 @@ class Lit(NamedTuple):
     ) -> Lit:
         """
         Returns:
-            Lit: A [`var` <= `value`] literal (i.e. [+`var` <= +`value`]).
+            A `[var <= value]` literal (i.e. `[+var <= value]`).
         """
         return Lit(SignedVar.plus(var), BoundVal(value))
 
@@ -166,7 +154,7 @@ class Lit(NamedTuple):
     ) -> Lit:
         """
         Returns:
-            Lit: A [`var` >= `value`] literal (i.e. [-`var` <= -`value`]).
+            A `[var >= value]` literal (i.e. `[-var <= -value]`).
         """
         return Lit(SignedVar.minus(var), BoundVal(-value))
 
@@ -175,7 +163,7 @@ class Lit(NamedTuple):
     def negation(self) -> Lit:
         """
         Returns:
-            Lit: The negation of the literal.
+            The negation of this literal.
         """
         return Lit(self.signed_var.opposite_signed_var(), -self.bound_value-BoundVal(1))
     
@@ -185,32 +173,34 @@ class Lit(NamedTuple):
         other_literal: Lit,
     ) -> bool:
         """
+        Args:
+            other_literal: Another literal.
+
         Returns:
-            bool: Whether this literal entails `other_literal`.
-            (i.e. it is on the same signed variable and has a stronger bound value).
+            Whether this literal entails `other_literal`.
+                (i.e. it is on the same signed variable and has a stronger bound value).
         """
         return (self.signed_var == other_literal.signed_var
-            and self.bound_value.is_stronger_than(other_literal.bound_value))
+                and self.bound_value.is_stronger_than(other_literal.bound_value))
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 TRUE_LIT = Lit.leq(ZERO_VAR, 0)
 """
-A special True (or tautology) literal.
+A special "true" (or tautology) literal.
 
-Corresponds to the [ZERO_VAR <= 0] literal.
+Corresponds to the `[ZERO_VAR <= 0]` literal.
 
-Relies on the fact that the special Zero variable is always equal to 0,
+Relies on the fact that the `ZERO_VAR`'s value is always 0,
 """
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 FALSE_LIT = TRUE_LIT.negation()
 """
-A special False (or contradiction) literal.
+A special "false" (or contradiction) literal.
 
-Is the negation of the "True" literal, which corresponds to
-the [ZERO_VAR >= 1] literal (i.e. [-ZERO_VAR <= -1]).
+Is the negation of the true literal, which corresponds to the `[ZERO_VAR >= 1]` literal.
 """
 
 #################################################################################
@@ -225,11 +215,11 @@ def tighten_disj_literals(
     (in lexicographic order - see `Lit` attributes) and, in case there were
     multiple literals on the same signed variable, only keeping the weakest one.
      
-    The returned tuple of literals is said to be tightened.
-     
-    Note that nowhere in the code is it "fundamentally required" for (a clause/disjunction of)
-    literals to be tightened. (At least I think so... REVIEW). However, it is
-    desirable to tighten them, for example to reduce the size of clauses.
+    Args:
+        literals: A set of literals
+    
+    Returns:
+        A "tightened" or "tight" set of literals.
     """
 
     lits: List[Lit] = sorted(literals)
@@ -255,13 +245,17 @@ def are_tightened_disj_literals_tautological(
     literals: Tuple[Lit,...]
 ) -> bool:
     """
-    Returns:
-        bool: Whether the disjunction of given (tightened) literals is tautological.
-        (i.e. is always true, because of two literals [v<=x] and [v>=y] with y<=x).
+    Args:
+        literals: A set of literals assumed to be tight.
 
-    !!! Requires the given set of literals to have been tightened !!! Indeed, the
-    function assumes that the literals are sorted and that there is only one literal
-    per signed variable.
+    Returns:
+        Whether the disjunction of the given literals is tautological (i.e. is
+            always true, because of two literals `[var<=a]` and `[var>=b]`
+            with `a<=b`).
+
+    Raises:
+        ValueError: If the given set of literals is empty.
+        ValueError: If the given set of literals is not tight.
     """
 
     n = len(literals)
@@ -274,7 +268,9 @@ def are_tightened_disj_literals_tautological(
     i = 0
     while i < n-1:
 
-        if not (literals[i] < literals[i+1] and literals[i].signed_var != literals[i+1].signed_var):
+        if not (literals[i] < literals[i+1]
+                and literals[i].signed_var != literals[i+1].signed_var
+        ):
             raise ValueError(("The set of literals given to ",
                              "`are_tightened_literals_tautological` is not tightened."))
 
