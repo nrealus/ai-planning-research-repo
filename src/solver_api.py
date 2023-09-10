@@ -53,8 +53,8 @@ def add_new_optional_variable(
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 def add_new_presence_variable(
-    solver: Solver,
     scope_literal: Lit,      
+    solver: Solver,
 ) -> Var:
     """
     Adds a new presence variable, defined in the scope corresponding to
@@ -583,13 +583,15 @@ def _insert_implication_between_literals_on_non_optional_vars(
     solver: Solver,
 ) -> None:
     """
-    Adds an implication between two literals (defined on non-optional variables) to the solver.
+    Adds an implication between two literals (defined on
+    non-optional variables) to the solver.
     """
 
     if (solver.presence_literals[lit_from.signed_var.var] != TRUE_LIT
         or solver.presence_literals[lit_to.signed_var.var] != TRUE_LIT
     ):
-        raise ValueError("Only implications between non-optional variables are supported")
+        raise ValueError(("Only implications between non-optional ",
+                          "variables are supported"))
 
     lit_from_neg = lit_from.negation()
     lit_to_neg = lit_to.negation()
@@ -621,7 +623,8 @@ def _insert_implication_between_literals_on_non_optional_vars(
                                                      Causes.ImplicationPropagation(lit_from))
 
         if isinstance(bound_update_result, InvalidBoundUpdateInfo):
-            raise ValueError("""Inconsistency on the addition of the implication {0} => {1}""".format(lit_from, lit_to))
+            raise ValueError(("Inconsistency on the addition of the ",
+                              "implication {0} => {1}".format(lit_from, lit_to)))
 
     # If to_literal is false, from_literal needs to be enforced as false.
     # (Indeed ((not to) => (not from)) <=> (to or (not from)))
@@ -632,9 +635,10 @@ def _insert_implication_between_literals_on_non_optional_vars(
                                                      Causes.ImplicationPropagation(lit_to))
 
         if isinstance(bound_update_result, InvalidBoundUpdateInfo):
-            raise ValueError("""Inconsistency on the addition of the implication {0} => {1}""".format(lit_from, lit_to))
+            raise ValueError(("Inconsistency on the addition of the ",
+                              "implication {0} => {1}".format(lit_from, lit_to)))
 
-#################################################################################
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 def _insert_new_scope_from_scope_as_lits_conj_and_scope_lit(
     lits_of_scope: Tuple[Lit,...],
