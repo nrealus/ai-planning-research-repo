@@ -288,4 +288,41 @@ class TestDiffReasonerBasics(unittest.TestCase):
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
+    def test_optional_chain(self):
+
+        solver = Solver()
+        diff_reasoner = DiffReasoner()
+
+        vars = []
+        context = TRUE_LIT
+
+        for i in range(10):
+            prez = Lit.geq(add_new_presence_variable(context, solver), 1)
+            var = add_new_optional_variable((0, 20), True, prez, solver)
+            if i > 0:
+                self._add_delay(vars[i-1][1], var, 1, solver, diff_reasoner)
+            vars.append((prez, var))
+            context = prez
+        
+        diff_reasoner.propagate(solver)
+
+        for i, (_, var) in enumerate(vars):
+            print((-solver.bound_values[SignedVar.minus(var)], solver.bound_values[SignedVar.plus(var)]))
+            self.assertEqual((-solver.bound_values[SignedVar.minus(var)], solver.bound_values[SignedVar.plus(var)]), 
+                             (i, 20))
+        
+        self.assertEqual(solver.set_bound_value(SignedVar.plus(vars[5][1]), BoundVal(4), Causes.Decision()),
+                         True)
+
+        diff_reasoner.propagate(solver)
+
+        for i, (_, var) in enumerate(vars):
+            if i <= 4:
+                self.assertEqual((-solver.bound_values[SignedVar.minus(var)], solver.bound_values[SignedVar.plus(var)]), 
+                                (i, 20))
+            else:
+                self.assertTrue(solver.is_literal_entailed(solver.presence_literals[var].negation()))
+
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
 #################################################################################
