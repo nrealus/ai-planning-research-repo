@@ -8,12 +8,8 @@ from typing import Optional, Tuple
 from src.fundamentals import (TRUE_LIT, BoundVal, Lit, SignedVar,
                               tighten_disj_literals)
 
-from src.solver import (Solver, Decisions, Causes, InvalidBoundUpdateInfo)
-from src.solver_api import (
-    _insert_implication_between_literals_on_non_optional_vars,
-    _insert_new_scope_from_scope_as_lits_conj_and_scope_lit, add_constraint,
-    add_new_non_optional_variable, add_new_optional_variable,
-    add_new_presence_variable)
+from src.solver import Solver, Causes
+from src.solver_api import add_new_non_optional_variable
 from src.solver_sat_reasoner import SATReasoner
 
 #################################################################################
