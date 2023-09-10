@@ -727,7 +727,9 @@ class Solver():
             if prez_lit != TRUE_LIT:
                 return True
             
-            # If the variable is not optional, we can perform lazy propagation.
+            # If the variable is not optional, we can perform "implication
+            # propagation" (which we can call lazy propagation, since we
+            # perform it "implicitly" as part of the bound update.
             #
             # We need to succesfully propagate the direct implications
             # of all events/updates caused by this bound update attempt.
@@ -770,7 +772,7 @@ class Solver():
                     # is unsuccessful and a conflict indicating the implied literal as the cause
                     # for failure is returned. Because we know the var of the implied literal to
                     # be non-optional, it cannot be made absent to resolve the problem.
-                    if ((-self.bound_values[implied_lit.signed_var.opposite_signed_var()])
+                    if (not (-self.bound_values[implied_lit.signed_var.opposite_signed_var()])
                         .is_stronger_than(implied_lit.bound_value)
                     ):
                         return InvalidBoundUpdateInfo(implied_lit, cause)
@@ -783,7 +785,7 @@ class Solver():
                                implied_lit.bound_value,
                                self.bound_values[implied_lit.signed_var],
                                (self.decision_level, j+1),
-                               self.bound_values_event_indices[implied_lit.signed_var],
+                               self.bound_values_event_indices.get(implied_lit.signed_var, None),
                                Causes.ImplicationPropagation(implied_lit))
 
                     self.events_trail[self.decision_level].append(ev)
