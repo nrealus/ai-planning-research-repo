@@ -895,9 +895,9 @@ class DiffReasoner(Reasoner):
                 
                 # If a watched literal was newly entailed, check if makes enabling conditions of an edge / propagator
                 # group true. If so, enqueue such edges / propagator groups to pending active propagators.
-                for guard_bound_val in self.propagators_database.watches.setdefault(ev.signed_var, {}):
+                for guard_bound_val, propagator_groups_and_enablers in self.propagators_database.watches.setdefault(ev.signed_var, {}).items():
                     if ev.new_bound_value.is_stronger_than(guard_bound_val):
-                        for (propagator_group_id, enabler) in self.propagators_database.watches[ev.signed_var][guard_bound_val]:
+                        for (propagator_group_id, enabler) in propagator_groups_and_enablers:
                             if solver.is_literal_entailed(enabler.active) and solver.is_literal_entailed(enabler.valid):
                                 self.propagators_pending_for_activation.insert(0, (propagator_group_id, enabler))
                 
@@ -910,7 +910,6 @@ class DiffReasoner(Reasoner):
                     and ev.cause.reasoner == self
                     and isinstance(ev.cause.inference_info, DiffReasoner.InferenceCauses.EdgeProp)
                 ):
-
                     # We generated this event ourselves by edge propagation, we can safely
                     # ignore it as it would been handled immediately    
                     continue
