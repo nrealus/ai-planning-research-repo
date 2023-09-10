@@ -151,72 +151,99 @@ def _actually_post_reified_constraint(
     diff_reasoner: DiffReasoner,
 ) -> Optional[InvalidBoundUpdateInfo]:
     """
+    TODO
     """
     
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+ 
+    def make_safe(
+        clause_lits: Tuple[Lit,...],
+        scope_lit: Lit,
+    ) -> Tuple[Tuple[Lit,...], Lit]:
+        """
+        NOTE: this could be generalized to look at literals
+        in the clause as potential scopes
+        """
+
+        if scope_lit == TRUE_LIT:
+            return (clause_lits,
+                    TRUE_LIT)
+        
+        # The clause can never be true, so it will have to be made absent.
+        if len(clause_lits) == 0:
+            return ((scope_lit.negation(),),
+                    TRUE_LIT)
+
+        if all(solver.is_implication_true(solver.presence_literals[lit.signed_var.var],
+                                          scope_lit)
+                                          for lit in clause_lits):
+            return (clause_lits,
+                    scope_lit)
+
+        return (tighten_disj_literals(clause_lits+(scope_lit.negation(),)),
+                TRUE_LIT)
+
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-    def add_clause_to_sat_reasoner(
+    def preprocess_then_add_scoped_clause_to_sat_reasoner(
         clause_lits: Tuple[Lit,...],
-        scope_lits: Lit,
-        clause_literals_already_known_to_be_tightened: bool,
+        scope_lit: Lit,
+        clause_lits_already_tightened: bool,
     ) -> Optional[InvalidBoundUpdateInfo]:
+        """
+        Preprocesses the clause literals and scope literal by:
 
-        if clause_literals_already_known_to_be_tightened:
-            clause_tightened_lits = tighten_disj_literals(clause_lits)
+        - Tightening the clause literals if they weren't already
+        
+        - Removing "unnecessary" literals from the clause literals 
+        (those already known to be false). 
+            - If this removes all literals, then the clause is false 
+            and thus we must leave its scope: we set the scope literal to false.
+        
+        - Making the clause literals and the scope literal "safe" for unit
+        propagation, by (in the general case) adding the negation of the scope
+        literal to the clause literals, and changing the scope literal to TRUE_LIT.
+        
+        - Adding the "safe" clause literals and scope literal to the SATReasoner
+        as a fixed/non-learned scoped clause.
+        """
+
+        if clause_lits_already_tightened:
+            tightened_lits = tighten_disj_literals(clause_lits)
         else:
-            clause_tightened_lits = clause_lits
-
+            tightened_lits = clause_lits
+            
         # Remove clause literals that are guaranteed to not become true
         # (i.e. whose value is False / whose negation literal is entailed)
-        lits: List[Lit] = list(clause_tightened_lits)
-        n: int = len(lits)
-        i: int = 0
-        j: int = 0
+        true_or_unbounded_lits = list(tightened_lits)
+        n = len(true_or_unbounded_lits)
+        i = 0
+        j = 0
         while i < n-j:
-            if solver.is_literal_entailed(lits[i].negation()):
-                lits.pop(i)
+            if solver.is_literal_entailed(true_or_unbounded_lits[i].negation()):
+                true_or_unbounded_lits.pop(i)
                 j += 1
             else:
                 i += 1
 
-        clause_tightened_lits = tuple(lits)
+        # If the preprocessing of the clause literals removed all of them,
+        # then the scope literal must be enforced to be false.
 
-        processed_scope_lit: Lit = scope_lits
+        if len(true_or_unbounded_lits) == 0:
 
-        # Analyze processed clause literals and scope.
-        #
-        # If the processing of the clause literals removed all of them,
-        # then the scope must be enforced to be false.
-        #
-        # If the processed clause literals are not empty, the we must make
-        # sure the clause added to the solver (or rather its sat reasoner)
-        # can be unit propagated safely, as its literals' variables can be optional.
-        #
-        # NOTE: this could be generalized to look at literals in the clause as potential scopes
-
-        if len(clause_tightened_lits) == 0:
-
-            processed_scope_literal_neg = processed_scope_lit.negation()
-
-            res = solver.set_bound_value(processed_scope_literal_neg.signed_var,
-                                         processed_scope_literal_neg.bound_value,
+            res = solver.set_bound_value(scope_lit.negation().signed_var,
+                                         scope_lit.negation().bound_value,
                                          Causes.Encoding()) 
-            if isinstance(res, InvalidBoundUpdateInfo):
-                return res
+            return res if isinstance(res, InvalidBoundUpdateInfo) else None
 
-        elif all(solver.is_implication_true(solver.presence_literals[lit.signed_var.var],
-                                            processed_scope_lit)
-                                            for lit in clause_tightened_lits
-        ):
-            pass
-        
-        else:
-            clause_tightened_lits = tighten_disj_literals(clause_tightened_lits
-                                                          +(processed_scope_lit.negation(),))
-            processed_scope_lit = TRUE_LIT
+        # The clause literals may have literals on optional variables.
+        # Thus the clause must be made "safe" for unit propagation in the SATReasoner.
 
-        sat_reasoner.add_new_fixed_clause_with_scope(clause_tightened_lits,
-                                                     processed_scope_lit)
+        safe_clause_lits, safe_scope_lit = make_safe(tuple(true_or_unbounded_lits),
+                                                     scope_lit)
+
+        sat_reasoner.add_new_fixed_clause_with_scope(safe_clause_lits,
+                                                     safe_scope_lit)
         return None
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -237,51 +264,68 @@ def _actually_post_reified_constraint(
 
             assert solver.is_implication_true(scope_lit, solver.presence_literals[lit.signed_var.var])
 
-            add_clause_to_sat_reasoner((constr_lit.negation(), lit), scope_lit, False)
-            add_clause_to_sat_reasoner((lit.negation(), constr_lit), scope_lit, False)
+            preprocess_then_add_scoped_clause_to_sat_reasoner((constr_lit.negation(), lit),
+                                                              scope_lit,
+                                                              False)
+            preprocess_then_add_scoped_clause_to_sat_reasoner((lit.negation(), constr_lit),
+                                                              scope_lit,
+                                                              False)
+            return None
 
         case (ElemConstrExpr.Kind.MAX_DIFFERENCE,
               (Var() as from_var, Var() as to_var, int() as max_diff)
         ):
             diff_reasoner.add_reified_difference_constraint(constr_lit,
-                                                            from_var, to_var, max_diff,
+                                                            from_var,
+                                                            to_var,
+                                                            max_diff,
                                                             solver)
+            return None
 
         case ElemConstrExpr.Kind.OR, [Lit(), *_] as lits:
 
             if solver.is_literal_entailed(constr_lit):
 
-                add_clause_to_sat_reasoner(lits, scope_lit, False)
+                preprocess_then_add_scoped_clause_to_sat_reasoner(lits, 
+                                                                  scope_lit, 
+                                                                  False)
                 return None
             
             elif solver.is_literal_entailed(constr_lit.negation()):
 
                 for lit in lits:
 
-                    res = add_clause_to_sat_reasoner((lit.negation(),), scope_lit, False)
+                    res = preprocess_then_add_scoped_clause_to_sat_reasoner((lit.negation(),),
+                                                                            scope_lit,
+                                                                            False)
                     if res is not None:
                         return res
 
                 return None
             
             else:
-                clause_tightened_lits = tighten_disj_literals((constr_lit.negation(),)+lits)
 
-                if are_tightened_disj_literals_tautological(clause_tightened_lits):
+                tightened_clause_lits = tighten_disj_literals((constr_lit.negation(),)+lits)
 
-                    res = add_clause_to_sat_reasoner(clause_tightened_lits, scope_lit, True)
+                if are_tightened_disj_literals_tautological(tightened_clause_lits):
+
+                    res = preprocess_then_add_scoped_clause_to_sat_reasoner(tightened_clause_lits,
+                                                                            scope_lit,
+                                                                            True)
                     if res is not None:
                         return res
                 
                 for lit in lits:
 
-                    res = add_clause_to_sat_reasoner((lit.negation(), constr_lit), scope_lit, False)
+                    res = preprocess_then_add_scoped_clause_to_sat_reasoner((lit.negation(), constr_lit),
+                                                                            scope_lit,
+                                                                            False)
                     if res is not None:
                         return res
 
                 return None
 
-        case ElemConstrExpr.Kind.AND, [Lit(), *_] as lits:
+        case ElemConstrExpr.Kind.AND, [Lit(), *_]:
 
             return _actually_post_reified_constraint((elem_constr_expr.negation(), constr_lit.negation()),
                                                      solver,
