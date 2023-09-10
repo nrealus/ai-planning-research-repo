@@ -192,7 +192,7 @@ class Lit(NamedTuple):
         return (self.signed_var == other_literal.signed_var
             and self.bound_value.is_stronger_than(other_literal.bound_value))
 
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 TRUE_LIT = Lit.leq(ZERO_VAR, 0)
 """
