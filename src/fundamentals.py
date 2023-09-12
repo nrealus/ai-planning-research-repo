@@ -6,7 +6,7 @@ from __future__ import annotations
 
 #################################################################################
 
-from typing import List, NamedTuple, Sequence, Tuple
+from typing import Dict, Generic, List, NamedTuple, Sequence, Set, Tuple, TypeVar
 
 #################################################################################
 # VARIABLES
@@ -22,7 +22,7 @@ class Var(NamedTuple):
 
 ZERO_VAR = Var(0)
 """
-A special instance of `Var` whose domain we'll assume to be reduced to the value 0.
+A special instance of `Var` whose domain will be assumed to be the single value 0.
 """
 
 #################################################################################
@@ -31,19 +31,26 @@ A special instance of `Var` whose domain we'll assume to be reduced to the value
 
 class SignedVar(NamedTuple):
     """
-    Represents so-called signed variables. A `SignedVar` is a positive or negative
-    view on a `Var`.
+    Represents so-called signed variables. A `SignedVar` 
+    is a positive or negative view on a `Var`.
     
-    The positive (resp. negative) signed variable for variable `var` is defined
-    as `SignedVar(var, True)` (resp. `SignedVar(var, False)`).
+    The positive (resp. negative) signed variable for variable `var` is
+    defined as `SignedVar(var, True)` (resp. `SignedVar(var, False)`).
     """
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     var: Var
-    """The variable of this signed variable."""
+    """The `SignedVar`'s variable."""
 
     plus_sign: bool
-    """The sign of the signed variable (+: True, -: False)."""
+    """The `SignedVar`'s sign (True: +, False: -)."""
+
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+    @property
+    def opposite(self) -> SignedVar:
+        """The `SignedVar`'s opposite (same variable, opposite sign)."""
+        return SignedVar(self.var, not self.plus_sign)
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -63,22 +70,14 @@ class SignedVar(NamedTuple):
         """Syntactic sugar for `SignedVar(var, False)`."""
         return SignedVar(var, False)
 
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-    def opposite_signed_var(self) -> SignedVar:
-        """
-        Returns:
-            The opposite signed variable.
-        """
-        return SignedVar(self.var, not self.plus_sign)
-
 #################################################################################
 # BOUND VALUES
 #################################################################################
 
 class BoundVal(int):
     """
-    Represents the values of a `SignedVar`'s upper bounds / of a `Var`'s lower and upper bounds.
+    Represents the value of an upper bound on a `SignedVar`. As such,
+    it also represents the value of a lower or upper bound on a `Var`.
     """
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -105,7 +104,8 @@ class BoundVal(int):
             other_bound_value: Other bound value to compare to.
         
         Returns:
-            Whether the bound value is stronger (i.e. equal or less) than `other_bound_value`.
+            Whether the bound value is stronger (i.e. equal or less)    \
+                than `other_bound_value`.
         """
         return self <= other_bound_value
 
@@ -115,22 +115,29 @@ class BoundVal(int):
 
 class Lit(NamedTuple):
     """
-    Represents comparison expressions on `SignedVar`s' upper bounds. For example,
-    `Lit(SignedVar(var, True), BoundVal(5))` (which we sometimes write `[var<=5]`
-    as a shortcut in text) represents the expression "the value of variable `var`
-    is less than or equal to 5".
-
-    By definition of a `SignedVar`, we can represent expressions on both the upper
-    and lower bounds of `Var`s. For example `Lit(SignedVar(var, False), BoundVal(-5))`
-    represents the expression "the value of variable `var` is greater than or equal to 5".
+    Represents an upper bound on a `SignedVar`. As such, it
+    actually represents an upper bound or a lower bound on a `Var`.
+        
+    For example, `Lit(SignedVar(var, True), BoundVal(5))` (which we
+    sometimes write `[var<=5]` as a shortcut in text) represents the
+    expression "the value of variable `var` is less than or equal to 5".
+    Similarly `Lit(SignedVar(var, False), BoundVal(-5))` represents the
+    expression "the value of variable `var` is greater than or equal to 5".
     """
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     signed_var: SignedVar
-    """The signed variable of the literal."""
+    """The `Lit`'s signed variable"""
 
     bound_value: BoundVal
-    """The (upper) bound value of the literal."""
+    """The value of the `Lit`'s (upper) bound."""
+    
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+    @property
+    def negated(self) -> Lit:
+        """The `Lit`'s negation."""
+        return Lit(self.signed_var.opposite, -self.bound_value-BoundVal(1))
     
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -159,16 +166,7 @@ class Lit(NamedTuple):
         return Lit(SignedVar.minus(var), BoundVal(-value))
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-    
-    def negation(self) -> Lit:
-        """
-        Returns:
-            The negation of this literal.
-        """
-        return Lit(self.signed_var.opposite_signed_var(), -self.bound_value-BoundVal(1))
-    
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-    
+        
     def entails(self,
         other_literal: Lit,
     ) -> bool:
@@ -177,13 +175,13 @@ class Lit(NamedTuple):
             other_literal: Another literal.
 
         Returns:
-            Whether this literal entails `other_literal`.
-                (i.e. it is on the same signed variable and has a stronger bound value).
+            Whether this literal entails `other_literal` (i.e. it is on the \
+                same signed variable and has a stronger bound value).
         """
         return (self.signed_var == other_literal.signed_var
                 and self.bound_value.is_stronger_than(other_literal.bound_value))
 
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 TRUE_LIT = Lit.leq(ZERO_VAR, 0)
 """
@@ -196,7 +194,7 @@ Relies on the fact that the `ZERO_VAR`'s value is always 0,
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-FALSE_LIT = TRUE_LIT.negation()
+FALSE_LIT = TRUE_LIT.negated
 """
 A special "false" (or contradiction) literal.
 
@@ -207,13 +205,13 @@ Is the negation of the true literal, which corresponds to the `[ZERO_VAR >= 1]` 
 # TIGHTENING OF (DISJUNCTIONS OF) LITERALS
 #################################################################################
 
-def tighten_disj_literals(
+def tighten_literals(
     literals: Sequence[Lit]
 ) -> Tuple[Lit,...]:
     """
-    "Tightens" a (disjunctive) set of literals. This means sorting the literals
-    (in lexicographic order - see `Lit` attributes) and, in case there were
-    multiple literals on the same signed variable, only keeping the weakest one.
+    "Tightens" a (disjunctive) set of literals. This means sorting them
+    in lexicographic order (as tuples) and, in case there are multiple
+    of them on the same `SignedVar`, only keeping the weakest one.
      
     Args:
         literals: A set of literals
@@ -241,17 +239,17 @@ def tighten_disj_literals(
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-def are_tightened_disj_literals_tautological(
+def are_tightened_literals_tautological(
     literals: Tuple[Lit,...]
 ) -> bool:
     """
     Args:
-        literals: A set of literals assumed to be tight.
+        literals: A set of literals, assumed to be tight.
 
     Returns:
-        Whether the disjunction of the given literals is tautological (i.e. is
-            always true, because of two literals `[var<=a]` and `[var>=b]`
-            with `a<=b`).
+        Whether the disjunction formed by then given literals is \
+            tautological (i.e. is always true, because of two    \
+            literals `[var<=a]` and `[var>=b]` with `a<=b`).
 
     Raises:
         ValueError: If the given set of literals is empty.
@@ -274,7 +272,7 @@ def are_tightened_disj_literals_tautological(
             raise ValueError(("The set of literals given to ",
                              "`are_tightened_literals_tautological` is not tightened."))
 
-        if literals[i].signed_var.opposite_signed_var() == literals[i+1].signed_var:
+        if literals[i].signed_var.opposite == literals[i+1].signed_var:
             if literals[i].bound_value - literals[i+1].bound_value <= 0:
                 return True
         i += 1
@@ -282,3 +280,150 @@ def are_tightened_disj_literals_tautological(
     return False
 
 #################################################################################
+# LITERAL GUARDED SETS / SETS GUARDED BY LITERALS
+#################################################################################
+
+T = TypeVar('T')
+
+class SetGuardedByLiterals(Generic[T]):
+    """
+    Represents a "guarded" collection/set of elements of (generic)
+    type `T`. Each element is "guarded" by a literal (as well as
+    all literals weaker than it, which is implied).
+
+    This class is most notably used for the implication graph on non optional
+    variables in `Solver`, as well as for (watched) literals' "watchlists" in
+    `SATReasoner` and `DiffReasoner`.
+    """
+    
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+    def __init__(self):
+        self._data: Dict[SignedVar, Dict[BoundVal, Set[T]]] = {}
+    
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+    def add(self,
+        element: T,
+        guard_literal: Lit,
+    ) -> None:
+        """
+        Adds a new `element` guarded by `guard_literal` to the colleciton.
+
+        Args:
+            element: An element to add to the collection.
+
+            guard_literal: The literal that should guard `element`.
+        
+        Raises:
+            ValueError: If `element` is already present and guarded by `guard_literal`.
+
+        Note:
+            An element can be added when it wasn't already guarded by a
+            literal stronger than `guard_literal`. But these elements
+            are basically duplicates, since an element being guarded
+            by a certain literal implies it being guarded by all literals
+            stronger than it. We do not make the effort to remove such a
+            duplicate if there is any. However, when using `elements_guarded_by`,
+            we return only unique elements (no duplicates), so this is not an issue.
+        """
+        
+        if guard_literal.signed_var not in self._data:
+            self._data[guard_literal.signed_var] = {}
+        
+        if guard_literal.bound_value not in self._data[guard_literal.signed_var]:
+            self._data[guard_literal.signed_var][guard_literal.bound_value] = set()
+
+        if element in self.elements_guarded_by(guard_literal):
+            raise ValueError("Element already present (guarded by {0}).".format(guard_literal))
+        
+        self._data[guard_literal.signed_var][guard_literal.bound_value].add(element)
+
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+    def remove(self,
+        element: T,
+        guard_literal: Lit,
+    ) -> None:
+        """
+        Removes an `element` guarded by `guard_literal` from the colleciton.
+
+        Args:
+            element: An element to remove from the collection.
+
+            guard_literal: The literal that guards `element`.
+        
+        Raises:
+            ValueError | KeyError: If `element` is not present  \
+                or not guarded by `guard_literal`.
+        """
+        
+        self._data[guard_literal.signed_var][guard_literal.bound_value].remove(element)
+
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+    def remove_all_on(self,
+        signed_var: SignedVar,
+    ) -> None:
+        """
+        Removes all elements guarded by literals on the given signed variable.
+        
+        Raises:whose
+            KeyError: If no guard literal on `signed_var` is registered.
+        """
+        
+        self._data.pop(signed_var)
+
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+    def elements_guarded_by(self,
+        guard_literal: Lit,
+    ) -> Tuple[T,...]:
+        """
+        Returns all elements guarded by the given literal (as well as all
+        literals stronger than it, which is implied).
+
+        Args:
+            guard_literal: The literal whose guarded elements to return.
+
+        Returns:
+            An immutable sequence (tuple), with no duplicates, containing   \
+                all elements guarded by the `guard_literal`.
+        """
+
+        if guard_literal.signed_var not in self._data:
+            return ()
+
+        res = set()
+
+        for guard_bound_value, guarded_elements in self._data[guard_literal.signed_var].items():
+            if guard_literal.bound_value.is_stronger_than(guard_bound_value):
+                res.update(guarded_elements)
+
+        return tuple(res)
+    
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+    def has_elements_guarded_by(self,
+        guard_literal: Lit
+    ) -> bool:
+        """
+
+        Args:
+            guard_literal: The literal for which we want to check for.
+
+        Returns:
+            Whether there are any elements guarded by the given literal     \
+                (as well as all literals stronger than it, which is implied).
+        """
+        
+        if guard_literal.signed_var not in self._data:
+            return False
+        
+        for guard_bound_value in self._data[guard_literal.signed_var]:
+            if guard_literal.bound_value.is_stronger_than(guard_bound_value):
+                return True
+        
+        return False
+    
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
