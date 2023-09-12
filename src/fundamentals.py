@@ -368,7 +368,7 @@ class SetGuardedByLiterals(Generic[T]):
         """
         Removes all elements guarded by literals on the given signed variable.
         
-        Raises:whose
+        Raises:
             KeyError: If no guard literal on `signed_var` is registered.
         """
         

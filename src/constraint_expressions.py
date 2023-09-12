@@ -255,9 +255,7 @@ class ElemConstrExpr(NamedTuple):
 
     @property
     def negated(self) -> ElemConstrExpr:
-        """
-        TODO
-        """
+        """The negated elementary constraint expression."""
 
         match self.kind, self.terms:
 
