@@ -1,0 +1,34 @@
+site_name: AI Planning Research Project
+
+theme:
+  name: material
+
+plugins:
+- mkdocstrings:
+    handlers:
+      python:
+        options:
+          docstring_section_style: list
+          docstring_style: google
+#          group_by_category: false
+          heading_level: 3
+          members_order: source
+          show_category_heading: true
+          show_if_no_docstring: true
+          show_signature_annotations: true
+          show_root_heading: false
+          show_root_toc_entry: false
+
+nav:
+  - Aries-like Solver Overview: overview.md
+
+  - Reference:
+    - Fundamentals: fundamentals.md
+    - Constraint Expressions: constraint_expressions.md
+    - Solver:
+      - Common: common.md
+      - Solver State: solver_state.md
+      - Solver main class: solver.md
+  
+extra_css:
+  - stylesheets/extra_style.css
