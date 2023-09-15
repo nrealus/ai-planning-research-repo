@@ -1,3 +1,12 @@
+"""
+This module defines both "high-level" and "low-level" constraint expressions.
+
+"High-level" (or "natural") constraint expressions (`ConstrExpr`) are specified
+by the user and fed to the solver. "Low-level" (or "elementary") constraint
+expressions (`ElemConstrExpr`) are used internally by the solver, and are obtained
+by the decomposing "high-level" constraint expressions.
+"""
+
 from __future__ import annotations
 
 #################################################################################
@@ -5,17 +14,9 @@ from __future__ import annotations
 from enum import Enum, auto
 from typing import NamedTuple, Sequence, Tuple, Union
 
-from .fundamentals import (FALSE_LIT, TRUE_LIT, ZERO_VAR, Lit, Var,
-                          are_tightened_disj_literals_tautological,
-                          tighten_disj_literals)
-
-#################################################################################
-#################################################################################
-#                                   CONTENTS:
-# - ("NATURAL") CONSTRAINT EXPRESSIONS
-# - ELEMENTARY CONSTRAINT EXPRESSIONS
-#################################################################################
-#################################################################################
+from src.fundamentals import (FALSE_LIT, TRUE_LIT, ZERO_VAR, Lit, Var,
+                              are_tightened_literals_tautological,
+                              tighten_literals)
 
 #################################################################################
 # ("NATURAL") CONSTRAINT EXPRESSIONS
@@ -23,15 +24,14 @@ from .fundamentals import (FALSE_LIT, TRUE_LIT, ZERO_VAR, Lit, Var,
 
 class ConstrExpr(NamedTuple):
     """
-    Represents a constraint in a "front-facing" / "front-end" / "natural" view for the user.
+    Represents a "high-level" or "natural" constraint, specified by the user.
 
-    No errors will be raised if an incorrect / inconsistent / incompatible
-    instantiation is made. (i.e. constraint type and terms are inconsistent)
-
-    However, an error may be raised during processing, if the expression could not 
-    be interpreted (because it is incorrect).
+    Warning:
+        No errors will be raised if an incorrect / inconsistent / incompatible\
+            instantiation is made (i.e. constraint type and terms are inconsistent).\
+            However, errors may be raised during further processing, if the\
+            expression cannot be interpreted.
     """
-    
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     class Kind(Enum):
@@ -48,12 +48,26 @@ class ConstrExpr(NamedTuple):
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     kind: Kind
+    """Represents the type or kind of constraint."""
 
-    terms: Union[Tuple[Var, Var],                           # - 2 boolean variables
-                 Tuple[Tuple[Var, int], Tuple[Var, int]],   # - 2 integer (numeric) "atoms":
-                                                            #   (variables + constant offsets)
-                 Tuple[Lit,...]]                            # - n literals
-                                                            #   (strictly 2 for "IMPLY" constraints)
+    terms: Union[Tuple[Var, Var],
+                 Tuple[Tuple[Var, int], Tuple[Var, int]],                            
+                 Tuple[Lit,...]]
+    """
+    Contains the terms of the constraint.
+
+    The kind of constraint will have to match the types of terms to be
+    successfully interpreted. The possibles types are the following:
+
+    -`Tuple[Var, Var]`: 2 boolean variables. For `EQ` and `NEQ` constraints.
+
+    -`Tuple[Tuple[Var, int], Tuple[Var, int]]`: 2 integer "atoms". An integer\
+        "atom" is a variable + a constant (integer) offset. For `LEQ`, `LT`, `GEQ`,\
+        `GT`, `EQ`, `NEQ` constraints.
+        
+    -`Tuple[Lit,...]`: any number of literals. For `OR`, `AND`, `IMPLY` constraints.\
+        IMPLY constraints require excatly two literals, however.
+    """
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
         
@@ -64,6 +78,11 @@ class ConstrExpr(NamedTuple):
         var_right: Var,
         offset_right: int,
     ) -> ConstrExpr:
+        """
+        Returns:
+            A "high-level" constraint expression for the\
+            constraint `var_left+offset_left <= var_right+offset_right`.
+        """
         return ConstrExpr(ConstrExpr.Kind.LEQ, ((var_left, offset_left),
                                                 (var_right, offset_right)))
 
@@ -76,6 +95,11 @@ class ConstrExpr(NamedTuple):
         var_right: Var,
         offset_right: int,
     ) -> ConstrExpr:
+        """
+        Returns:
+            A "high-level" constraint expression for the\
+            `var_left+offset_left < var_right+offset_right`.
+        """
         return ConstrExpr(ConstrExpr.Kind.LT, ((var_left, offset_left),
                                                (var_right, offset_right)))
 
@@ -88,6 +112,11 @@ class ConstrExpr(NamedTuple):
         var_right: Var,
         offset_right: int,
     ) -> ConstrExpr:
+        """
+        Returns:
+            A "high-level" constraint expression for the\
+            `var_left+offset_left >= var_right+offset_right`.
+        """
         return ConstrExpr(ConstrExpr.Kind.GEQ, ((var_left, offset_left),
                                                 (var_right, offset_right)))
 
@@ -100,6 +129,11 @@ class ConstrExpr(NamedTuple):
         var_right: Var,
         offset_right: int,
     ) -> ConstrExpr:
+        """
+        Returns:
+            A "high-level" constraint expression for the\
+            `var_left+offset_left > var_right+offset_right`.
+        """
         return ConstrExpr(ConstrExpr.Kind.GT, ((var_left, offset_left),
                                                (var_right, offset_right)))
 
@@ -109,6 +143,13 @@ class ConstrExpr(NamedTuple):
     def eq(cls,
         terms: Tuple[Var, Var] | Tuple[Tuple[Var, int], Tuple[Var, int]],
     ) -> ConstrExpr:
+        """
+        Returns:
+            A "high-level" constraint expression for the constraint\
+                `terms[0][0]+terms[0][1] == terms[1][0]+terms[1][1]` if 2 integer atoms are given.                
+            A "high-level" constraint expression for the constraint\
+                `terms[0] == terms[1]` if 2 boolean variables are given.
+        """
         return ConstrExpr(ConstrExpr.Kind.EQ, terms)
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -117,6 +158,13 @@ class ConstrExpr(NamedTuple):
     def neq(cls,
         terms: Tuple[Var, Var] | Tuple[Tuple[Var, int], Tuple[Var, int]],
     ) -> ConstrExpr:
+        """
+        Returns:
+            A "high-level" constraint expression for the constraint\
+                `terms[0][0]+terms[0][1] != terms[1][0]+terms[1][1]` if 2 integer atoms are given.                
+            A "high-level" constraint expression for the constraint\
+                `terms[0] != terms[1]` if 2 boolean variables are given.
+        """
         return ConstrExpr(ConstrExpr.Kind.NEQ, terms)
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -125,6 +173,10 @@ class ConstrExpr(NamedTuple):
     def or_(cls,
         terms: Tuple[Lit,...],
     ) -> ConstrExpr:
+        """
+        Returns:
+            A "high-level" constraint expression for the constraint `terms[0] | ... | terms[n]`.
+        """
         return ConstrExpr(ConstrExpr.Kind.OR, terms)
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -133,6 +185,10 @@ class ConstrExpr(NamedTuple):
     def and_(cls,
         terms: Tuple[Lit,...]
     ) -> ConstrExpr:
+        """
+        Returns:
+            A "high-level" constraint expression for the constraint `terms[0] & ... & terms[n]`.
+        """
         return ConstrExpr(ConstrExpr.Kind.AND, terms)
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -141,6 +197,10 @@ class ConstrExpr(NamedTuple):
     def imply(cls,
         terms: Tuple[Lit, Lit],
     ) -> ConstrExpr:
+        """
+        Returns:
+            A "high-level" constraint expression for the constraint `terms[0] => terms[1]`.
+        """
         return ConstrExpr(ConstrExpr.Kind.IMPLY, terms)
 
 #################################################################################
@@ -149,19 +209,16 @@ class ConstrExpr(NamedTuple):
 
 class ElemConstrExpr(NamedTuple):
     """
-    Represents a constraint in a "back-facing" / "back-end" view, for internal use
-    by the solver.
+    Represents a "low-level" or "elementary" constraint to be used internally
+    by the solver. They are integrated to the solver during processing / interpretation
+    of "high-level" constraints.
 
-    Elementary constraints expressions are obtained and integrated to the solver
-    during processing of "natural" constraint expressions.
-
-    No errors will be raised if an incorrect / inconsistent / incompatible
-    instantiation is made. (i.e. constraint type and terms are inconsistent)
-
-    However, an error may be raised during processing if the expression could not
-    be interpreted (because it is incorrect).
+    Warning:
+        No errors will be raised if an incorrect / inconsistent / incompatible\
+            instantiation is made (i.e. constraint type and terms are inconsistent).\
+            However, errors may be raised during further processing, if the\
+            expression cannot be interpreted.
     """
-    
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     class Kind(Enum):
@@ -174,10 +231,48 @@ class ElemConstrExpr(NamedTuple):
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     kind: Kind
+    """Represents the type or kind of constraint."""
 
-    terms: Union[Lit,                   # for LIT constraints
-                 Tuple[Lit,...],        # for OR and AND constraints
-                 Tuple[Var, Var, int]]  # for MAX_DIFFERENCE constraints
+    terms: Union[Lit,
+                 Tuple[Lit,...],
+                 Tuple[Var, Var, int]]
+    """
+    Contains the terms of the constraint.
+
+    The kind of constraint will have to match the types of terms to be
+    successfully interpreted. The possibles types are the following:
+
+    -`Lit`: 1 literal. For LIT constraints. (but `OR` and `AND` as well).
+
+    -`Tuple[Lit,...]`: any number of literals. For `OR` and `AND` constraints.
+        
+    -`Tuple[Var, Var, int]`: For `MAX_DIFFERENCE` constraints (`target - source <= weight`).
+    """
+
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+    @property
+    def negated(self) -> ElemConstrExpr:
+        """The negated elementary constraint expression."""
+
+        match self.kind, self.terms:
+
+            case ElemConstrExpr.Kind.LIT, Lit() as lit:
+                return ElemConstrExpr(ElemConstrExpr.Kind.LIT, lit.negated)
+
+            case ElemConstrExpr.Kind.OR, [Lit(), *_] as lits:
+                return ElemConstrExpr(ElemConstrExpr.Kind.AND, tuple(lit.negated for lit in lits))
+
+            case ElemConstrExpr.Kind.AND, [Lit(), *_] as lits:
+                return ElemConstrExpr(ElemConstrExpr.Kind.OR, tuple(lit.negated for lit in lits))
+
+            case (ElemConstrExpr.Kind.MAX_DIFFERENCE,
+                  (Var() as from_var, Var() as to_var, int() as max_diff)
+            ):
+                return ElemConstrExpr(ElemConstrExpr.Kind.MAX_DIFFERENCE,
+                                      (to_var, from_var, -max_diff-1))
+            case _:
+                raise ValueError("ElemConstrExpr could not be interpreted: negation failed.")
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -188,6 +283,9 @@ class ElemConstrExpr(NamedTuple):
         var_right: Var,
         offset_right: int,
     ) -> ElemConstrExpr:
+        """
+        TODO
+        """
 
         offset_diff = offset_right - offset_left
 
@@ -212,6 +310,9 @@ class ElemConstrExpr(NamedTuple):
     def from_lit(cls,
         literal: Lit,
     ) -> ElemConstrExpr:
+        """
+        TODO
+        """
         return ElemConstrExpr(ElemConstrExpr.Kind.LIT, literal)
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -220,16 +321,19 @@ class ElemConstrExpr(NamedTuple):
     def from_lits_simplify_or(cls,
         literals: Sequence[Lit],
     ) -> ElemConstrExpr:
+        """
+        TODO
+        """
 
         if len(literals) == 0:
             return ElemConstrExpr.from_lit(FALSE_LIT)
 
-        tightened_literals = tighten_disj_literals(literals)
+        tightened_literals = tighten_literals(literals)
 
         if len(tightened_literals) == 1:
             return ElemConstrExpr.from_lit(tightened_literals[0])
 
-        elif are_tightened_disj_literals_tautological(tightened_literals):
+        elif are_tightened_literals_tautological(tightened_literals):
             return ElemConstrExpr.from_lit(TRUE_LIT)
 
         return ElemConstrExpr(ElemConstrExpr.Kind.OR, tightened_literals)
@@ -240,20 +344,22 @@ class ElemConstrExpr(NamedTuple):
     def from_lits_simplify_and(cls,
         literals: Sequence[Lit]
     ) -> ElemConstrExpr:
+        """
+        TODO
+        """
 
         if len(literals) == 0:
             return ElemConstrExpr.from_lit(TRUE_LIT)
 
-        tightened_neg_literals = tighten_disj_literals(tuple(lit.negation()
+        tightened_neg_literals = tighten_literals(tuple(lit.negated
                                                         for lit in literals))
         if len(tightened_neg_literals) == 1:
-            return ElemConstrExpr.from_lit(tightened_neg_literals[0].negation())
+            return ElemConstrExpr.from_lit(tightened_neg_literals[0].negated)
 
-        elif are_tightened_disj_literals_tautological(tightened_neg_literals):
+        elif are_tightened_literals_tautological(tightened_neg_literals):
             return ElemConstrExpr.from_lit(FALSE_LIT)
 
-        return ElemConstrExpr(ElemConstrExpr.Kind.AND, tuple(lit.negation()
-                                                        for lit in tightened_neg_literals))
+        return ElemConstrExpr(ElemConstrExpr.Kind.AND, tuple(lit.negated for lit in tightened_neg_literals))
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -263,29 +369,9 @@ class ElemConstrExpr(NamedTuple):
         var_to: Var,
         max_diff: int,
     ) -> ElemConstrExpr:
+        """
+        TODO
+        """
         return ElemConstrExpr(ElemConstrExpr.Kind.MAX_DIFFERENCE, (var_from, var_to, max_diff))
-
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-    def negation(self) -> ElemConstrExpr:
-
-        match self.kind, self.terms:
-
-            case ElemConstrExpr.Kind.LIT, Lit() as lit:
-                return ElemConstrExpr(ElemConstrExpr.Kind.LIT, lit.negation())
-
-            case ElemConstrExpr.Kind.OR, [Lit(), *_] as lits:
-                return ElemConstrExpr(ElemConstrExpr.Kind.AND, tuple(lit.negation()
-                                                                     for lit in lits))
-            case ElemConstrExpr.Kind.AND, [Lit(), *_] as lits:
-                return ElemConstrExpr(ElemConstrExpr.Kind.OR, tuple(lit.negation()
-                                                                    for lit in lits))
-            case (ElemConstrExpr.Kind.MAX_DIFFERENCE,
-                  (Var() as from_var, Var() as to_var, int() as max_diff)
-            ):
-                return ElemConstrExpr(ElemConstrExpr.Kind.MAX_DIFFERENCE,
-                                      (to_var, from_var, -max_diff-1))
-            case _:
-                raise ValueError("ElemConstrExpr could not be interpreted: negation failed.")
 
 #################################################################################

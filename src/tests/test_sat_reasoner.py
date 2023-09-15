@@ -5,12 +5,12 @@ from __future__ import annotations
 import unittest
 from typing import Optional, Tuple
 
-from src.fundamentals import (TRUE_LIT, BoundVal, Lit, SignedVar,
-                              tighten_disj_literals)
+from src.fundamentals import TRUE_LIT, BoundVal, Lit, SignedVar, tighten_literals
 
-from src.solver import Solver, Causes
-from src.solver_api import add_new_non_optional_variable
-from src.solver_sat_reasoner import SATReasoner
+from src.fundamentals import SignedVar, BoundVal, Lit, TRUE_LIT
+from src.solver.common import Causes
+from src.solver.reasoners.sat_reasoner import SATReasoner
+from src.solver.solver import Solver
 
 #################################################################################
 
@@ -26,34 +26,34 @@ class TestSATReasonerBasics(unittest.TestCase):
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
         def value_of_bool(var) -> Optional[int]:
-            if solver.bound_values[SignedVar.plus(var)] == -solver.bound_values[SignedVar.minus(var)]:
-                return solver.bound_values[SignedVar.plus(var)]
+            if solver.state.bound_value_of(SignedVar.plus(var)) == -solver.state.bound_value_of(SignedVar.minus(var)):
+                return solver.state.bound_value_of(SignedVar.plus(var))
             else:
                 return None            
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-        A = add_new_non_optional_variable((0,1), True, solver)
-        B = add_new_non_optional_variable((0,1), True, solver)
+        A = solver.add_new_non_optional_variable((0,1), True)
+        B = solver.add_new_non_optional_variable((0,1), True)
 
         self.assertEqual(value_of_bool(A), None)
         self.assertEqual(value_of_bool(B), None)
 
-        A_or_B = tighten_disj_literals((Lit.geq(A, 1), Lit.geq(B, 1)))
+        A_or_B = tighten_literals((Lit.geq(A, 1), Lit.geq(B, 1)))
 
         sat_reasoner.add_new_fixed_clause_with_scope(A_or_B, TRUE_LIT)
 
-        sat_reasoner.propagate(solver)
+        sat_reasoner.propagate(solver.state)
 
         self.assertEqual(value_of_bool(A), None)
         self.assertEqual(value_of_bool(B), None)
 
-        solver.set_bound_value(SignedVar.plus(A), BoundVal(0), Causes.Decision())
+        solver.state.set_bound_value(SignedVar.plus(A), BoundVal(0), Causes.Decision())
 
         self.assertEqual(value_of_bool(A), 0)
         self.assertEqual(value_of_bool(B), None)
 
-        sat_reasoner.propagate(solver)
+        sat_reasoner.propagate(solver.state)
 
         self.assertEqual(value_of_bool(A), 0)
         self.assertEqual(value_of_bool(B), 1)
@@ -68,104 +68,104 @@ class TestSATReasonerBasics(unittest.TestCase):
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
         def value_of_bool(var) -> Optional[int]:
-            if solver.bound_values[SignedVar.plus(var)] == -solver.bound_values[SignedVar.minus(var)]:
-                return solver.bound_values[SignedVar.plus(var)]
+            if solver.state.bound_value_of(SignedVar.plus(var)) == -solver.state.bound_value_of(SignedVar.minus(var)):
+                return solver.state.bound_value_of(SignedVar.plus(var))
             else:
                 return None            
         
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-        A = add_new_non_optional_variable((0,1), True, solver)
-        B = add_new_non_optional_variable((0,1), True, solver)
-        C = add_new_non_optional_variable((0,1), True, solver)
-        D = add_new_non_optional_variable((0,1), True, solver)
+        A = solver.add_new_non_optional_variable((0,1), True)
+        B = solver.add_new_non_optional_variable((0,1), True)
+        C = solver.add_new_non_optional_variable((0,1), True)
+        D = solver.add_new_non_optional_variable((0,1), True)
 
         self.assertEqual([value_of_bool(v) for v in (A,B,C,D)],
                          [None, None, None, None])
 
-        A_or_B_or_C_or_D = tighten_disj_literals((Lit.geq(A, 1),
+        A_or_B_or_C_or_D = tighten_literals((Lit.geq(A, 1),
                                                   Lit.geq(B, 1),
                                                   Lit.geq(C, 1),
                                                   Lit.geq(D, 1)))
         sat_reasoner.add_new_fixed_clause_with_scope(A_or_B_or_C_or_D, TRUE_LIT)
 
-        sat_reasoner.propagate(solver)
+        sat_reasoner.propagate(solver.state)
 
         self.assertEqual([value_of_bool(v) for v in (A,B,C,D)],
                          [None, None, None, None])
 
-        solver.increment_decision_level((sat_reasoner,))
-        solver.set_bound_value(SignedVar.plus(A), BoundVal(0), Causes.Decision())
+        solver.increment_one_decision_level((sat_reasoner,))
+        solver.state.set_bound_value(SignedVar.plus(A), BoundVal(0), Causes.Decision())
 
         self.assertEqual([value_of_bool(v) for v in (A,B,C,D)],
                          [0, None, None, None])
 
-        sat_reasoner.propagate(solver)
+        sat_reasoner.propagate(solver.state)
 
         self.assertEqual([value_of_bool(v) for v in (A,B,C,D)],
                          [0, None, None, None])
 
-        solver.increment_decision_level((sat_reasoner,))
-        solver.set_bound_value(SignedVar.plus(B), BoundVal(0), Causes.Decision())
+        solver.increment_one_decision_level((sat_reasoner,))
+        solver.state.set_bound_value(SignedVar.plus(B), BoundVal(0), Causes.Decision())
 
         self.assertEqual([value_of_bool(v) for v in (A,B,C,D)], 
                          [0, 0, None, None])
 
-        sat_reasoner.propagate(solver)
+        sat_reasoner.propagate(solver.state)
 
         self.assertEqual([value_of_bool(v) for v in (A,B,C,D)], 
                          [0, 0, None, None])
 
-        solver.increment_decision_level((sat_reasoner,))
-        solver.set_bound_value(SignedVar.minus(C), BoundVal(-1), Causes.Decision())
+        solver.increment_one_decision_level((sat_reasoner,))
+        solver.state.set_bound_value(SignedVar.minus(C), BoundVal(-1), Causes.Decision())
 
         self.assertEqual([value_of_bool(v) for v in (A,B,C,D)],
                          [0, 0, 1, None])
 
-        sat_reasoner.propagate(solver)
+        sat_reasoner.propagate(solver.state)
 
         self.assertEqual([value_of_bool(v) for v in (A,B,C,D)],
                          [0, 0, 1, None])
 
-        solver.increment_decision_level((sat_reasoner,))
-        solver.set_bound_value(SignedVar.plus(D), BoundVal(0), Causes.Decision())
+        solver.increment_one_decision_level((sat_reasoner,))
+        solver.state.set_bound_value(SignedVar.plus(D), BoundVal(0), Causes.Decision())
 
         self.assertEqual([value_of_bool(v) for v in (A,B,C,D)],
                          [0, 0, 1, 0])
 
-        sat_reasoner.propagate(solver)
+        sat_reasoner.propagate(solver.state)
 
         self.assertEqual([value_of_bool(v) for v in (A,B,C,D)],
                          [0, 0, 1, 0])
 
-        solver.backtrack_to_decision_level(solver.decision_level-1,
+        solver.backtrack_to_decision_level(solver.state.decision_level-1,
                                            (sat_reasoner,))
 
         self.assertEqual([value_of_bool(v) for v in (A,B,C,D)], 
                          [0, 0, 1, None])
 
-        sat_reasoner.propagate(solver)
+        sat_reasoner.propagate(solver.state)
 
         self.assertEqual([value_of_bool(v) for v in (A,B,C,D)], 
                          [0, 0, 1, None])
 
-        solver.backtrack_to_decision_level(solver.decision_level-1,
+        solver.backtrack_to_decision_level(solver.state.decision_level-1,
                                            (sat_reasoner,))
         self.assertEqual([value_of_bool(v) for v in (A,B,C,D)], 
                          [0, 0, None, None])
 
-        sat_reasoner.propagate(solver)
+        sat_reasoner.propagate(solver.state)
 
         self.assertEqual([value_of_bool(v) for v in (A,B,C,D)], 
                          [0, 0, None, None])
 
-        solver.increment_decision_level((sat_reasoner,))
-        solver.set_bound_value(SignedVar.plus(C), BoundVal(0), Causes.Decision())
+        solver.increment_one_decision_level((sat_reasoner,))
+        solver.state.set_bound_value(SignedVar.plus(C), BoundVal(0), Causes.Decision())
 
         self.assertEqual([value_of_bool(v) for v in (A,B,C,D)], 
                          [0, 0, 0, None])
 
-        sat_reasoner.propagate(solver)
+        sat_reasoner.propagate(solver.state)
 
         self.assertEqual([value_of_bool(v) for v in (A,B,C,D)], 
                          [0, 0, 0, 1])
@@ -180,24 +180,24 @@ class TestSATReasonerBasics(unittest.TestCase):
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
         def value_of_bool(var) -> Optional[int]:
-            if solver.bound_values[SignedVar.plus(var)] == -solver.bound_values[SignedVar.minus(var)]:
-                return solver.bound_values[SignedVar.plus(var)]
+            if solver.state.bound_value_of(SignedVar.plus(var)) == -solver.state.bound_value_of(SignedVar.minus(var)):
+                return solver.state.bound_value_of(SignedVar.plus(var))
             else:
                 return None            
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-        A = add_new_non_optional_variable((0,1), True, solver)
-        B = add_new_non_optional_variable((0,1), True, solver)
+        A = solver.add_new_non_optional_variable((0,1), True)
+        B = solver.add_new_non_optional_variable((0,1), True)
 
         self.assertEqual(value_of_bool(A), None)
         self.assertEqual(value_of_bool(B), None)
 
-        A_or_B = tighten_disj_literals((Lit.geq(A, 1), Lit.geq(B, 1)))
+        A_or_B = tighten_literals((Lit.geq(A, 1), Lit.geq(B, 1)))
 
         sat_reasoner.add_new_fixed_clause_with_scope(A_or_B, TRUE_LIT)
 
-        sat_reasoner.propagate(solver)
+        sat_reasoner.propagate(solver.state)
 
         self.assertEqual(value_of_bool(A), None)
         self.assertEqual(value_of_bool(B), None)
@@ -205,16 +205,16 @@ class TestSATReasonerBasics(unittest.TestCase):
 #        solver.increment_decision_level_and_perform_set_literal_decision(
 #            SolverDecisions.SetLiteral(Lit.leq(A, 0)),
 #            (sat_reasoner,))
-        solver.set_bound_value(SignedVar.plus(A), BoundVal(0), Causes.Decision())
+        solver.state.set_bound_value(SignedVar.plus(A), BoundVal(0), Causes.Decision())
 #        solver.increment_decision_level_and_perform_set_literal_decision(
 #            SolverDecisions.SetLiteral(Lit.leq(B, 0)),
 #            (sat_reasoner,))
-        solver.set_bound_value(SignedVar.plus(B), BoundVal(0), Causes.Decision())
+        solver.state.set_bound_value(SignedVar.plus(B), BoundVal(0), Causes.Decision())
 
         self.assertEqual(value_of_bool(A), False)
         self.assertEqual(value_of_bool(B), False)
 
-        self.assertNotEqual(sat_reasoner.propagate(solver), None)
+        self.assertNotEqual(sat_reasoner.propagate(solver.state), None)
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -226,131 +226,131 @@ class TestSATReasonerBasics(unittest.TestCase):
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
         def value_of_int(var) -> Tuple[int, int]:
-            return (-solver.bound_values[SignedVar(var, False)],
-                    solver.bound_values[SignedVar(var, True)])
+            return (-solver.state.bound_value_of(SignedVar(var, False)),
+                    solver.state.bound_value_of(SignedVar(var, True)))
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-        A = add_new_non_optional_variable((0,10), True, solver)
-        B = add_new_non_optional_variable((0,10), True, solver)
-        C = add_new_non_optional_variable((0,10), True, solver)
-        D = add_new_non_optional_variable((0,10), True, solver)
+        A = solver.add_new_non_optional_variable((0,10), True)
+        B = solver.add_new_non_optional_variable((0,10), True)
+        C = solver.add_new_non_optional_variable((0,10), True)
+        D = solver.add_new_non_optional_variable((0,10), True)
 
         self.assertListEqual([value_of_int(v) for v in (A,B,C,D)], 
                              [(0,10), (0,10), (0,10), (0,10)])
 
-        clause1_literals = tighten_disj_literals((Lit.leq(A, 5), Lit.leq(B, 5)))
-        clause2_literals = tighten_disj_literals((Lit.geq(C, 5), Lit.geq(D, 5)))
+        clause1_literals = tighten_literals((Lit.leq(A, 5), Lit.leq(B, 5)))
+        clause2_literals = tighten_literals((Lit.geq(C, 5), Lit.geq(D, 5)))
 
         sat_reasoner.add_new_fixed_clause_with_scope(clause1_literals, TRUE_LIT)
         sat_reasoner.add_new_fixed_clause_with_scope(clause2_literals, TRUE_LIT)
 
-        sat_reasoner.propagate(solver)
+        sat_reasoner.propagate(solver.state)
 
         self.assertListEqual([value_of_int(v) for v in (A,B,C,D)], 
                              [(0,10), (0,10), (0,10), (0,10)])
 
         # Lower bound changes
 
-        solver.set_bound_value(SignedVar.minus(A), BoundVal(-4), Causes.Decision())
+        solver.state.set_bound_value(SignedVar.minus(A), BoundVal(-4), Causes.Decision())
 
         self.assertListEqual([value_of_int(v) for v in (A,B,C,D)],
                              [(4,10), (0,10), (0,10), (0,10)])
 
-        sat_reasoner.propagate(solver)
+        sat_reasoner.propagate(solver.state)
 
         self.assertListEqual([value_of_int(v) for v in (A,B,C,D)], 
                              [(4,10), (0,10), (0,10), (0,10)])
 
-        solver.set_bound_value(SignedVar.minus(A), BoundVal(-5), Causes.Decision())
+        solver.state.set_bound_value(SignedVar.minus(A), BoundVal(-5), Causes.Decision())
 
         self.assertListEqual([value_of_int(v) for v in (A,B,C,D)], 
                              [(5,10), (0,10), (0,10), (0,10)])
         
-        sat_reasoner.propagate(solver)
+        sat_reasoner.propagate(solver.state)
         
         self.assertListEqual([value_of_int(v) for v in (A,B,C,D)], 
                              [(5,10), (0,10), (0,10), (0,10)])
 
         # Trigger first clause
 
-        solver.increment_decision_level((sat_reasoner,))
-        solver.set_bound_value(SignedVar.minus(A), BoundVal(-6), Causes.Decision())
+        solver.increment_one_decision_level((sat_reasoner,))
+        solver.state.set_bound_value(SignedVar.minus(A), BoundVal(-6), Causes.Decision())
 
         self.assertListEqual([value_of_int(v) for v in (A,B,C,D)], 
                              [(6,10), (0,10), (0,10), (0,10)])
         
-        sat_reasoner.propagate(solver)
+        sat_reasoner.propagate(solver.state)
         
         self.assertListEqual([value_of_int(v) for v in (A,B,C,D)], 
                              [(6,10), (0,5), (0,10), (0,10)])
 
         # Retrigger first clause with stronger literal
 
-        solver.backtrack_to_decision_level(solver.decision_level-1, 
+        solver.backtrack_to_decision_level(solver.state.decision_level-1, 
                                            (sat_reasoner,))
 
         self.assertListEqual([value_of_int(v) for v in (A,B,C,D)], 
                              [(5,10), (0,10), (0,10), (0,10)])
 
-        solver.set_bound_value(SignedVar.minus(A), BoundVal(-8), Causes.Decision())
+        solver.state.set_bound_value(SignedVar.minus(A), BoundVal(-8), Causes.Decision())
         
         self.assertListEqual([value_of_int(v) for v in (A,B,C,D)], 
                              [(8,10), (0,10), (0,10), (0,10)])
-        sat_reasoner.propagate(solver)
+        sat_reasoner.propagate(solver.state)
         
         self.assertListEqual([value_of_int(v) for v in (A,B,C,D)], 
                              [(8,10), (0,5), (0,10), (0,10)])
 
         # Upper bound changes
 
-        solver.set_bound_value(SignedVar.plus(C), BoundVal(6), Causes.Decision())
+        solver.state.set_bound_value(SignedVar.plus(C), BoundVal(6), Causes.Decision())
         
         self.assertListEqual([value_of_int(v) for v in (A,B,C,D)], 
                              [(8,10), (0,5), (0,6), (0,10)])
         
-        sat_reasoner.propagate(solver)
+        sat_reasoner.propagate(solver.state)
         
         self.assertListEqual([value_of_int(v) for v in (A,B,C,D)], 
                              [(8,10), (0,5), (0,6), (0,10)])
 
-        solver.set_bound_value(SignedVar.plus(C), BoundVal(5), Causes.Decision())
+        solver.state.set_bound_value(SignedVar.plus(C), BoundVal(5), Causes.Decision())
         
         self.assertListEqual([value_of_int(v) for v in (A,B,C,D)], 
                              [(8,10), (0,5), (0,5), (0,10)])
         
-        sat_reasoner.propagate(solver)
+        sat_reasoner.propagate(solver.state)
         
         self.assertListEqual([value_of_int(v) for v in (A,B,C,D)], 
                              [(8,10), (0,5), (0,5), (0,10)])
 
         # Should trigger second clause
         
-        solver.increment_decision_level((sat_reasoner,))
-        solver.set_bound_value(SignedVar.plus(C), BoundVal(4), Causes.Decision())
+        solver.increment_one_decision_level((sat_reasoner,))
+        solver.state.set_bound_value(SignedVar.plus(C), BoundVal(4), Causes.Decision())
 
         self.assertListEqual([value_of_int(v) for v in (A,B,C,D)], 
                              [(8,10), (0,5), (0,4), (0,10)])
 
-        sat_reasoner.propagate(solver)
+        sat_reasoner.propagate(solver.state)
 
         self.assertListEqual([value_of_int(v) for v in (A,B,C,D)], 
                              [(8,10), (0,5), (0,4), (5,10)])
 
         # Retrigger second clause with stronger literal
 
-        solver.backtrack_to_decision_level(solver.decision_level-1, 
+        solver.backtrack_to_decision_level(solver.state.decision_level-1, 
                                            (sat_reasoner,))
         
         self.assertListEqual([value_of_int(v) for v in (A,B,C,D)], 
                              [(8,10), (0,5), (0,5), (0,10)])
         
-        solver.set_bound_value(SignedVar.plus(C), BoundVal(2), Causes.Decision())
+        solver.state.set_bound_value(SignedVar.plus(C), BoundVal(2), Causes.Decision())
         
         self.assertListEqual([value_of_int(v) for v in (A,B,C,D)], 
                              [(8,10), (0,5), (0,2), (0,10)])
         
-        sat_reasoner.propagate(solver)
+        sat_reasoner.propagate(solver.state)
         
         self.assertListEqual([value_of_int(v) for v in (A,B,C,D)], 
                              [(8,10), (0,5), (0,2), (5,10)])
@@ -368,17 +368,17 @@ class TestSATReasonerClauses(unittest.TestCase):
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
         def value_of_bool(var) -> Optional[int]:
-            if solver.bound_values[SignedVar(var,True)] == -solver.bound_values[SignedVar(var,False)]:
-                return solver.bound_values[SignedVar(var,True)]
+            if solver.state.bound_value_of(SignedVar(var,True)) == -solver.state.bound_value_of(SignedVar(var,False)):
+                return solver.state.bound_value_of(SignedVar(var,True))
             else:
                 return None            
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-        A = add_new_non_optional_variable((0,1), True, solver)
-        B = add_new_non_optional_variable((0,1), True, solver)
-        C = add_new_non_optional_variable((0,1), True, solver)
-        D = add_new_non_optional_variable((0,1), True, solver)
+        A = solver.add_new_non_optional_variable((0,1), True)
+        B = solver.add_new_non_optional_variable((0,1), True)
+        C = solver.add_new_non_optional_variable((0,1), True)
+        D = solver.add_new_non_optional_variable((0,1), True)
 
         self.assertEqual(value_of_bool(A), None)
         self.assertEqual(value_of_bool(B), None)
@@ -386,53 +386,53 @@ class TestSATReasonerClauses(unittest.TestCase):
         self.assertEqual(value_of_bool(D), None)
 
         # not A and not B
-        solver.set_bound_value(SignedVar(A, True), BoundVal(0), Causes.Decision())
-        solver.set_bound_value(SignedVar(B, True), BoundVal(0), Causes.Decision())
+        solver.state.set_bound_value(SignedVar(A, True), BoundVal(0), Causes.Decision())
+        solver.state.set_bound_value(SignedVar(B, True), BoundVal(0), Causes.Decision())
 
         self.assertEqual([value_of_bool(v) for v in (A,B,C,D)], 
                          [0, 0, None, None])
 
-        A_or_B_or_C_or_D = tighten_disj_literals((Lit.geq(A, 1), Lit.geq(B, 1), Lit.geq(C, 1), Lit.geq(D, 1)))
+        A_or_B_or_C_or_D = tighten_literals((Lit.geq(A, 1), Lit.geq(B, 1), Lit.geq(C, 1), Lit.geq(D, 1)))
 
         sat_reasoner.add_new_fixed_clause_with_scope(A_or_B_or_C_or_D, TRUE_LIT)
 
-        sat_reasoner.propagate(solver)
+        sat_reasoner.propagate(solver.state)
 
         self.assertEqual([value_of_bool(v) for v in (A,B,C,D)], 
                          [0, 0, None, None])
 
-        notA_or_notB = tighten_disj_literals((Lit.leq(A, 0), Lit.leq(B, 0)))
+        notA_or_notB = tighten_literals((Lit.leq(A, 0), Lit.leq(B, 0)))
 
         sat_reasoner.add_new_fixed_clause_with_scope(notA_or_notB, TRUE_LIT)
 
-        sat_reasoner.propagate(solver)
+        sat_reasoner.propagate(solver.state)
 
         self.assertEqual([value_of_bool(v) for v in (A,B,C,D)], 
                          [0, 0, None, None])
 
-        notA_or_B = tighten_disj_literals((Lit.leq(A, 0), Lit.geq(B, 1)))
+        notA_or_B = tighten_literals((Lit.leq(A, 0), Lit.geq(B, 1)))
 
         sat_reasoner.add_new_fixed_clause_with_scope(notA_or_B, TRUE_LIT)
 
-        sat_reasoner.propagate(solver)
+        sat_reasoner.propagate(solver.state)
 
         self.assertEqual([value_of_bool(v) for v in (A,B,C,D)], 
                          [0, 0, None, None])
 
-        A_or_B_or_notC = tighten_disj_literals((Lit.geq(A, 1), Lit.geq(B, 1), Lit.leq(C, 0)))
+        A_or_B_or_notC = tighten_literals((Lit.geq(A, 1), Lit.geq(B, 1), Lit.leq(C, 0)))
 
         sat_reasoner.add_new_fixed_clause_with_scope(A_or_B_or_notC, TRUE_LIT)
 
-        sat_reasoner.propagate(solver)
+        sat_reasoner.propagate(solver.state)
 
         self.assertEqual([value_of_bool(v) for v in (A,B,C,D)], 
                          [0, 0, 0, 1])
 
-        A_or_B_or_C_or_notD = tighten_disj_literals((Lit.geq(A, 1), Lit.geq(B, 1), Lit.geq(C, 1), Lit.leq(D, 0)))
+        A_or_B_or_C_or_notD = tighten_literals((Lit.geq(A, 1), Lit.geq(B, 1), Lit.geq(C, 1), Lit.leq(D, 0)))
 
         sat_reasoner.add_new_fixed_clause_with_scope(A_or_B_or_C_or_notD, TRUE_LIT)
 
-        self.assertNotEqual(sat_reasoner.propagate(solver), None)
+        self.assertNotEqual(sat_reasoner.propagate(solver.state), None)
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
