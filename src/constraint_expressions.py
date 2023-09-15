@@ -14,9 +14,9 @@ from __future__ import annotations
 from enum import Enum, auto
 from typing import NamedTuple, Sequence, Tuple, Union
 
-from .fundamentals import (FALSE_LIT, TRUE_LIT, ZERO_VAR, Lit, Var,
-                          are_tightened_literals_tautological,
-                          tighten_literals)
+from src.fundamentals import (FALSE_LIT, TRUE_LIT, ZERO_VAR, Lit, Var,
+                              are_tightened_literals_tautological,
+                              tighten_literals)
 
 #################################################################################
 # ("NATURAL") CONSTRAINT EXPRESSIONS
@@ -32,7 +32,6 @@ class ConstrExpr(NamedTuple):
             However, errors may be raised during further processing, if the\
             expression cannot be interpreted.
     """
-    
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     class Kind(Enum):
@@ -220,7 +219,6 @@ class ElemConstrExpr(NamedTuple):
             However, errors may be raised during further processing, if the\
             expression cannot be interpreted.
     """
-    
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     class Kind(Enum):
@@ -361,8 +359,7 @@ class ElemConstrExpr(NamedTuple):
         elif are_tightened_literals_tautological(tightened_neg_literals):
             return ElemConstrExpr.from_lit(FALSE_LIT)
 
-        return ElemConstrExpr(ElemConstrExpr.Kind.AND, tuple(lit.negated
-                                                        for lit in tightened_neg_literals))
+        return ElemConstrExpr(ElemConstrExpr.Kind.AND, tuple(lit.negated for lit in tightened_neg_literals))
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
