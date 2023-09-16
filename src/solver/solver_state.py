@@ -80,7 +80,7 @@ class SolverState():
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-        self._scopes: Dict[Tuple[Lit,...], Lit] = {}
+        self._scope_lits_of_lit_conjs: Dict[Tuple[Lit,...], Lit] = {}
         """
         Stores conjunctions of (presence) literals corresponding to (conjunctive)
         scopes that have been defined in the problem, as well as the associated
@@ -92,12 +92,12 @@ class SolverState():
         to exist in the conjunctive scope "presence(a) & presence(b)".
         """
 
-        self._scopes_reverse: Dict[Lit, Tuple[Lit,...]] = {}
+        self._scope_representative_lit_conjs: Dict[Lit, Tuple[Lit,...]] = {}
         """
         The reverse of `scopes`.
         """
 
-        self._scopes_tautologies: Dict[Lit, Lit] = {}
+        self._scope_tautologies: Dict[Lit, Lit] = {}
         """
         For each scope literal, associates a literal (on an optional variable).
         When we're in that scope (i.e. the scope literal is true, i.e. all the
@@ -143,9 +143,9 @@ class SolverState():
         self._bound_values[SignedVar.plus(ZERO_VAR)] = BoundVal(0)
         self._bound_values[SignedVar.minus(ZERO_VAR)] = BoundVal(0)
 
-        self._scopes[()] = TRUE_LIT
-        self._scopes_reverse[TRUE_LIT] = ()
-        self._scopes_tautologies[TRUE_LIT] = TRUE_LIT
+        self._scope_lits_of_lit_conjs[()] = TRUE_LIT
+        self._scope_representative_lit_conjs[TRUE_LIT] = ()
+        self._scope_tautologies[TRUE_LIT] = TRUE_LIT
 
     #############################################################################
     # PROPERTIES & QUERIES / GETTERS
@@ -546,9 +546,6 @@ class SolverState():
             raise ValueError(("Only implications between non-optional ",
                             "variables are supported"))
 
-        lit_from_neg = lit_from.negated
-        lit_to_neg = lit_to.negated
-
         # If the implication is implicit/obvious, no need to add it.
         if (lit_to == TRUE_LIT
             or lit_from == FALSE_LIT
@@ -562,8 +559,8 @@ class SolverState():
             self._non_optionals_implication_graph.add(element=lit_to,
                                                       guard_literal=lit_from)
 
-            self._non_optionals_implication_graph.add(element=lit_from_neg,
-                                                      guard_literal=lit_to_neg)
+            self._non_optionals_implication_graph.add(element=lit_from.negated,
+                                                      guard_literal=lit_to.negated)
 
         # If from_literal is true, to_literal needs to be enforced as true.
         # (Indeed (from => to) <=> ((not from) or to))
@@ -578,10 +575,10 @@ class SolverState():
 
         # If to_literal is false, from_literal needs to be enforced as false.
         # (Indeed ((not to) => (not from)) <=> (to or (not from)))
-        if self.is_entailed(lit_to_neg):
+        if self.is_entailed(lit_to.negated):
 
-            bound_update_result = self.set_bound_value(lit_from_neg.signed_var,
-                                                       lit_from_neg.bound_value,
+            bound_update_result = self.set_bound_value(lit_from.negated.signed_var,
+                                                       lit_from.negated.bound_value,
                                                        Causes.ImplicationPropagation(lit_to))
 
             if isinstance(bound_update_result, InvalidBoundUpdateInfo):
@@ -590,20 +587,33 @@ class SolverState():
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-    def _register_new_scope(self,
+    def _register_new_scope_after_sorting(self,
         scope_as_conjunction: Tuple[Lit,...],
         scope_lit: Lit,
     ) -> None:
         """
-        Adds to the solver a conjunctive scope consisting of the given literals, and
-        corresponding to the given scope literal (i.e. it is true iff all the literals are).
+        First, sorts the given literals, then adds to the solver a conjunctive 
+        scope consisting of them, and corresponding to the given scope literal
+        (i.e. it is true iff all the literals are).
         """
 
-        if scope_as_conjunction in self._scopes:
+        scope_as_conjunction_sorted = tuple(sorted(scope_as_conjunction))
+
+        if scope_as_conjunction_sorted in self._scope_lits_of_lit_conjs:
             raise ValueError("Could not insert a new scope because it already exists.")
 
-        self._scopes[scope_as_conjunction] = scope_lit
-        self._scopes_reverse[scope_lit] = scope_as_conjunction
+        self._scope_lits_of_lit_conjs[scope_as_conjunction_sorted] = scope_lit
+        
+        # NOTE: Actually important ! absence of "not in" condition was a reason for a bug !!
+        #
+        # REVIEW: The collection `_scope_representatives` pairs up two associated
+        # different kinds of "representatives" (as in the notion of
+        # equivalence class) of a scope: its "scope literal" and its
+        # *defining* conjunction of literals.
+        # Together with the `_scopes` collection, this allows to
+        # "bind" different conjunctions falling in the same scope.
+        if scope_lit not in self._scope_representative_lit_conjs:
+            self._scope_representative_lit_conjs[scope_lit] = scope_as_conjunction_sorted
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -669,6 +679,10 @@ class SolverState():
           adding an "artificial" constraint binding them together.
         """
 
+        expr_scope_lit = \
+            self._get_or_make_new_scope_lit_from_conjunction(
+                self._get_scope_as_conjunction(elem_constr_expr))
+
         if elem_constr_expr in self._reifications:
         
             reif_lit = self._reifications[elem_constr_expr]
@@ -677,10 +691,6 @@ class SolverState():
                 self._constraints.append((ElemConstrExpr.from_lit(reif_lit), scope_tautology_lit))
         
         else:
-
-            expr_scope_lit = \
-                self._get_or_make_new_scope_lit_from_conjunction(
-                    self._get_scope_as_conjunction(elem_constr_expr))
 
             if expr_scope_lit == self.presence_literal_of(scope_tautology_lit.signed_var.var):
 
@@ -721,8 +731,8 @@ class SolverState():
                 defined by `scope_as_conjunction`. 
         """
 
-        if scope_as_conjunction in self._scopes:
-            return self._scopes[scope_as_conjunction]
+        if scope_as_conjunction in self._scope_lits_of_lit_conjs:
+            return self._scope_lits_of_lit_conjs[scope_as_conjunction]
 
         # If scope is not already known we need to register 
         # with a new literal. There are 2 possibilities:
@@ -748,8 +758,8 @@ class SolverState():
                 simplification = scope_as_conjunction[0]
 
             # If l_2 => l_1, the conjunction can be simplified to l_2
-            elif (self.is_implication_true(scope_as_conjunction[0],
-                                         scope_as_conjunction[1])
+            elif (self.is_implication_true(scope_as_conjunction[1],
+                                           scope_as_conjunction[0])
             ):
                 simplification = scope_as_conjunction[1]
 
@@ -759,14 +769,14 @@ class SolverState():
             # need to uniquely identify the literal as the conjunction
             # of the other two in some corner cases.
             # So we create a new literal that is always false.
-            if (self.is_implication_true(scope_as_conjunction[0],
+            elif (self.is_implication_true(scope_as_conjunction[0],
                                          scope_as_conjunction[1].negated)
             ):
                 simplification = Lit.geq(self._add_new_variable((0, 1), False, TRUE_LIT), 1)
 
         if simplification is not None:
 
-            self._register_new_scope(scope_as_conjunction, simplification)
+            self._register_new_scope_after_sorting(scope_as_conjunction, simplification)
             return simplification
 
         else:
@@ -780,11 +790,11 @@ class SolverState():
                 lits.append(l.negated)
 
             self._add_elem_constraint(ElemConstrExpr.from_lits_simplify_or(lits),
-                                      self._scopes_tautologies[TRUE_LIT])           
+                                      self._scope_tautologies[TRUE_LIT])           
                                       # we know that self._scopes_tautologies[TRUE_LIT] = TRUE_LIT,
                                       # but we also keep it explicit for clarity
 
-            self._register_new_scope(scope_as_conjunction, scope_lit)
+            self._register_new_scope_after_sorting(scope_as_conjunction, scope_lit)
             return scope_lit
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -873,15 +883,15 @@ class SolverState():
 
         This is done by:
 
-            1. Keeping only the strongest literals of the "raw" required presences.
+        1. Keeping only the strongest literals of the "raw" required presences.
+    
+        2. Replacing literals defined as a conjunction of other literals by
+        that conjunction (using `_scope_representative_lit_conjs`)
         
-            2. Replacing literals defined as a conjunction of other literals by
-            that conjunction (using `_scopes_reverse`)
-            
-            3. Keeping non-tautological literals (i.e. non entailed ones).
+        3. Keeping non-tautological literals (i.e. non entailed ones).
 
-            4. Keeping non-guarded literals (i.e. removing the literals that
-            are contradicting a literal from "guards")
+        4. Keeping non-guarded literals (i.e. removing the literals that
+        are contradicting a literal from "guards")
         """
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -909,18 +919,18 @@ class SolverState():
             ):
                 required_presences[lit.signed_var] = lit.bound_value
 
-        for signed_var, bound_value in required_presences.items():
+        for signed_var, bound_value in required_presences.copy().items():
 
             lit = Lit(signed_var, bound_value)
-            lits = self._scopes_reverse.get(lit, None)
+            lits = self._scope_representative_lit_conjs.get(lit, None)
 
             if lits is not None:
-                
+
                 for l in lits:
 
                     if is_tautology(l):
                         continue
-                        
+
                     if (l.signed_var not in required_presences
                         or l.bound_value.is_stronger_than(required_presences[l.signed_var])
                     ):
@@ -974,12 +984,12 @@ class SolverState():
             The so-called tautology literal for the scope represented by `scope_lit`.
         """
 
-        if scope_lit in self._scopes_tautologies:
-            return self._scopes_tautologies[scope_lit]
+        if scope_lit in self._scope_tautologies:
+            return self._scope_tautologies[scope_lit]
 
         else:
             lit = Lit.geq(self._add_new_variable((1, 1), False, scope_lit), 1)
-            self._scopes_tautologies[scope_lit] = lit
+            self._scope_tautologies[scope_lit] = lit
             return lit
 
 #################################################################################

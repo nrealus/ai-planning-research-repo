@@ -539,7 +539,7 @@ class Solver():
         var = self.add_new_non_optional_variable((0,1), True)
         
         lit = Lit.geq(var, 1)
-        self.state._register_new_scope((lit,), lit)
+        self.state._register_new_scope_after_sorting((lit,), lit)
         self.state._register_implication_between_literals_on_non_optional_vars(lit, scope_literal)
         
         return var

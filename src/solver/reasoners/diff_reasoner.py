@@ -618,7 +618,7 @@ class DiffReasoner(Reasoner):
                 # levels, enqueue it for activation.
                 elif state.is_entailed(eblr.active) and state.is_entailed(eblr.valid):
                     self.propagators_pending_for_activation.insert(0, (propagator_group_id, eblr))
-                
+
                 # If the propagator isn't known to be active or inactive yet, 
                 # record the fact that:
                 # - If the enabling conditions hold (`enabler.valid` and `enabler.active` are true),

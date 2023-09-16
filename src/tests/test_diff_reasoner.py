@@ -24,9 +24,8 @@ class TestDiffReasonerBasics(unittest.TestCase):
         diff_reasoner: DiffReasoner
     ) -> Lit:
         psrc, ptgt = solver.state.presence_literal_of(src), solver.state.presence_literal_of(tgt)
-        valid_edge = solver.state._get_or_make_new_scope_lit_from_conjunction((psrc, ptgt))
-        # valid_edge = solver.state._get_or_make_new_scope_lit_from_conjunction(                  # BUG
-        #     solver.state._process_raw_required_presences_and_guards((psrc, ptgt), (), True))    # BUG
+        valid_edge = solver.state._get_or_make_new_scope_lit_from_conjunction(
+            solver.state._process_raw_required_presences_and_guards((psrc, ptgt), (), True))
         active_edge = solver.state._get_or_make_tautology_of_scope(valid_edge)
         diff_reasoner.add_reified_difference_constraint(active_edge, src, tgt, weight, solver.state)
         return active_edge
@@ -41,7 +40,6 @@ class TestDiffReasonerBasics(unittest.TestCase):
         diff_reasoner: DiffReasoner
     ) -> Lit:
         psrc, ptgt = solver.state.presence_literal_of(src), solver.state.presence_literal_of(tgt)
-        # valid_edge = solver.state._get_or_make_new_scope_lit_from_conjunction((psrc, ptgt))
         valid_edge = solver.state._get_or_make_new_scope_lit_from_conjunction(
             solver.state._process_raw_required_presences_and_guards((psrc, ptgt), (), True))
         active_edge = Lit.geq(solver.add_new_optional_variable((0, 1), True, valid_edge), 1)
@@ -294,7 +292,6 @@ class TestDiffReasonerBasics(unittest.TestCase):
         diff_reasoner.propagate(solver.state)
 
         for i, (_, var) in enumerate(vars):
-            print((-solver.state._bound_values[SignedVar.minus(var)], solver.state._bound_values[SignedVar.plus(var)]))
             self.assertEqual((-solver.state._bound_values[SignedVar.minus(var)], solver.state._bound_values[SignedVar.plus(var)]), 
                              (i, 20))
         
