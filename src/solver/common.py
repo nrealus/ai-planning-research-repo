@@ -37,22 +37,22 @@ class SetGuardedByLiterals(Generic[T]):
 
     def add(self,
         element: T,
-        guard_literal: Lit,
+        literal: Lit,
     ) -> None:
         """
-        Adds a new `element` guarded by `guard_literal` to the colleciton.
+        Adds a new `element` guarded by `literal` to the colleciton.
 
         Args:
             element: An element to add to the collection.
 
-            guard_literal: The literal that should guard `element`.
+            literal: The literal that should guard `element`.
         
         Raises:
-            ValueError: If `element` is already present and guarded by `guard_literal`.
+            ValueError: If `element` is already present and guarded by `literal`.
 
         Note:
             An element can be added when it wasn't already guarded by a
-            literal stronger than `guard_literal`. But these elements
+            literal stronger than `literal`. But these elements
             are basically duplicates, since an element being guarded
             by a certain literal implies it being guarded by all literals
             stronger than it. We do not make the effort to remove such a
@@ -60,37 +60,37 @@ class SetGuardedByLiterals(Generic[T]):
             we return only unique elements (no duplicates), so this is not an issue.
         """
         
-        if guard_literal.signed_var not in self._data:
-            self._data[guard_literal.signed_var] = {}
+        if literal.signed_var not in self._data:
+            self._data[literal.signed_var] = {}
         
-        if guard_literal.bound_value not in self._data[guard_literal.signed_var]:
-            self._data[guard_literal.signed_var][guard_literal.bound_value] = set()
+        if literal.bound_value not in self._data[literal.signed_var]:
+            self._data[literal.signed_var][literal.bound_value] = set()
 
-        if element in self.elements_guarded_by(guard_literal):
-            raise ValueError("Element already present (guarded by {0}).".format(guard_literal))
+        if element in self.elements_guarded_by(literal):
+            raise ValueError("Element already present (guarded by {0}).".format(literal))
         
-        self._data[guard_literal.signed_var][guard_literal.bound_value].add(element)
+        self._data[literal.signed_var][literal.bound_value].add(element)
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     def remove(self,
         element: T,
-        guard_literal: Lit,
+        literal: Lit,
     ) -> None:
         """
-        Removes an `element` guarded by `guard_literal` from the colleciton.
+        Removes an `element` guarded by `literal` from the colleciton.
 
         Args:
             element: An element to remove from the collection.
 
-            guard_literal: The literal that guards `element`.
+            literal: The literal that guards `element`.
         
         Raises:
             ValueError | KeyError: If `element` is not present  \
-                or not guarded by `guard_literal`.
+                or not guarded by `literal`.
         """
         
-        self._data[guard_literal.signed_var][guard_literal.bound_value].remove(element)
+        self._data[literal.signed_var][literal.bound_value].remove(element)
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -109,27 +109,27 @@ class SetGuardedByLiterals(Generic[T]):
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     def elements_guarded_by(self,
-        guard_literal: Lit,
+        literal: Lit,
     ) -> Tuple[T,...]:
         """
         Returns all elements guarded by the given literal (as well as all
         literals stronger than it, which is implied).
 
         Args:
-            guard_literal: The literal whose guarded elements to return.
+            literal: The literal whose guarded elements to return.
 
         Returns:
             An immutable sequence (tuple), with no duplicates, containing   \
-                all elements guarded by the `guard_literal`.
+                all elements guarded by the `literal`.
         """
 
-        if guard_literal.signed_var not in self._data:
+        if literal.signed_var not in self._data:
             return ()
 
         res = set()
 
-        for guard_bound_value, guarded_elements in self._data[guard_literal.signed_var].items():
-            if guard_literal.bound_value.is_stronger_than(guard_bound_value):
+        for guard_bound_value, guarded_elements in self._data[literal.signed_var].items():
+            if literal.bound_value.is_stronger_than(guard_bound_value):
                 res.update(guarded_elements)
 
         return tuple(res)
@@ -153,22 +153,22 @@ class SetGuardedByLiterals(Generic[T]):
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     def has_elements_guarded_by(self,
-        guard_literal: Lit
+        literal: Lit
     ) -> bool:
         """
         Args:
-            guard_literal: The literal for which we want to check for.
+            literal: The literal for which we want to check for.
 
         Returns:
             Whether there are any elements guarded by the given literal     \
                 (as well as all literals stronger than it, which is implied).
         """
         
-        if guard_literal.signed_var not in self._data:
+        if literal.signed_var not in self._data:
             return False
         
-        for guard_bound_value in self._data[guard_literal.signed_var]:
-            if guard_literal.bound_value.is_stronger_than(guard_bound_value):
+        for guard_bound_value in self._data[literal.signed_var]:
+            if literal.bound_value.is_stronger_than(guard_bound_value):
                 return True
         
         return False
