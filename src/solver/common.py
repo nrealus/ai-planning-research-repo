@@ -136,11 +136,26 @@ class SetGuardedByLiterals(Generic[T]):
     
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
+    def has_elements_guarded_by_literals_on(self,
+        signed_var: SignedVar
+    ) -> bool:
+        """
+        Args:
+            signed_var: The signed variable for which to check.
+
+        Returns:
+            Whether there are any elements guarded by a literal on  \
+                the given signed variable.
+        """
+        
+        return signed_var in self._data and len(self._data[signed_var]) > 0
+
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
     def has_elements_guarded_by(self,
         guard_literal: Lit
     ) -> bool:
         """
-
         Args:
             guard_literal: The literal for which we want to check for.
 
