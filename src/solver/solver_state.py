@@ -604,7 +604,7 @@ class SolverState():
 
         self._scope_lits_of_lit_conjs[scope_as_conjunction_sorted] = scope_lit
         
-        # NOTE: Actually important ! absence of "not in" condition was a reason for a bug !!
+        # NOTE: The absence of the "not in" condition was causing a bug !
         #
         # REVIEW: The collection `_scope_representatives` pairs up two associated
         # different kinds of "representatives" (as in the notion of
@@ -612,6 +612,9 @@ class SolverState():
         # *defining* conjunction of literals.
         # Together with the `_scopes` collection, this allows to
         # "bind" different conjunctions falling in the same scope.
+        #
+        # Ideally, we'd like each scope literal to point to
+        # the smallest conjunction defining the scope.
         if scope_lit not in self._scope_representative_lit_conjs:
             self._scope_representative_lit_conjs[scope_lit] = scope_as_conjunction_sorted
 
