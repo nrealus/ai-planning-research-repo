@@ -724,14 +724,14 @@ class SATReasoner(Reasoner):
     def explain(self,
         explanation_literals: List[Lit],
         literal: Lit,
-        inference_cause_data: Tuple[Reasoner, object],
+        inference_cause: Causes.ReasonerInference,
         state: SolverState,
     ) -> None:
         """
         TODO
         """
 
-        _, inference_info = inference_cause_data
+        _, inference_info = inference_cause
 
         clause_id = typing.cast(SATReasoner.ClauseId, inference_info)
         self._bump_activity(clause_id)
@@ -741,7 +741,7 @@ class SATReasoner(Reasoner):
         # However, it is not necessarily the case with eager propagation of optionals.
         for lit in clause.literals:
             if not lit.entails(literal):
-                explanation_literals.append(lit)
+                explanation_literals.append(lit.negated)
 
     #############################################################################
     # CLAUSE DATABASE SCALING, ACTIVITIES
