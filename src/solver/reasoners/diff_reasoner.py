@@ -843,7 +843,6 @@ class DiffReasoner(Reasoner):
                     self.propagators_database.propagators_list[self.propagators_database.next_new_constraint_index]]
                 self.propagators_database.next_new_constraint_index += 1
                 
-                assert propagator_group.enabler is None #REVIEW
                 if propagator_group.enabler is not None:
                     continue
 
@@ -913,7 +912,6 @@ class DiffReasoner(Reasoner):
                 (propagator_group_id, enabler) = self.propagators_pending_for_activation.pop()
                 propagator_group = self.propagators_database.propagators[propagator_group_id]
 
-                assert propagator_group.enabler is None # REVIEWw
                 if propagator_group.enabler is not None:
                     continue
                 propagator_group.enabler = enabler
@@ -1488,6 +1486,8 @@ class DiffReasoner(Reasoner):
             curr_bound = state.bound_value_of(curr_node)
 
             # Process all outgoing edges
+            if curr_node not in self.propagators_active:
+                continue
             for prop_target, prop_weight, prop_id in self.propagators_active[curr_node]:
                 
                 # TODO: here we check that the target is present and thus that all nodes in the path are present.
@@ -1499,7 +1499,7 @@ class DiffReasoner(Reasoner):
                 # that if there is an edge `a -> b` then there is an (-b) -> (-a)` that can be used for backward traversal.
                 # To properly fix this, we should index the active propagators backward and make this dijkstra pass
                 # aware of whether it is traversing backward or forward.
-                if (dijkstra_state.is_final(prop_target)
+                if (not dijkstra_state.is_final(prop_target)
                     and state.is_entailed(state.presence_literal_of(prop_target.var))
                 ):
                     

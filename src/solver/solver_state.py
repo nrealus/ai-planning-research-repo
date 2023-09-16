@@ -562,10 +562,10 @@ class SolverState():
         # (both from => to and (not to) => (not from))
         else:
             self._non_optionals_implication_graph.add(element=lit_to,
-                                                      guard_literal=lit_from)
+                                                      literal=lit_from)
 
             self._non_optionals_implication_graph.add(element=lit_from.negated,
-                                                      guard_literal=lit_to.negated)
+                                                      literal=lit_to.negated)
 
         # If from_literal is true, to_literal needs to be enforced as true.
         # (Indeed (from => to) <=> ((not from) or to))
