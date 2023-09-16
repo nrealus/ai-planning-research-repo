@@ -867,9 +867,8 @@ class DiffReasoner(Reasoner):
                     for enabler in propagator_group.potential_enablers:
                         enabler_active_neg = enabler.active.negated
 
-                        res = state.set_bound_value(enabler_active_neg.signed_var,
-                                                     enabler_active_neg.bound_value,
-                                                     cause)
+                        res = state.set_literal(enabler_active_neg,
+                                                cause)
                         if isinstance(res, InvalidBoundUpdateInfo):
                             return res
 
@@ -945,9 +944,9 @@ class DiffReasoner(Reasoner):
                 # Does not support self loops (handled above).
 
                 res = state.set_bound_value(propagator_group.target,
-                                             BoundVal(state.bound_value_of(propagator_group.source)+propagator_group.weight),
-                                             Causes.ReasonerInference(id(self),
-                                                                    DiffReasoner.InferenceCauses.EdgeProp(propagator_group_id)))
+                                            BoundVal(state.bound_value_of(propagator_group.source)+propagator_group.weight),
+                                            Causes.ReasonerInference(id(self),
+                                                                     DiffReasoner.InferenceCauses.EdgeProp(propagator_group_id)))
                 match res:
 
                     case InvalidBoundUpdateInfo():
@@ -1050,8 +1049,8 @@ class DiffReasoner(Reasoner):
                 candidate = BoundVal(source_bound + weight)
 
                 res = state.set_bound_value(target,
-                                             candidate,
-                                             Causes.ReasonerInference(id(self),
+                                            candidate,
+                                            Causes.ReasonerInference(id(self),
                                                                     DiffReasoner.InferenceCauses.EdgeProp(group_id)))
 
                 match res:
@@ -1135,11 +1134,9 @@ class DiffReasoner(Reasoner):
             self.propagation_metadata_trail[state.decision_level].append(None)
 
             # Disable the edge
-            state.set_bound_value(
-                out_presence.negated.signed_var,
-                out_presence.negated.bound_value,
-                Causes.ReasonerInference(id(self),
-                                       DiffReasoner.InferenceCauses.TheoryProp(len(self.theory_propagation_causes)-1)))
+            state.set_literal(out_presence.negated,
+                              Causes.ReasonerInference(id(self),
+                                                       DiffReasoner.InferenceCauses.TheoryProp(len(self.theory_propagation_causes)-1)))
 
         return None
 
@@ -1231,11 +1228,9 @@ class DiffReasoner(Reasoner):
                     self.propagation_metadata_trail[state._dec_lvl].append(None)
                     
                     # Update to force this edge to be inactive
-                    res = state.set_bound_value(
-                        potential_presence.negated.signed_var,
-                        potential_presence.negated.bound_value,
-                        Causes.ReasonerInference(id(self),
-                                               DiffReasoner.InferenceCauses.TheoryProp(len(self.theory_propagation_causes)-1)))
+                    res = state.set_literal(potential_presence.negated,
+                                            Causes.ReasonerInference(id(self),
+                                                                     DiffReasoner.InferenceCauses.TheoryProp(len(self.theory_propagation_causes)-1)))
 
                     if isinstance(res, InvalidBoundUpdateInfo):
                         return res

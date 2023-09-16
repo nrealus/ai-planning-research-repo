@@ -345,7 +345,7 @@ class SolverState():
             ev = self._events_trail[dl][i]
 
             if ev.previous_bound_value.is_stronger_than(literal.bound_value):
-                ev_index = ev.previous_index    # BUG !!!!!!
+                ev_index = ev.previous_index 
             else:
                 break
         
@@ -369,6 +369,9 @@ class SolverState():
         literal: Lit,
         cause: Causes.AnyCause,
     ) -> bool | InvalidBoundUpdateInfo:
+        """
+        Syntactic sugar for `set_bound_value`.
+        """
         
         return self.set_bound_value(literal.signed_var, literal.bound_value, cause)
 

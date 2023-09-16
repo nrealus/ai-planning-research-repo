@@ -147,8 +147,8 @@ class Lit(NamedTuple):
         value: int     
     ) -> Lit:
         """
-        Returns:
-            A `[var <= value]` literal (i.e. `[+var <= value]`).
+        Syntactic sugar for `Lit(SignedVar.plus(var), BoundVal(value))`, which
+        represents the `[var <= value]` literal.
         """
         return Lit(SignedVar.plus(var), BoundVal(value))
 
@@ -160,8 +160,8 @@ class Lit(NamedTuple):
         value: int     
     ) -> Lit:
         """
-        Returns:
-            A `[var >= value]` literal (i.e. `[-var <= -value]`).
+        Syntactic sugar for `Lit(SignedVar.minus(var), BoundVal(-value))`, which
+        represents the `[var >= value]` literal.
         """
         return Lit(SignedVar.minus(var), BoundVal(-value))
 
