@@ -1,3 +1,7 @@
+"""
+TODO
+"""
+
 from __future__ import annotations
 
 #################################################################################
@@ -9,14 +13,14 @@ from typing import (Callable, Dict, Iterable, List, NamedTuple, Optional, Set,
                     Tuple, Union)
 
 from src.fundamentals import TRUE_LIT, BoundVal, Lit, SignedVar, Var
-from src.solver.common import Causes, InvalidBoundUpdateInfo, ReasonerBaseExplanation
+from src.solver.common import Causes, InvalidBoundUpdateInfo, ReasonerBaseExplanation, SetGuardedByLiterals
 from src.solver.reasoners.reasoner import Reasoner
 from src.solver.solver_state import SolverState
 
 MAX_INT = 2**64
 
 #################################################################################
-# - DIFFERENCE LOGIC (STN) REASONER
+# DIFFERENCE LOGIC (STN) REASONER
 #################################################################################
 
 class DiffReasoner(Reasoner):
@@ -161,7 +165,7 @@ class DiffReasoner(Reasoner):
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-        watches: Dict[SignedVar, Dict[BoundVal, List[Tuple[DiffReasoner.PropaGroupId, DiffReasoner.Enabler]]]] = field(default_factory=dict)
+        watchlists: SetGuardedByLiterals[Tuple[DiffReasoner.PropaGroupId, DiffReasoner.Enabler]] = field(default_factory=SetGuardedByLiterals)
         """
         Associates literals to propagators (with an enabler) that should be activated
         when they become true.
@@ -401,6 +405,7 @@ class DiffReasoner(Reasoner):
     def __init__(self):
 
         self.propagators_database: DiffReasoner.PropaDatabase = DiffReasoner.PropaDatabase()
+
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
         self.propagators_active: Dict[SignedVar, List[Tuple[SignedVar, BoundVal, DiffReasoner.PropaGroupId]]] = {}
@@ -629,12 +634,8 @@ class DiffReasoner(Reasoner):
                     # Set a watch on both `enabler.active` and `enabler.valid` literals
                     # (when one of them becomes true, we will still have to check that the
                     # other one becomes true as well)
-                    self.propagators_database.watches.setdefault(
-                        eblr.active.signed_var, {}).setdefault(
-                            eblr.active.bound_value, []).append((propagator_group_id, eblr))
-                    self.propagators_database.watches.setdefault(
-                        eblr.valid.signed_var, {}).setdefault(
-                            eblr.valid.bound_value, []).append((propagator_group_id, eblr))
+                    self.propagators_database.watchlists.add((propagator_group_id, eblr), eblr.active)
+                    self.propagators_database.watchlists.add((propagator_group_id, eblr), eblr.valid)
 
                     self.propagators_database.intermittent_propagators.setdefault(
                         self.propagators_database.propagators[propagator_group_id].source, []).append((
@@ -778,8 +779,8 @@ class DiffReasoner(Reasoner):
                 # NOTE: no need to reset/update self.constraints_database.next_new_constraint_index !
             else:
                 (propagator_group_id, enabler) = ev
-                self.propagators_database.watches[enabler.active.signed_var][enabler.active.bound_value].remove((propagator_group_id, enabler))
-                self.propagators_database.watches[enabler.valid.signed_var][enabler.valid.bound_value].remove((propagator_group_id, enabler))
+                self.propagators_database.watchlists.remove((propagator_group_id, enabler), enabler.active)
+                self.propagators_database.watchlists.remove((propagator_group_id, enabler), enabler.valid)
                 propagator_group = self.propagators_database.propagators[propagator_group_id]
                 self.propagators_database.intermittent_propagators[propagator_group.source].pop()
         self.propagators_database.propagator_groups_events_trail[state.decision_level+1].clear()
@@ -884,11 +885,9 @@ class DiffReasoner(Reasoner):
                 
                 # If a watched literal was newly entailed, check if makes enabling conditions of an edge / propagator
                 # group true. If so, enqueue such edges / propagator groups to pending active propagators.
-                for guard_bound_val, propagator_groups_and_enablers in self.propagators_database.watches.setdefault(ev.signed_var, {}).items():
-                    if ev.new_bound_value.is_stronger_than(guard_bound_val):
-                        for (propagator_group_id, enabler) in propagator_groups_and_enablers:
-                            if state.is_entailed(enabler.active) and state.is_entailed(enabler.valid):
-                                self.propagators_pending_for_activation.insert(0, (propagator_group_id, enabler))
+                for propagator_group_id, enabler in self.propagators_database.watchlists.elements_guarded_by(Lit(ev.signed_var, ev.new_bound_value)):
+                    if state.is_entailed(enabler.active) and state.is_entailed(enabler.valid):
+                        self.propagators_pending_for_activation.insert(0, (propagator_group_id, enabler))
                 
                 if "bounds" in theory_propagation_levels:
                     res = self.theory_propagate_bound(Lit(ev.signed_var, ev.new_bound_value), state)
