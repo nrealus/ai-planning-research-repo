@@ -330,24 +330,23 @@ class SolverState():
 
         if not self.is_entailed(literal):
             raise ValueError(("Literal not entailed: A literal must be entailed ",
-                             "to find its first entailing event"))
-
-        ev_index = self._bound_values_event_indices.get(literal.signed_var, None)
-
-        if ev_index is None:
-            return None
+                              "to find its first entailing event"))
 
         ev: Event
 
+        ev_index = self._bound_values_event_indices.get(literal.signed_var, None)
+
         while True:
+
+            if ev_index is None:
+                return None
+
             dl, i = ev_index
             ev = self._events_trail[dl][i]
 
-            if not ev.previous_bound_value.is_stronger_than(literal.bound_value):
-                break
-
-            ev_index = ev.previous_index
-            if ev_index is None:
+            if ev.previous_bound_value.is_stronger_than(literal.bound_value):
+                ev_index = ev.previous_index    # BUG !!!!!!
+            else:
                 break
         
         return ev
@@ -478,10 +477,12 @@ class SolverState():
             # The bound update will succeed only if implication propagation
             # is successful. A conflict will be returned otherwise.
 
-            i = self.num_events_at_current_decision_level-1
-            j = i+1
+            pending_lit = Lit(ev.signed_var, ev.new_bound_value)
 
-            while i < j:
+            i = self.num_events_at_current_decision_level-1
+            j = i
+
+            while i <= j:
 
                 pending_lit = Lit(self._events_trail[self.decision_level][i].signed_var,
                                   self._events_trail[self.decision_level][i].new_bound_value)
@@ -505,23 +506,24 @@ class SolverState():
                     # The update to the implied literal's variable's bound is not useless and is valid.
                     # It is pushed to the trail of events, and information on the previous bound is recorded.
 
-                    assert j == self.num_events_at_current_decision_level
+                    assert j+1 == self.num_events_at_current_decision_level
 
                     ev = Event(implied_lit.signed_var,
                                implied_lit.bound_value,
                                previous_bound_value=self.bound_value_of(implied_lit.signed_var),
-                               index=(self.decision_level, self.num_events_at_current_decision_level),
+                               index=(self.decision_level, j+1),
                                previous_index=self._bound_values_event_indices.get(implied_lit.signed_var, None),
                                cause=Causes.ImplicationPropagation(pending_lit))
 
                     self._events_trail[self.decision_level].append(ev)
 
                     self._bound_values[implied_lit.signed_var] = implied_lit.bound_value
-                    self._bound_values_event_indices[signed_var] = ev.index
+                    self._bound_values_event_indices[implied_lit.signed_var] = ev.index
+
                     j += 1
 
                 i += 1
-
+                
         return True
 
     # TODO: minimal domain size for uncontrollable variables ?
