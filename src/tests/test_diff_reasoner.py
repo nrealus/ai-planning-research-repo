@@ -303,7 +303,7 @@ class TestDiffReasonerBasics(unittest.TestCase):
         for i, (_, var) in enumerate(vars):
             if i <= 4:
                 self.assertEqual((-solver.state._bound_values[SignedVar.minus(var)], solver.state._bound_values[SignedVar.plus(var)]), 
-                                (i, 20))
+                                 (i, 20))
             else:
                 self.assertTrue(solver.state.is_entailed(solver.state.presence_literal_of(var).negated))
 
