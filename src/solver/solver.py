@@ -169,7 +169,7 @@ class Solver():
         explanation_literals: List[Lit],
         literal: Lit,
         cause: Causes.AnyCause,
-        explain_function: Callable[[List[Lit], Lit, Causes.ReasonerInference, Solver], None],
+        explain_function: Callable[[List[Lit], Lit, Causes.ReasonerInference, SolverState], None],
     ) -> None:
         """
         Computes a set of literals l_1, ..., l_n such that:
@@ -205,7 +205,7 @@ class Solver():
 
             case Causes.ReasonerInference():
                 # Ask the reasoner for an explanation clause (l_1 & ... & l_n) => literal
-                explain_function(explanation_literals, literal, cause, self)
+                explain_function(explanation_literals, literal, cause, self.state)
 
             case Causes.ImplicationPropagation():
                 explanation_literals.append(cause.literal)
@@ -217,7 +217,7 @@ class Solver():
 
                     case Causes.ReasonerInference():
                         # Ask the reasoner for an explanation clause (l_1 & ... & l_n) => cause.literal
-                        explain_function(explanation_literals, cause.literal, cause.cause, self)
+                        explain_function(explanation_literals, cause.literal, cause.cause, self.state)
 
                     case Causes.ImplicationPropagation():
                         explanation_literals.append(cause.cause.literal)
@@ -232,7 +232,7 @@ class Solver():
 
     def explain_invalid_bound_update(self,
         invalid_bound_update_info: InvalidBoundUpdateInfo,
-        explain_function: Callable[[List[Lit], Lit, Causes.ReasonerInference, Solver], None],
+        explain_function: Callable[[List[Lit], Lit, Causes.ReasonerInference, SolverState], None],
     ) -> ConflictAnalysisResult:
         """
         Given an invalid bound update of a literal 'l',
@@ -281,7 +281,7 @@ class Solver():
 
     def refine_explanation(self,
         explanation_literals: List[Lit],
-        explain_function: Callable[[List[Lit], Lit, Causes.ReasonerInference, Solver], None],
+        explain_function: Callable[[List[Lit], Lit, Causes.ReasonerInference, SolverState], None],
     ) -> ConflictAnalysisResult:
         """
         Refines an explanation into an asserting clause.
