@@ -16,7 +16,8 @@ class TestSolverBasics(unittest.TestCase):
 
     def test_non_optional_vars_set_bound_values(self):
 
-        solver = Solver()
+        solver = Solver(use_sat_reasoner=False,
+                        use_diff_reasoner=False)
 
         A = solver.add_new_non_optional_variable((0, 10), True)
 
@@ -60,7 +61,8 @@ class TestSolverBasics(unittest.TestCase):
 
     def test_optional_vars_set_bound_values(self):
 
-        solver = Solver()
+        solver = Solver(use_sat_reasoner=False,
+                        use_diff_reasoner=False)
 
         # NOTE: we do not use `add_new_presence_variable` because we
         # do not need "advanced" scope managemenet for the purposes of
@@ -131,7 +133,8 @@ class TestSolverBasics(unittest.TestCase):
 
     def test_presence_relations(self):
 
-        solver = Solver()
+        solver = Solver(use_sat_reasoner=False,
+                        use_diff_reasoner=False)
 
         def always_present_together(A, B):
             return solver.state.presence_literal_of(A) == solver.state.presence_literal_of(B)
@@ -178,7 +181,8 @@ class TestSolverBasics(unittest.TestCase):
 
     def test_implications(self):
         
-        solver = Solver()
+        solver = Solver(use_sat_reasoner=False,
+                        use_diff_reasoner=False)
 
         A = solver.add_new_non_optional_variable((-10,10), True)
         B = solver.add_new_non_optional_variable((-10,10), True)
@@ -225,7 +229,8 @@ class TestSolverBasics(unittest.TestCase):
 
     def test_explanation(self):
 
-        solver = Solver()
+        solver = Solver(use_sat_reasoner=False,
+                        use_diff_reasoner=False)
 
         a = Lit.geq(solver.add_new_non_optional_variable((0,1), True), 1)
         b = Lit.geq(solver.add_new_non_optional_variable((0,1), True), 1)
@@ -249,7 +254,7 @@ class TestSolverBasics(unittest.TestCase):
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-        def dummy_reasoner_explain(expl, lit, cause: Causes.ReasonerInference, _) -> None:
+        def dummy_reasoner_explain(expl, lit, cause: Causes.ReasonerInference) -> None:
             if cause.inference_info == 0:
                 self.assertEqual(lit, Lit.leq(n, 4))
                 expl.append(a)
@@ -276,7 +281,7 @@ class TestSolverBasics(unittest.TestCase):
 
         propag()
 
-        solver.increment_one_decision_level(())
+        solver.increment_one_decision_level()
         solver.state.set_literal(a, Causes.Decision())
 
         self.assertEqual((-solver.state.bound_value_of(SignedVar.minus(a.signed_var.var)),
@@ -289,7 +294,7 @@ class TestSolverBasics(unittest.TestCase):
 
         solver.state.set_literal(Lit.geq(n, 1), Causes.Decision())
 
-        solver.increment_one_decision_level(())
+        solver.increment_one_decision_level()
         solver.state.set_literal(b, Causes.Decision())
 
         err = propag()
@@ -315,7 +320,8 @@ class TestSolverBasics(unittest.TestCase):
     def test_scoped_disjunction(self):
     # TODO: should be removed: we should test constraint addition and posting instead
 
-        solver = Solver()
+        solver = Solver(use_sat_reasoner=False,
+                        use_diff_reasoner=False)
 
         def scoped_disj(clause_lits, scope):
 

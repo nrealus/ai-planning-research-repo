@@ -45,10 +45,9 @@ class SATReasoner(Reasoner):
 
     def _get_literal_value(self,
         literal: Lit,
-        state: SolverState,
     ) -> Optional[bool]:
         """
-        Syntactic sugar around `state.is_entailed`.
+        Syntactic sugar around `self.state.is_entailed`.
 
         Args:
             literal: A literal.
@@ -60,9 +59,9 @@ class SATReasoner(Reasoner):
                 known to be true or false).
         """ 
 
-        if state.is_entailed(literal):
+        if self.state.is_entailed(literal):
             return True
-        elif state.is_entailed(literal.negated):
+        elif self.state.is_entailed(literal.negated):
             return False
         else:
             return None
@@ -163,7 +162,11 @@ class SATReasoner(Reasoner):
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
  
-    def __init__(self):
+    def __init__(self,
+        state: SolverState,
+    ):
+
+        self._state: SolverState = state
 
         self._clauses_id_counter: int = 0
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -252,7 +255,11 @@ class SATReasoner(Reasoner):
         The index of the next unprocessed (i.e. not yet propagated) event
         in the main solver's events trail (in the current decision level).
         """
-        
+    
+    @property
+    def state(self) -> SolverState:
+        return self._state
+
     #############################################################################
     # CLAUSE ADDITION / REGISTRATION
     #############################################################################
@@ -356,7 +363,6 @@ class SATReasoner(Reasoner):
             
     def _move_watches_front(self,
         clause_id: SATReasoner.ClauseId,
-        state: SolverState,
     ) -> None:
         """
         Selects the two (unbound) literals that should be watched
@@ -374,13 +380,13 @@ class SATReasoner(Reasoner):
         """
 
         def priority_of_lit(lit: Lit) -> int:
-            match self._get_literal_value(lit, state):
+            match self._get_literal_value(lit):
                 case True:
                     return MAX_INT
                 case None:
                     return MAX_INT-1
                 case False:
-                    first_impl_ev = state.first_event_entailing(lit.negated)
+                    first_impl_ev = self.state.first_event_entailing(lit.negated)
                     if first_impl_ev is None or first_impl_ev.index[0] == 0:
                         return 0
                     return first_impl_ev.index[0]+first_impl_ev.index[1]
@@ -428,34 +434,28 @@ class SATReasoner(Reasoner):
     # MAIN SOLVER DECISION LEVEL INCREASE & DECREASE CALLBACKS
     #############################################################################
 
-    def on_solver_increment_one_decision_level(self,
-        state: SolverState,
-    ) -> None:
+    def on_solver_increment_one_decision_level(self) -> None:
         
         self.next_unprocessed_solver_event_index = 0
 
-        if len(self.locked_clauses_trail) == state.decision_level:
+        if len(self.locked_clauses_trail) == self.state.decision_level:
             self.locked_clauses_trail.append([])
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-    def on_solver_backtrack_one_decision_level(self,
-        state: SolverState,
-    ) -> None:
+    def on_solver_backtrack_one_decision_level(self) -> None:
 
-        for locked_clause in reversed(self.locked_clauses_trail[state.decision_level+1]):
+        for locked_clause in reversed(self.locked_clauses_trail[self.state.decision_level+1]):
             self.locked_clauses.remove(locked_clause)
-        self.locked_clauses_trail[state.decision_level+1].clear()
+        self.locked_clauses_trail[self.state.decision_level+1].clear()
 
-        self.next_unprocessed_solver_event_index = state.num_events_at_current_decision_level
+        self.next_unprocessed_solver_event_index = self.state.num_events_at_current_decision_level
 
     #############################################################################
     # PROPAGATION
     #############################################################################
 
-    def propagate(self,
-        state: SolverState,
-    ) -> Optional[ReasonerBaseExplanation]:
+    def propagate(self) -> Optional[ReasonerBaseExplanation]:
         """
         Main propagation method of the SAT reasoner.
         Performs unit propagation (aka boolean constraint propagation).
@@ -481,15 +481,15 @@ class SATReasoner(Reasoner):
 
             clause_id, asserted_literal = self.pending_clauses_info.pop()
 
-            violated_clause_id = self._process_pending_clause(clause_id, state)
+            violated_clause_id = self._process_pending_clause(clause_id)
 
             if violated_clause_id is not None:
                 break
 
             if asserted_literal is not None:
 
-                if not state.is_entailed(asserted_literal):
-                    self._set_from_unit_propagation(asserted_literal, clause_id, state)
+                if not self.state.is_entailed(asserted_literal):
+                    self._set_from_unit_propagation(asserted_literal, clause_id)
 
         # If no violated clause was detected above,
         # process/propagate new events/bound updates.
@@ -497,7 +497,7 @@ class SATReasoner(Reasoner):
         if violated_clause_id is None:
             self._scale_database()
 
-            violated_clause_id = self._propagate_enqueued(state)
+            violated_clause_id = self._propagate_enqueued()
 
             if violated_clause_id is None:
                 return None
@@ -518,7 +518,6 @@ class SATReasoner(Reasoner):
 
     def _process_pending_clause(self,
         clause_id: SATReasoner.ClauseId,
-        state: SolverState,
     ) -> Optional[SATReasoner.ClauseId]:
         """
         Processes a pending (i.e. newly added and not yet processed)
@@ -533,29 +532,29 @@ class SATReasoner(Reasoner):
 
             self._add_watch(clause_id, clause.watch1.negated)
 
-            match self._get_literal_value(clause.watch1, state):
+            match self._get_literal_value(clause.watch1):
                 # If the literal is known to be true, the clause is satisfied.
                 case True:
                     return None 
                 # If the literal is known to be false, the clause is violated.
                 case False:
-                    return self._process_violated_clause(clause_id, state)
+                    return self._process_violated_clause(clause_id)
                 # If the literal is unbound, it must be set to true
                 # (because it's the only literal of the clause).
                 case None:
-                    self._set_from_unit_propagation(clause.watch1, clause_id, state)
+                    self._set_from_unit_propagation(clause.watch1, clause_id)
                     return None
         
         # If the clause has 2 or more literals
 
         # Update watched literals (to possibly, but not necessarily new ones).
-        self._move_watches_front(clause_id, state)
+        self._move_watches_front(clause_id)
 
         # Determine whether a watch should indeed be set on the new 1st
         # and 2nd watched literals (based on the priority values - see `_move_watches_front()`)
 
-        watch1_value = self._get_literal_value(clause.watch1, state)
-        watch2_value = self._get_literal_value(clause.watch2, state)
+        watch1_value = self._get_literal_value(clause.watch1)
+        watch2_value = self._get_literal_value(clause.watch2)
 
         # If the 1st watched literal is true, the clause is satisfied.
         # The state is unchanged and a watch is set. 
@@ -574,7 +573,7 @@ class SATReasoner(Reasoner):
             self._add_watch(clause_id, clause.watch1.negated)
             self._add_watch(clause_id, clause.watch2.negated)
 
-            return self._process_violated_clause(clause_id, state)
+            return self._process_violated_clause(clause_id)
 
         # If the 1st and 2nd watched literal are unbound,
         # the state is unchanged and a watch is set.
@@ -594,7 +593,7 @@ class SATReasoner(Reasoner):
             self._add_watch(clause_id, clause.watch1.negated)
             self._add_watch(clause_id, clause.watch2.negated)
 
-            self._set_from_unit_propagation(clause.watch1, clause_id, state)
+            self._set_from_unit_propagation(clause.watch1, clause_id)
 
             return None
 
@@ -602,7 +601,6 @@ class SATReasoner(Reasoner):
     
     def _process_violated_clause(self,
         clause_id: SATReasoner.ClauseId,
-        state: SolverState,
     ) -> Optional[SATReasoner.ClauseId]:
         """
         Processes a clause that is violated. This is done by deactivating
@@ -615,7 +613,7 @@ class SATReasoner(Reasoner):
         
         scope_literal = self.clauses_database[clause_id].scope_literal
 
-        match self._get_literal_value(scope_literal, state):
+        match self._get_literal_value(scope_literal):
 
             case True:
                 return clause_id
@@ -624,14 +622,12 @@ class SATReasoner(Reasoner):
                 return None
 
             case None:
-                self._set_from_unit_propagation(scope_literal.negated, clause_id, state)
+                self._set_from_unit_propagation(scope_literal.negated, clause_id)
                 return None
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-    def _propagate_enqueued(self,
-        state: SolverState,
-    ) -> Optional[SATReasoner.ClauseId]:
+    def _propagate_enqueued(self) -> Optional[SATReasoner.ClauseId]:
         """
         Propagates enqueued "unit information", notably new events resulting
         from the processing of pending clauses. As such, all clauses must be
@@ -645,8 +641,8 @@ class SATReasoner(Reasoner):
         """
 
         # Loop through yet unprocessed events, accumulated since the last call to this function.
-        while self.next_unprocessed_solver_event_index < state.num_events_at_current_decision_level:
-            ev = state._events_trail[state.decision_level][self.next_unprocessed_solver_event_index]
+        while self.next_unprocessed_solver_event_index < self.state.num_events_at_current_decision_level:
+            ev = self.state._events_trail[self.state.decision_level][self.next_unprocessed_solver_event_index]
             self.next_unprocessed_solver_event_index += 1
 
             # Select clauses with a literal that is 
@@ -669,9 +665,9 @@ class SATReasoner(Reasoner):
                         and ev.new_bound_value.is_stronger_than(watched_literal.bound_value)
                         and not ev.previous_bound_value.is_stronger_than(watched_literal.bound_value)
                     ):
-                        if not self._propagate_clause(clause_id,
-                                                      Lit(ev.signed_var, ev.new_bound_value),
-                                                      state):
+                        if (not self._propagate_clause(clause_id,
+                                                      Lit(ev.signed_var, ev.new_bound_value))
+                        ):
                             contradicting_clause_id = clause_id
 
                     # Otherwise, the watch must be restored.
@@ -686,7 +682,6 @@ class SATReasoner(Reasoner):
     def _propagate_clause(self, 
         clause_id: SATReasoner.ClauseId,
         lit: Lit,
-        state: SolverState,
     ) -> bool:
         """
         Propagates a clause that is watching a literal lit that became true.
@@ -706,7 +701,7 @@ class SATReasoner(Reasoner):
         if clause.watch1 == clause.watch2:
 
             self._add_watch(clause_id, lit)
-            return self._process_violated_clause(clause_id, state) is None
+            return self._process_violated_clause(clause_id) is None
 
         if lit.entails(clause.watch1.negated):
 
@@ -714,7 +709,7 @@ class SATReasoner(Reasoner):
         
         # If the 1st watched literal is true, the clause is satisfied.
         # The watch is restored.
-        if state.is_entailed(clause.watch1):
+        if self.state.is_entailed(clause.watch1):
 
             self._add_watch(clause_id, clause.watch2.negated)
             return True
@@ -724,7 +719,7 @@ class SATReasoner(Reasoner):
         for i in range(len(clause.unwatched_indices)):
 
             cached_unwatched = clause.unwatched(i)
-            if not state.is_entailed(cached_unwatched.negated):
+            if not self.state.is_entailed(cached_unwatched.negated):
 
                 self._swap_watch2_and_unwatched_i(clause_id, i)
                 self._add_watch(clause_id, cached_unwatched.negated)
@@ -736,15 +731,15 @@ class SATReasoner(Reasoner):
 
         cached_watch1 = clause.watch1
 
-        if state.is_entailed(cached_watch1):
+        if self.state.is_entailed(cached_watch1):
             return True
 
         # If the clause is violated, deactivate it if possible
-        elif state.is_entailed(cached_watch1.negated):
-            return self._process_violated_clause(clause_id, state) is None
+        elif self.state.is_entailed(cached_watch1.negated):
+            return self._process_violated_clause(clause_id) is None
 
         else:
-            self._set_from_unit_propagation(cached_watch1, clause_id, state)
+            self._set_from_unit_propagation(cached_watch1, clause_id)
             return True
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -752,7 +747,6 @@ class SATReasoner(Reasoner):
     def _set_from_unit_propagation(self,
         literal: Lit,
         propagating_clause_id: SATReasoner.ClauseId,
-        state: SolverState,
     ) -> None:
         """
         Sets the literal to true, as a result of unit propagation.
@@ -769,12 +763,12 @@ class SATReasoner(Reasoner):
         may be needed to provide an explanation.
         """
 
-        is_bound_changed = state.set_literal(literal,
+        is_bound_changed = self.state.set_literal(literal,
                                              Causes.ReasonerInference(id(self),
                                                                       propagating_clause_id))
 
         if is_bound_changed is True:
-            self.locked_clauses_trail[state.decision_level].append(propagating_clause_id)
+            self.locked_clauses_trail[self.state.decision_level].append(propagating_clause_id)
             self.locked_clauses.add(propagating_clause_id)
             # FIXME:
             # if solver.clauses_db.clauses[propagating_clause_id].learned:
@@ -789,7 +783,6 @@ class SATReasoner(Reasoner):
         explanation_literals: List[Lit],
         literal: Lit,
         inference_cause: Causes.ReasonerInference,
-        state: SolverState,
     ) -> None:
         """
         TODO

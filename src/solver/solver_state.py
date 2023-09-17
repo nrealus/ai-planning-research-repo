@@ -128,14 +128,6 @@ class SolverState():
         """
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-#
-#        self.reasoners: List[Reasoner] = []
-#        """
-#        The set of reasoners plugged into the solver. There cannot be 2 or more
-#        reasoners of the same type.
-#        """
-#
-        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
         self._vars[False].add(ZERO_VAR)
         self._presence_literals[ZERO_VAR] = TRUE_LIT

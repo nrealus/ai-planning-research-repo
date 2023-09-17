@@ -402,7 +402,11 @@ class DiffReasoner(Reasoner):
 
     #############################################################################
  
-    def __init__(self):
+    def __init__(self,
+        state: SolverState,
+    ):
+
+        self._state: SolverState = state
 
         self.propagators_database: DiffReasoner.PropaDatabase = DiffReasoner.PropaDatabase()
 
@@ -450,6 +454,10 @@ class DiffReasoner(Reasoner):
 #
 #        self.num_distance_updates: int = 0
 
+    @property
+    def state(self) -> SolverState:
+        return self._state
+
     #############################################################################
     # (REIFIED) DIFFERENCE CONSTRAINT ADDITION
     #############################################################################
@@ -460,7 +468,6 @@ class DiffReasoner(Reasoner):
         source: Var,
         target: Var,
         weight: int,
-        state: SolverState,
     ) -> None:
         """
         Adds a new difference constraint (`target - source <= weight`), i.e. STN
@@ -522,7 +529,7 @@ class DiffReasoner(Reasoner):
             # Only optimize organisation of propagator groups at the top decision level,
             # because if done at a decision level beyond, it would to complex to undo/backtrack
             # the changes made to the groups.
-            if state._dec_lvl == 0:
+            if self.state.decision_level == 0:
                 
                 self.propagators_database.propagators_source_and_target.setdefault((src, tgt), [])
 
@@ -587,7 +594,7 @@ class DiffReasoner(Reasoner):
             self.propagators_database.propagators_list.append(created_group_id)
             self.propagators_database.propagators_source_and_target.setdefault((src, tgt), []).append(created_group_id)
 
-            self.propagators_database.propagator_groups_events_trail[state._dec_lvl].append(None)
+            self.propagators_database.propagator_groups_events_trail[self.state.decision_level].append(None)
 
             return (created_group_id, "creating")
             
@@ -613,15 +620,15 @@ class DiffReasoner(Reasoner):
                 or propagator_integrated_by == "merging"
             ):
                 # If the propagator can never be active/present, do nothing.
-                edge_valid = state.presence_literal_of(eblr.active.signed_var.var)
-                if (state.is_entailed(eblr.active.negated)
-                    or state.is_entailed(edge_valid.negated)
+                edge_valid = self.state.presence_literal_of(eblr.active.signed_var.var)
+                if (self.state.is_entailed(eblr.active.negated)
+                    or self.state.is_entailed(edge_valid.negated)
                 ):
                     return
                 
                 # If the propagator is always active in the current (and following) decision
                 # levels, enqueue it for activation.
-                elif state.is_entailed(eblr.active) and state.is_entailed(eblr.valid):
+                elif self.state.is_entailed(eblr.active) and self.state.is_entailed(eblr.valid):
                     self.propagators_pending_for_activation.insert(0, (propagator_group_id, eblr))
 
                 # If the propagator isn't known to be active or inactive yet, 
@@ -643,7 +650,7 @@ class DiffReasoner(Reasoner):
                             self.propagators_database.propagators[propagator_group_id].weight,
                             eblr.active))
 
-                    self.propagators_database.propagator_groups_events_trail[state._dec_lvl].append((propagator_group_id, eblr))
+                    self.propagators_database.propagator_groups_events_trail[self.state.decision_level].append((propagator_group_id, eblr))
 
             # If an existing group was tightened (as a result of
             # a new propagator's integration into the database), then:
@@ -653,7 +660,7 @@ class DiffReasoner(Reasoner):
             #   enqueuing it for activation)
             elif propagator_integrated_by == "tightening":
 
-                if state.is_entailed(eblr.active) and state.is_entailed(eblr.valid):
+                if self.state.is_entailed(eblr.active) and self.state.is_entailed(eblr.valid):
                     self.propagators_database.propagators[propagator_group_id].enabler = None
                     self.propagators_pending_for_activation.insert(0, (propagator_group_id, eblr))
                 else:
@@ -671,9 +678,9 @@ class DiffReasoner(Reasoner):
         # 
         # As such, the edge is valid / well-defined iff its reification literal is
         # present (iff the source and target variables of the edge are both present)
-        edge_valid = state.presence_literal_of(reification_literal.signed_var.var)
-        assert state.is_implication_true(edge_valid, state.presence_literal_of(source))
-        assert state.is_implication_true(edge_valid, state.presence_literal_of(target))
+        edge_valid = self.state.presence_literal_of(reification_literal.signed_var.var)
+        assert self.state.is_implication_true(edge_valid, self.state.presence_literal_of(source))
+        assert self.state.is_implication_true(edge_valid, self.state.presence_literal_of(target))
 
         # The edge will be decomposed into 4 propagators:
         # 2 "canonical", and 2 "negated" (or "inverted": swapped source and target for them).
@@ -686,19 +693,19 @@ class DiffReasoner(Reasoner):
         # is valid, as well as a literal that is true iff a "negated" (target-to-source) propagator is valid.
 
         # "Canonical" propagator case.
-        if state.is_implication_true(state.presence_literal_of(target), edge_valid):
+        if self.state.is_implication_true(self.state.presence_literal_of(target), edge_valid):
             # If it is statically known that `presence(target) => edge_valid`, the propagator is always valid
             source_to_target_propagator_valid = TRUE_LIT
         else:
             # Given that `presence(source) & presence(target) <=> edge_valid`, we can infer that the propagator becomes valid
             # (i.e. `presence(target) => edge_valid` holds) when `presence(source)` becomes true
-            source_to_target_propagator_valid = state.presence_literal_of(source)
+            source_to_target_propagator_valid = self.state.presence_literal_of(source)
 
         # "Negated" propagator case (analogous).
-        if state.is_implication_true(state.presence_literal_of(source), edge_valid):
+        if self.state.is_implication_true(self.state.presence_literal_of(source), edge_valid):
             target_to_source_propagator_valid = TRUE_LIT
         else:
-            target_to_source_propagator_valid = state.presence_literal_of(target)
+            target_to_source_propagator_valid = self.state.presence_literal_of(target)
 
         propagators = [
 
@@ -737,38 +744,34 @@ class DiffReasoner(Reasoner):
     # MAIN SOLVER DECISION LEVEL INCREASE & DECREASE CALLBACKS
     #############################################################################
 
-    def on_solver_increment_one_decision_level(self,
-        state: SolverState,
-    ) -> None:
+    def on_solver_increment_one_decision_level(self) -> None:
 
         self.next_unprocessed_solver_event_index = 0
 
-        if len(self.propagation_metadata_trail) == state.decision_level:
+        if len(self.propagation_metadata_trail) == self.state.decision_level:
             self.propagation_metadata_trail.append([])
 
-        if len(self.propagators_database.propagator_groups_events_trail) == state.decision_level:
+        if len(self.propagators_database.propagator_groups_events_trail) == self.state.decision_level:
             self.propagators_database.propagator_groups_events_trail.append([])
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-    def on_solver_backtrack_one_decision_level(self,
-        state: SolverState,
-    ) -> None:
+    def on_solver_backtrack_one_decision_level(self) -> None:
 
         self.propagators_pending_for_activation.clear()
 
-        for ev in reversed(self.propagation_metadata_trail[state._dec_lvl+1]):
+        for ev in reversed(self.propagation_metadata_trail[self.state._dec_lvl+1]):
             if ev is None:
                 self.theory_propagation_causes.pop()
             else:
                 propagator_group = self.propagators_database.propagators[ev]
                 self.propagators_active[propagator_group.source].pop()
                 propagator_group.enabler = None
-        self.propagation_metadata_trail[state.decision_level+1].clear()
+        self.propagation_metadata_trail[self.state.decision_level+1].clear()
 
-        self.next_unprocessed_solver_event_index = state.num_events_at_current_decision_level
+        self.next_unprocessed_solver_event_index = self.state.num_events_at_current_decision_level
 
-        for ev in reversed(self.propagators_database.propagator_groups_events_trail[state.decision_level+1]):
+        for ev in reversed(self.propagators_database.propagator_groups_events_trail[self.state.decision_level+1]):
             if ev is None:
                 propagator_group_id = self.propagators_database.propagators_list.pop()
                 propagator_group = self.propagators_database.propagators.pop(propagator_group_id)
@@ -783,25 +786,22 @@ class DiffReasoner(Reasoner):
                 self.propagators_database.watchlists.remove((propagator_group_id, enabler), enabler.valid)
                 propagator_group = self.propagators_database.propagators[propagator_group_id]
                 self.propagators_database.intermittent_propagators[propagator_group.source].pop()
-        self.propagators_database.propagator_groups_events_trail[state.decision_level+1].clear()
+        self.propagators_database.propagator_groups_events_trail[self.state.decision_level+1].clear()
 
     #############################################################################
     #  PROPAGATION
     #############################################################################
 
-    def propagate(self,
-        state: SolverState,
-    ) -> Optional[InvalidBoundUpdateInfo | ReasonerBaseExplanation]:
+    def propagate(self) -> Optional[InvalidBoundUpdateInfo | ReasonerBaseExplanation]:
         """
         TODO
         """
-        return self._propagate(state, ("bounds",))
+        return self._propagate(("bounds",))
         # return self._propagate(solver, ("bounds", "edges"))
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     def _propagate(self,
-        state: SolverState,
         theory_propagation_levels: Tuple[str, ...]=("bounds",),
     ) -> Optional[InvalidBoundUpdateInfo | ReasonerBaseExplanation]:
         """
@@ -846,8 +846,8 @@ class DiffReasoner(Reasoner):
                 if propagator_group.enabler is not None:
                     continue
 
-                target_new_lb = BoundVal(state.bound_value_of(propagator_group.source) + propagator_group.weight)
-                target_current_ub = state.bound_value_of(propagator_group.target.opposite)
+                target_new_lb = BoundVal(self.state.bound_value_of(propagator_group.source) + propagator_group.weight)
+                target_current_ub = self.state.bound_value_of(propagator_group.target.opposite)
 
                 # If the lower bound implied by the propagator for the target is greater
                 # than its current upper bound, then the edge is impossible / is a contradiction.
@@ -857,9 +857,9 @@ class DiffReasoner(Reasoner):
 
                     self.theory_propagation_causes.append(
                         DiffReasoner.TheoryPropCauses.Bounds(
-                            Lit(propagator_group.source, state.bound_value_of(propagator_group.source)), 
+                            Lit(propagator_group.source, self.state.bound_value_of(propagator_group.source)), 
                             Lit(propagator_group.target.opposite, target_current_ub)))
-                    self.propagation_metadata_trail[state._dec_lvl].append(None)
+                    self.propagation_metadata_trail[self.state.decision_level].append(None)
                     
                     cause = Causes.ReasonerInference(id(self),
                                                    DiffReasoner.InferenceCauses.TheoryProp(len(self.theory_propagation_causes)-1))
@@ -867,29 +867,29 @@ class DiffReasoner(Reasoner):
                     for enabler in propagator_group.potential_enablers:
                         enabler_active_neg = enabler.active.negated
 
-                        res = state.set_literal(enabler_active_neg,
+                        res = self.state.set_literal(enabler_active_neg,
                                                 cause)
                         if isinstance(res, InvalidBoundUpdateInfo):
                             return res
 
         # Step (2) (see function documentation).
-        while (self.next_unprocessed_solver_event_index < state.num_events_at_current_decision_level
+        while (self.next_unprocessed_solver_event_index < self.state.num_events_at_current_decision_level
             or self.propagators_pending_for_activation
         ):
             
             # Step (2.1) (see function documentation).
-            while self.next_unprocessed_solver_event_index < state.num_events_at_current_decision_level:
-                ev = state._events_trail[state.decision_level][self.next_unprocessed_solver_event_index]
+            while self.next_unprocessed_solver_event_index < self.state.num_events_at_current_decision_level:
+                ev = self.state._events_trail[self.state.decision_level][self.next_unprocessed_solver_event_index]
                 self.next_unprocessed_solver_event_index += 1
                 
                 # If a watched literal was newly entailed, check if makes enabling conditions of an edge / propagator
                 # group true. If so, enqueue such edges / propagator groups to pending active propagators.
                 for propagator_group_id, enabler in self.propagators_database.watchlists.elements_guarded_by(Lit(ev.signed_var, ev.new_bound_value)):
-                    if state.is_entailed(enabler.active) and state.is_entailed(enabler.valid):
+                    if self.state.is_entailed(enabler.active) and self.state.is_entailed(enabler.valid):
                         self.propagators_pending_for_activation.insert(0, (propagator_group_id, enabler))
                 
                 if "bounds" in theory_propagation_levels:
-                    res = self.theory_propagate_bound(Lit(ev.signed_var, ev.new_bound_value), state)
+                    res = self.theory_propagate_bound(Lit(ev.signed_var, ev.new_bound_value))
                     if res is not None:
                         return res
                 
@@ -903,7 +903,7 @@ class DiffReasoner(Reasoner):
 
                 # Propagate bound change
                 if ev.signed_var in self.propagators_active and len(self.propagators_active[ev.signed_var]) > 0:
-                    res = self.run_propagation_loop(ev.signed_var, False, state)
+                    res = self.run_propagation_loop(ev.signed_var, False)
                     if res is not None:
                         return res
 
@@ -923,7 +923,7 @@ class DiffReasoner(Reasoner):
                         continue    # positive self-loop: useless / can be ignored
                     else:
                         return ReasonerBaseExplanation((propagator_group.enabler.active,
-                                                                  state.presence_literal_of(propagator_group.enabler.active.signed_var.var)))
+                                                        self.state.presence_literal_of(propagator_group.enabler.active.signed_var.var)))
 
                 # The edge / propagator group is not a self loop:
 
@@ -932,7 +932,7 @@ class DiffReasoner(Reasoner):
                     propagator_group.weight,
                     propagator_group_id))
 
-                self.propagation_metadata_trail[state._dec_lvl].append(propagator_group_id)
+                self.propagation_metadata_trail[self.state.decision_level].append(propagator_group_id)
 
                 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
                 # Propagate new edge: implementation of the Cesta96 algorithm.
@@ -940,8 +940,8 @@ class DiffReasoner(Reasoner):
                 # into a **consistent** constraint network / STN.
                 # Does not support self loops (handled above).
 
-                res = state.set_bound_value(propagator_group.target,
-                                            BoundVal(state.bound_value_of(propagator_group.source)+propagator_group.weight),
+                res = self.state.set_bound_value(propagator_group.target,
+                                            BoundVal(self.state.bound_value_of(propagator_group.source)+propagator_group.weight),
                                             Causes.ReasonerInference(id(self),
                                                                      DiffReasoner.InferenceCauses.EdgeProp(propagator_group_id)))
                 match res:
@@ -950,14 +950,14 @@ class DiffReasoner(Reasoner):
                         return res
                     
                     case True:
-                        res = self.run_propagation_loop(propagator_group.target, True, state)
+                        res = self.run_propagation_loop(propagator_group.target, True)
                         if res is not None:
                             return res
 
                 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
                 if "edges" in theory_propagation_levels:
-                    res = self.theory_propagate_edge(propagator_group_id, state)
+                    res = self.theory_propagate_edge(propagator_group_id)
                     if res is not None:
                         return res
 
@@ -968,7 +968,6 @@ class DiffReasoner(Reasoner):
     def run_propagation_loop(self,
         original: SignedVar,
         cycle_on_update: bool,
-        state: SolverState,
     ) -> Optional[InvalidBoundUpdateInfo | ReasonerBaseExplanation]:
         """
         TODO: ...Incremental Bellman-Ford...
@@ -995,11 +994,11 @@ class DiffReasoner(Reasoner):
             curr = vb
             cycle_length = 0
             while True:
-                value = state.bound_value_of(curr)
+                value = self.state.bound_value_of(curr)
 
-                ev = state.first_event_entailing(Lit(curr, value))
+                ev = self.state.first_event_entailing(Lit(curr, value))
                 assert ev is not None
-                assert ev.index[0] == state._dec_lvl
+                assert ev.index[0] == self.state.decision_level
 
 #                if not (isinstance(ev.cause, SolverCauses.ReasonerInference)
 #                    and isinstance(ev.cause.inference_info, DiffReasoner.InferenceCauses.EdgePropagation)
@@ -1016,7 +1015,7 @@ class DiffReasoner(Reasoner):
                 cycle_length += edge.weight
 
                 explanation_literals.append(edge.enabler.active)
-                explanation_literals.append(state.presence_literal_of(edge.enabler.active.signed_var.var))
+                explanation_literals.append(self.state.presence_literal_of(edge.enabler.active.signed_var.var))
 
                 if curr == vb:
                     return tuple(explanation_literals)
@@ -1025,7 +1024,7 @@ class DiffReasoner(Reasoner):
 
         while self.internal_pending_bounds_to_update_queue:
             source = self.internal_pending_bounds_to_update_queue.pop()
-            source_bound = state.bound_value_of(source)
+            source_bound = self.state.bound_value_of(source)
 
             # If the bound was already updated, ignore and move on to next
             if source not in self.pending_bounds_to_update:
@@ -1045,7 +1044,7 @@ class DiffReasoner(Reasoner):
 
                 candidate = BoundVal(source_bound + weight)
 
-                res = state.set_bound_value(target,
+                res = self.state.set_bound_value(target,
                                             candidate,
                                             Causes.ReasonerInference(id(self),
                                                                     DiffReasoner.InferenceCauses.EdgeProp(group_id)))
@@ -1069,7 +1068,6 @@ class DiffReasoner(Reasoner):
 
     def theory_propagate_bound(self,
         literal: Lit,
-        state: SolverState,
     ) -> Optional[InvalidBoundUpdateInfo | ReasonerBaseExplanation]:
         """
         Perform the theory propagation that follows from the addition of a new bound on a variable.
@@ -1103,11 +1101,11 @@ class DiffReasoner(Reasoner):
 
         for out_target, out_weight, out_presence in potential_out_edges(x):
 
-            if state.is_entailed(out_presence.negated):
+            if self.state.is_entailed(out_presence.negated):
                 continue
 
             y, w = out_target, out_weight
-            y_neg_lit = Lit(y.opposite, state.bound_value_of(y.opposite))
+            y_neg_lit = Lit(y.opposite, self.state.bound_value_of(y.opposite))
             dist_y_o = dist_to_origin(y_neg_lit)
 
             cycle_length = dist_o_x + w + dist_y_o
@@ -1128,10 +1126,10 @@ class DiffReasoner(Reasoner):
 
             self.theory_propagation_causes.append(
                 DiffReasoner.TheoryPropCauses.Bounds(relaxed_literal, y_neg_lit))
-            self.propagation_metadata_trail[state.decision_level].append(None)
+            self.propagation_metadata_trail[self.state.decision_level].append(None)
 
             # Disable the edge
-            state.set_literal(out_presence.negated,
+            self.state.set_literal(out_presence.negated,
                               Causes.ReasonerInference(id(self),
                                                        DiffReasoner.InferenceCauses.TheoryProp(len(self.theory_propagation_causes)-1)))
 
@@ -1141,7 +1139,6 @@ class DiffReasoner(Reasoner):
 
     def theory_propagate_edge(self,
         propagator_group_id: PropaGroupId,
-        state: SolverState,
     ) -> Optional[InvalidBoundUpdateInfo | ReasonerBaseExplanation]:
         """
         Perform the theory propagation that follows from the addition of the given (new) edge.
@@ -1169,11 +1166,11 @@ class DiffReasoner(Reasoner):
         predecessors = DiffReasoner.DijkstraState()
 
         # Find all nodes reachable from target(edge), including itself
-        self.distances_from(target, successors, state)
+        self.distances_from(target, successors)
 
         # Find all nodes that can reach source(edge), including itself
         # predecessors nodes and edge are in the inverse direction.
-        self.distances_from(source.opposite, predecessors, state)
+        self.distances_from(source.opposite, predecessors)
 
         # Iterate through all predecessors, they will constitute the source of our shortest paths
         for (pred_dist, pred) in predecessors.reached_nodes():
@@ -1192,7 +1189,7 @@ class DiffReasoner(Reasoner):
                 total_dist = back_dist + edge.weight + forward_dist
 
                 # If this edge would be violated and is not inactive yet:
-                if total_dist < 0 and not state.is_entailed(potential_presence.negated):
+                if total_dist < 0 and not self.state.is_entailed(potential_presence.negated):
 
                     # careful: we are doing batched eager updates involving optional variable
                     # When doing the shortest path computation, we followed any edge that was not proven inactive yet.
@@ -1206,8 +1203,7 @@ class DiffReasoner(Reasoner):
                         potential_target.opposite,
                         propagator_group_id,
                         successors,
-                        predecessors,
-                        state)
+                        predecessors)
         
                     # If the shortest path would be made inactive, ignore this update
                     # Note that on a valid constraint network, making this change should be
@@ -1222,10 +1218,10 @@ class DiffReasoner(Reasoner):
                             pred.opposite,
                             potential_target.opposite,
                             propagator_group_id))
-                    self.propagation_metadata_trail[state._dec_lvl].append(None)
+                    self.propagation_metadata_trail[self.state.decision_level].append(None)
                     
                     # Update to force this edge to be inactive
-                    res = state.set_literal(potential_presence.negated,
+                    res = self.state.set_literal(potential_presence.negated,
                                             Causes.ReasonerInference(id(self),
                                                                      DiffReasoner.InferenceCauses.TheoryProp(len(self.theory_propagation_causes)-1)))
 
@@ -1242,15 +1238,13 @@ class DiffReasoner(Reasoner):
         explanation_literals: List[Lit],
         literal: Lit,
         inference_cause: Causes.ReasonerInference,
-        state: SolverState,
     ) -> None:
         
         if isinstance(inference_cause, DiffReasoner.InferenceCauses.EdgeProp):
             self.explain_bound_propagation(
                 explanation_literals,
                 literal,
-                inference_cause.propagator_group_id,
-                state)
+                inference_cause.propagator_group_id)
 
         elif isinstance(inference_cause, DiffReasoner.InferenceCauses.TheoryProp):
             theory_propagation_cause = self.theory_propagation_causes[inference_cause.theory_propagation_cause_index]
@@ -1262,7 +1256,7 @@ class DiffReasoner(Reasoner):
                 # FIXME: KNOWN PROBLEM: this prevents the explanation of arbitrary literals which is required by some heuristics (e.g. LRB)
                 while inference_cause.theory_propagation_cause_index < len(self.theory_propagation_causes):
                     # get an event to undo
-                    propagator_group_id = self.propagation_metadata_trail[state._dec_lvl].pop()
+                    propagator_group_id = self.propagation_metadata_trail[self.state.decision_level].pop()
 
                     # NOTE: this is copied from `on_solver_backtrack_one_level`
                     if propagator_group_id is None:
@@ -1274,8 +1268,7 @@ class DiffReasoner(Reasoner):
             
             self.explain_theory_propagation(
                 explanation_literals,
-                theory_propagation_cause,
-                state)
+                theory_propagation_cause)
 
         else:
             assert False
@@ -1286,7 +1279,6 @@ class DiffReasoner(Reasoner):
         explanation_literals: List[Lit],
         literal: Lit,
         propagator_group_id: DiffReasoner.PropaGroupId,
-        state: SolverState,
         deep_explanation: bool=False,
     ) -> None:
 
@@ -1298,7 +1290,7 @@ class DiffReasoner(Reasoner):
         assert enabler is not None
 
         explanation_literals.append(enabler.active)
-        explanation_literals.append(state.presence_literal_of(enabler.active.signed_var.var))
+        explanation_literals.append(self.state.presence_literal_of(enabler.active.signed_var.var))
 
         cause_lit = Lit(propagator_group.source, BoundVal(val-propagator_group.weight))
 
@@ -1312,12 +1304,11 @@ class DiffReasoner(Reasoner):
     def explain_theory_propagation(self,
         explanation_literals: List[Lit],
         cause: DiffReasoner.TheoryPropCauses.AnyCause,
-        state: SolverState,
     ) -> None:
         
         if isinstance(cause, DiffReasoner.TheoryPropCauses.Path):
 
-            path = self.get_theory_propagation_path(cause.source, cause.target, cause.triggering_propagator_group_id, state)
+            path = self.get_theory_propagation_path(cause.source, cause.target, cause.triggering_propagator_group_id)
 
             for edge in path:
                 enabler = self.propagators_database.propagators[edge].enabler
@@ -1325,11 +1316,11 @@ class DiffReasoner(Reasoner):
                 assert enabler is not None
 
                 explanation_literals.append(enabler.active)
-                explanation_literals.append(state.presence_literal_of(enabler.active.signed_var.var))
+                explanation_literals.append(self.state.presence_literal_of(enabler.active.signed_var.var))
 
         elif isinstance(cause, DiffReasoner.TheoryPropCauses.Bounds):
 
-            assert state.is_entailed(cause.source_lit) and state.is_entailed(cause.target_lit)
+            assert self.state.is_entailed(cause.source_lit) and self.state.is_entailed(cause.target_lit)
 
             explanation_literals.append(cause.source_lit)
             explanation_literals.append(cause.target_lit)
@@ -1345,7 +1336,6 @@ class DiffReasoner(Reasoner):
         source: SignedVar,
         target: SignedVar,
         through_propagator_group_id: DiffReasoner.PropaGroupId,
-        state: SolverState,
     ) -> List[DiffReasoner.PropaGroupId]:
         """
         Returns a (shortest) path that triggered a theory propagation from `source`
@@ -1370,7 +1360,7 @@ class DiffReasoner(Reasoner):
             dijkstra_state.enqueue(from_, BoundVal(0), None)
         
             # Run Dijkstra until exhaustion to find all reachable nodes
-            self.run_dijkstra(dijkstra_state, lambda curr: curr == to, state)
+            self.run_dijkstra(dijkstra_state, lambda curr: curr == to)
 
             # Go up the predecessors chain to extract the shortest path and append the edge to `out`.
             curr = to
@@ -1409,7 +1399,6 @@ class DiffReasoner(Reasoner):
         through_propagator_group_id: DiffReasoner.PropaGroupId,
         successors: DijkstraState,
         predecessors: DijkstraState,
-        state: SolverState,
     ) -> bool:
         """
         This method checks whether the `get_theory_propagation_path` method would be able to find a path
@@ -1428,14 +1417,14 @@ class DiffReasoner(Reasoner):
         # We assume that the edges themselves are active (since it cannot be made inactive once activated).
         def path_active(src: SignedVar, tgt: SignedVar, dij: DiffReasoner.DijkstraState):
             curr = tgt
-            if state.is_entailed(state.presence_literal_of(curr.var).negated):
+            if self.state.is_entailed(self.state.presence_literal_of(curr.var).negated):
                 return False
             while curr != src:
                 pred_edge = dij.predecessor(curr)
                 assert pred_edge is not None
                 ee = self.propagators_database.propagators[pred_edge]
                 curr = ee.source
-                if state.is_entailed(state.presence_literal_of(curr.var).negated):
+                if self.state.is_entailed(self.state.presence_literal_of(curr.var).negated):
                     return False
             return True
         
@@ -1456,7 +1445,6 @@ class DiffReasoner(Reasoner):
     def run_dijkstra(self,
         dijkstra_state: DiffReasoner.DijkstraState,
         stop_condition: Callable[[SignedVar], bool],
-        state: SolverState,
     ) -> None:
         """
         Run the Dijkstra algorithm from a pre-initialized queue.
@@ -1480,10 +1468,10 @@ class DiffReasoner(Reasoner):
             if stop_condition(curr_node):
                 return
             
-            if state.is_entailed(state.presence_literal_of(curr_node.var).negated):
+            if self.state.is_entailed(self.state.presence_literal_of(curr_node.var).negated):
                 continue
                 
-            curr_bound = state.bound_value_of(curr_node)
+            curr_bound = self.state.bound_value_of(curr_node)
 
             # Process all outgoing edges
             if curr_node not in self.propagators_active:
@@ -1500,12 +1488,12 @@ class DiffReasoner(Reasoner):
                 # To properly fix this, we should index the active propagators backward and make this dijkstra pass
                 # aware of whether it is traversing backward or forward.
                 if (not dijkstra_state.is_final(prop_target)
-                    and state.is_entailed(state.presence_literal_of(prop_target.var))
+                    and self.state.is_entailed(self.state.presence_literal_of(prop_target.var))
                 ):
                     
                     # We do not have a shortest path to this node yet, so compute a the reduced cost of the edge.
 
-                    target_bound = state.bound_value_of(prop_target)
+                    target_bound = self.state.bound_value_of(prop_target)
                     cost = prop_weight
 
                     reduced_cost = cost + (curr_bound - target_bound)   # rcost(curr, tgt) = cost(curr, tgt) + val(curr) - val(tgt)
@@ -1522,7 +1510,6 @@ class DiffReasoner(Reasoner):
     def distances_from(self,
         origin: SignedVar,
         dijkstra_state: DiffReasoner.DijkstraState,
-        state: SolverState,
     ) -> None:
         """
         Computes the one-to-all shortest paths in an STN.
@@ -1552,17 +1539,17 @@ class DiffReasoner(Reasoner):
         If the STN is fully propagated and consistent, the reduced distance is guaranteed to always be positive.
         """
 
-        origin_bound = state.bound_value_of(origin)
+        origin_bound = self.state.bound_value_of(origin)
 
         dijkstra_state.clear()
         dijkstra_state.enqueue(origin, BoundVal(0), None)
 
         # Run Dijkstra until exhaustion to find all reachable nodes
-        self.run_dijkstra(dijkstra_state, lambda _: False, state)
+        self.run_dijkstra(dijkstra_state, lambda _: False)
 
         # Convert all reduced distances to true distances.
         for (dist, curr_node) in dijkstra_state.reached_nodes():
-            curr_bound = state.bound_value_of(curr_node)
+            curr_bound = self.state.bound_value_of(curr_node)
             true_distance = dist + (curr_bound - origin_bound)
             dijkstra_state.distances[curr_node] = (BoundVal(true_distance), dijkstra_state.distances[curr_node][1])
             # FIXME line above: ugly...  direct modification of dijkstra_state.distances...

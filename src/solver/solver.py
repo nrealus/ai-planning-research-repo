@@ -15,6 +15,8 @@ from src.solver.common import (Causes, ConflictAnalysisResult, Decisions,
                                Event, InvalidBoundUpdateInfo,
                                ReasonerBaseExplanation)
 from src.solver.reasoners.reasoner import Reasoner
+from src.solver.reasoners.sat_reasoner import SATReasoner
+from src.solver.reasoners.diff_reasoner import DiffReasoner
 from src.solver.solver_state import SolverState
 
 #################################################################################
@@ -26,9 +28,33 @@ class Solver():
     The main solver class.
     """
 
-    def __init__(self):
+    def __init__(self,
+        use_sat_reasoner: bool,
+        use_diff_reasoner: bool,
+    ):
 
         self.state: SolverState = SolverState()
+
+        self._sat_reasoner: Optional[SATReasoner] = (SATReasoner(self.state) if use_sat_reasoner
+                                                     else None)
+        self._diff_reasoner: Optional[DiffReasoner] = (DiffReasoner(self.state) if use_diff_reasoner
+                                                       else None)
+
+        self._reasoners = tuple(r for r in (self._sat_reasoner,
+                                            self._diff_reasoner)
+                                if r is not None)
+
+    @property
+    def reasoners(self) -> Tuple[Reasoner,...]:
+        return self._reasoners
+
+    @property
+    def sat_reasoner(self) -> Optional[SATReasoner]:
+        return self._sat_reasoner
+
+    @property
+    def diff_reasoner(self) -> Optional[DiffReasoner]:
+        return self._diff_reasoner
 
     #############################################################################
     # DECISION CHOICE
@@ -43,17 +69,12 @@ class Solver():
     # DECISION LEVEL INCREMENTATION
     #############################################################################
 
-    def increment_one_decision_level(self,
-        reasoners: Tuple[Reasoner,...],
-    ) -> None:
+    def increment_one_decision_level(self) -> None:
         """
         Increments the current decision level (by 1).
         
         Invokes all reasoners' `on_solver_increment_decision_level` callbacks, which
         updates them internally to account for the decision level incrementation.
-
-        Args:
-            reasoners: The reasoners collaborating with the solver.
         """
 
         # assert self.curr_dec_lvl == 0 or len(self._events_trail[self.curr_dec_lvl]) > 0
@@ -63,8 +84,8 @@ class Solver():
         if len(self.state._events_trail) == self.state.decision_level:
             self.state._events_trail.append([])
         
-        for reasoner in reasoners:
-            reasoner.on_solver_increment_one_decision_level(self.state)
+        for reasoner in self.reasoners:
+            reasoner.on_solver_increment_one_decision_level()
 
     #############################################################################
     # BACKTRACKING
@@ -92,7 +113,6 @@ class Solver():
 
     def backtrack_to_decision_level(self,
         target_decision_level: int,
-        reasoners: Tuple[Reasoner,...],
     ) -> None:
         """
         Backtracks to the target decision level by reverting all events at all
@@ -104,8 +124,6 @@ class Solver():
 
         Args:
             target_decision_level: The target decision level to backtrack to.
-
-            reasoners: The reasoners collaborating with the solver.
 
         Raises:
             ValueError: If the target decision level was strictly less than 0.
@@ -121,15 +139,14 @@ class Solver():
 
             self.state._dec_lvl -= 1
 
-            for reasoner in reasoners:
-                reasoner.on_solver_backtrack_one_decision_level(self.state)
+            for reasoner in self.reasoners:
+                reasoner.on_solver_backtrack_one_decision_level()
 
     #############################################################################
     # PROPAGATION
     #############################################################################
 
     def propagate(self,
-        reasoners:Tuple[Reasoner,...],
     ) -> Optional[Tuple[InvalidBoundUpdateInfo | ReasonerBaseExplanation, Reasoner]]:
         """
         The propagation method of the solver.
@@ -137,9 +154,6 @@ class Solver():
         For all reasoners, propagates new events/changes. The propagation
         process stops either when no new bound update can be inferred (success),
         or when a contradiction is detected by one of the reasoners (failure).
-
-        Args:
-            reasoners: The reasoners collaborating with the solver.
 
         Returns:
             None if the propagation was successful, and a tuple if a conflict   \
@@ -150,8 +164,8 @@ class Solver():
         while True:
             num_events = self.state.num_events_at_current_decision_level
 
-            for reasoner in reasoners:
-                conflict_info = reasoner.propagate(self.state)
+            for reasoner in self.reasoners:
+                conflict_info = reasoner.propagate()
 
                 if conflict_info is not None:
                     return (conflict_info, reasoner)
@@ -169,7 +183,7 @@ class Solver():
         explanation_literals: List[Lit],
         literal: Lit,
         cause: Causes.AnyCause,
-        explain_function: Callable[[List[Lit], Lit, Causes.ReasonerInference, SolverState], None],
+        explain_function: Callable[[List[Lit], Lit, Causes.ReasonerInference], None],
     ) -> None:
         """
         Computes a set of literals l_1, ..., l_n such that:
@@ -205,7 +219,7 @@ class Solver():
 
             case Causes.ReasonerInference():
                 # Ask the reasoner for an explanation clause (l_1 & ... & l_n) => literal
-                explain_function(explanation_literals, literal, cause, self.state)
+                explain_function(explanation_literals, literal, cause)
 
             case Causes.ImplicationPropagation():
                 explanation_literals.append(cause.literal)
@@ -217,7 +231,7 @@ class Solver():
 
                     case Causes.ReasonerInference():
                         # Ask the reasoner for an explanation clause (l_1 & ... & l_n) => cause.literal
-                        explain_function(explanation_literals, cause.literal, cause.cause, self.state)
+                        explain_function(explanation_literals, cause.literal, cause.cause)
 
                     case Causes.ImplicationPropagation():
                         explanation_literals.append(cause.cause.literal)
@@ -232,7 +246,7 @@ class Solver():
 
     def explain_invalid_bound_update(self,
         invalid_bound_update_info: InvalidBoundUpdateInfo,
-        explain_function: Callable[[List[Lit], Lit, Causes.ReasonerInference, SolverState], None],
+        explain_function: Callable[[List[Lit], Lit, Causes.ReasonerInference], None],
     ) -> ConflictAnalysisResult:
         """
         Given an invalid bound update of a literal 'l',
@@ -281,7 +295,7 @@ class Solver():
 
     def refine_explanation(self,
         explanation_literals: List[Lit],
-        explain_function: Callable[[List[Lit], Lit, Causes.ReasonerInference, SolverState], None],
+        explain_function: Callable[[List[Lit], Lit, Causes.ReasonerInference], None],
     ) -> ConflictAnalysisResult:
         """
         Refines an explanation into an asserting clause.
