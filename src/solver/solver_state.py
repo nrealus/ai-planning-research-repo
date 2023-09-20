@@ -1,5 +1,9 @@
 """
-TODO
+This module defines the main low-level class of the solver.
+
+It contains low-level methods allowing to query the state of the solver,
+as well as arguably the most important method of the whole solver:
+`set_bound_literal` (and its syntactic sugar `set_literal`). 
 """
 
 from __future__ import annotations
@@ -410,8 +414,8 @@ class SolverState():
             cause: The cause for this bound update.
         
         Returns:
-            False if the update was useless, True if the update was performed
-            successfully, `InvalidBoundUpdateInfo` if a conflict was encountered.
+            False if the update was useless, True if the update was performed   \
+                successfully, `InvalidBoundUpdateInfo` if a conflict was encountered.
         """
 
         prez_lit = self.presence_literal_of(signed_var.var)
@@ -541,7 +545,7 @@ class SolverState():
             or self.presence_literal_of(lit_to.signed_var.var) != TRUE_LIT
         ):
             raise ValueError(("Only implications between non-optional ",
-                            "variables are supported"))
+                              "variables are supported"))
 
         # If the implication is implicit/obvious, no need to add it.
         if (lit_to == TRUE_LIT
@@ -568,7 +572,7 @@ class SolverState():
 
             if isinstance(bound_update_result, InvalidBoundUpdateInfo):
                 raise ValueError(("Inconsistency on the addition of the ",
-                                "implication {0} => {1}".format(lit_from, lit_to)))
+                                  "implication {0} => {1}".format(lit_from, lit_to)))
 
         # If to_literal is false, from_literal needs to be enforced as false.
         # (Indeed ((not to) => (not from)) <=> (to or (not from)))
@@ -580,7 +584,7 @@ class SolverState():
 
             if isinstance(bound_update_result, InvalidBoundUpdateInfo):
                 raise ValueError(("Inconsistency on the addition of the ",
-                                "implication {0} => {1}".format(lit_from, lit_to)))
+                                  "implication {0} => {1}".format(lit_from, lit_to)))
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -627,8 +631,8 @@ class SolverState():
         """
 
         if self.presence_literal_of(presence_literal.signed_var.var) != TRUE_LIT:
-            raise ValueError(("The presence literal of an optional variable must", 
-                            "not be based on an optional variable."))
+            raise ValueError(("The presence literal of an optional variable must ", 
+                              "not be based on an optional variable."))
 
         self._vars_id_counter += 1
 
