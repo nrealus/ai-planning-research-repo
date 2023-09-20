@@ -1,5 +1,11 @@
 """
-TODO
+This module defines the "SAT reasoner" (aka "disjunctive reasoner") of the solver.
+
+This reasoner acts like a SAT solver.
+It maintains a database of clauses and performs unit propagation.
+
+It is the most "basic" reasoner of the solver and is absolutely required,
+as clause learning (for CDCL search) would be simply impossible without it.
 """
 
 #################################################################################
@@ -164,6 +170,13 @@ class SATReasoner(Reasoner):
  
     def __init__(self,
         state: SolverState,
+        clause_activity_increase: float = 1,
+        clause_activity_decay: float = 0.999,
+        num_allowed_learned_clauses_before_forgetting_first_time: int = 1000,
+        num_allowed_learned_clauses_ratio: float = 1/3,
+        num_conflicts_allowed_before_database_expansion: int = 100,
+        database_expansion_ratio: float = 1.05,
+        increase_ratio_of_conflicts_before_db_expansion: float = 1.5,
     ):
 
         self._state: SolverState = state
@@ -176,21 +189,26 @@ class SATReasoner(Reasoner):
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-        self.clause_activity_increase: float = 1
+        self.clause_activity_increase: float = clause_activity_increase
 
-        self.clause_activity_decay: float = 0.999
+        self.clause_activity_decay: float = clause_activity_decay
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
         self.num_fixed_clauses: int = 0
 
-        self.num_learned_clauses: int = 0
+        self.num_learned_clauses: int = 0   # The difference between the number of conflicts
+                                            # and the number of learned clauses is that the
+                                            # number of conflicts never gets smaller, but the
+                                            # number of learned clauses can (when reducing
+                                            # the database / forgetting learned clauses). 
 
-        self.num_allowed_learned_clauses: int = 0
+        self.num_allowed_learned_clauses_before_forgetting: int = 0 # Not initialized yet. "Actual" initial value
+                                                                    # assigned at the first call to `scale_database`,
 
-        self.num_allowed_learned_clauses_base: int = 1000
+        self.num_allowed_learned_clauses_before_forgetting_first_time: int = num_allowed_learned_clauses_before_forgetting_first_time
 
-        self.num_allowed_learned_clauses_ratio: float = 1/3
+        self.allowed_learned_clauses_ratio: float = num_allowed_learned_clauses_ratio
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -198,11 +216,12 @@ class SATReasoner(Reasoner):
 
         self.num_conflicts_at_last_database_expansion: int = 0
 
-        self.num_conflicts_allowed_before_database_expansion: int = 0
+        self.num_conflicts_allowed_before_database_expansion: int = num_conflicts_allowed_before_database_expansion
+                                                                    # TODO synchronize with restarts !!!
 
-        self.database_expansion_ratio: float = 1.05
+        self.database_expansion_ratio: float = database_expansion_ratio
 
-        self.increase_ratio_of_conflicts_before_db_expansion: float = 1.5
+        self.increase_ratio_of_conflicts_before_db_expansion: float = increase_ratio_of_conflicts_before_db_expansion
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -809,28 +828,31 @@ class SATReasoner(Reasoner):
         Scales the size of the clauses database.
 
         The clauses database has a limited number of slots for learned clauses.
-        When all slots are occupied, this function ca:
-        - Expand the database with more slots. This occurs if a certain number of
-        conflicts occured since last expansion.
-        - Remove learned clauses from the database. This typically removes about half
-        of the learned clauses, making sure that clauses that are used to explain the 
-        current value of the literal are kept ("locked" clauses). The clauses to be
-        removed are those whose "activity" is the lowest.
+        When all slots are occupied, this function can:
+
+        - Expand the database with more slots. This occurs if a certain number
+        of conflicts (i.e. learned clauses) occured since last expansion.
+        
+        - Remove learned clauses from the database. This typically removes about
+        half of the learned clauses, making sure that clauses that are used to
+        explain the current value of the literal are kept ("locked" clauses).
+        The clauses to be removed are those whose "activity" is the lowest.
         """
         
-        if self.num_allowed_learned_clauses == 0:
+        if self.num_allowed_learned_clauses_before_forgetting == 0:
 
-            self.num_allowed_learned_clauses = \
-                self.num_allowed_learned_clauses_base \
-                + int(self.num_fixed_clauses*self.num_allowed_learned_clauses_ratio)
+            self.num_allowed_learned_clauses_before_forgetting = \
+                self.num_allowed_learned_clauses_before_forgetting_first_time \
+                + int(self.num_fixed_clauses*self.allowed_learned_clauses_ratio)
 
-        if self.num_learned_clauses - len(self.locked_clauses) >= self.num_allowed_learned_clauses:
-            
+        if (self.num_learned_clauses - len(self.locked_clauses)
+            >= self.num_allowed_learned_clauses_before_forgetting
+        ):  
             if (self.num_conflicts - self.num_conflicts_at_last_database_expansion
                 >= self.num_conflicts_allowed_before_database_expansion
             ):
-                self.num_allowed_learned_clauses = \
-                    int(self.num_allowed_learned_clauses * self.database_expansion_ratio)
+                self.num_allowed_learned_clauses_before_forgetting = \
+                    int(self.num_allowed_learned_clauses_before_forgetting * self.database_expansion_ratio)
 
                 self.num_conflicts_at_last_database_expansion = self.num_conflicts
 
@@ -840,9 +862,8 @@ class SATReasoner(Reasoner):
 
             else:
 
-                clauses_to_remove_ids = [
-                    clause_id for clause_id, clause in self.clauses_database.items()
-                    if clause.learned and clause_id not in self.locked_clauses]
+                clauses_to_remove_ids = [clause_id for clause_id, clause in self.clauses_database.items()
+                                         if clause.learned and clause_id not in self.locked_clauses]
 
                 clauses_to_remove_ids.sort(key=lambda _: self.clauses_database[_].activity)
                 clauses_to_remove_ids = clauses_to_remove_ids[:int(len(clauses_to_remove_ids)/2)]
@@ -852,7 +873,6 @@ class SATReasoner(Reasoner):
 
                     if clause.watch1 == clause.watch2:
                         self._remove_watch(clause_id, clause.watch1.negated)
-
                     else:
                         self._remove_watch(clause_id, clause.watch1.negated)
                         self._remove_watch(clause_id, clause.watch2.negated)
