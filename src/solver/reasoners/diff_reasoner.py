@@ -1,5 +1,9 @@
 """
-TODO
+This module defines the "Difference logic reasoner"
+(aka "diff reasoner", aka "stn reasoner") of the solver.
+
+This reasoner is dedicated to handling reified difference constraints of
+the form `X + Y < c` (where `X` and `Y` are variables, and `c` is a constant).
 """
 
 from __future__ import annotations
@@ -156,11 +160,14 @@ class DiffReasoner(Reasoner):
         
         Encoding as a dictionary:
         - The key corresponds to the source of a propagator
-        - The value for that key / propagator source is a list of (target, weight, presence), for each encoded propagator.
+        - The value for that key / propagator source is a list of (target, weight, presence),
+        for each encoded propagator.
 
-        Here, "presence" corresponds to a literal that is true iff the edge / propagator must be present.
+        Here, "presence" corresponds to a literal that is true iff the
+        edge / propagator must be present.
         REVIEW: same thing as "valid" or not ?
-        Note that handling of optional variables might allow an edge to propagate even if it is not known to be present yet.
+        Note that handling of optional variables might allow an edge to
+        propagate even if it is not known to be present yet.
         """
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -173,13 +180,13 @@ class DiffReasoner(Reasoner):
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-        # propagator_groups_events_trail: List[List[DiffReasoner.ConstraintsDatabase.PropagatorGroupEvents.AnyEvent]] = [[]]
         propagator_groups_events_trail: List[List[Optional[Tuple[DiffReasoner.PropaGroupId, DiffReasoner.Enabler]]]] = field(default_factory=lambda:[[]])
         """
         Holds the trail of "propagator groups events", i.e. updates on propagator groups:
         - A None element designates the addition of a new propagator group.
-        - A (PropagatorGroupId, Enabler) tuple designates the addition of the specified
-        enabler to the set of potential enablers of the propagator group with the specified id.
+        - A (PropagatorGroupId, Enabler) tuple designates the addition of
+        the specified enabler to the set of potential enablers of the
+        propagator group with the specified id.
         """
 
         next_new_constraint_index: int = 0
@@ -485,21 +492,24 @@ class DiffReasoner(Reasoner):
         a propagator group "bundles" propagators which only differ by enabling conditions)).
         For each new propagator, this is done by either:
 
-            - Merging / adding the new propagator into an existing group of propagators,
-            by adding its enabler to their `potential_enablers`.
+            - Merging / adding the new propagator into an existing group
+            of propagators, by adding its enabler to their `potential_enablers`.
             
-            - Tightening an already active existing group of propagators (superseded by the new propagator),
-            by setting their weight to the new propagator's weight.
+            - Tightening an already active existing group of propagators
+            (superseded by the new propagator), by setting their weight to
+            the new propagator's weight.
             
-            - Ignoring the new propagator, if it is redundant with an existing one (i.e. if
-            its weight is weaker than an existing propagator's with the same enabling conditions).
+            - Ignoring the new propagator, if it is redundant with an
+            existing one (i.e. if its weight is weaker than an existing
+            propagator's with the same enabling conditions).
             
             - Creating a new propagator group with the new propagator's enabler,
             if there are no existing propagators with the same source and target.
 
-        NOTE that merging, tightening, or ignoring is only done when the solver is at the top decision level.
-        Beyond the top decision level, we always choose to create a new propagator group, because it
-        would be too complicated to undo/backtrack the reorganization of a propagator group.
+        NOTE that merging, tightening, or ignoring is only done when the solver
+        is at the top decision level. Beyond the top decision level, we always choose 
+        to create a new propagator group, because it would be too complicated to
+        undo/backtrack the reorganization of a propagator group.
 
         3. Postprocess the integration of the new propagator. The two possibilities are the following:
             
@@ -537,7 +547,8 @@ class DiffReasoner(Reasoner):
                 for existing_group_id in self.propagators_database.propagators_source_and_target[(src, tgt)]:
                     existing_group = self.propagators_database.propagators[existing_group_id]
 
-                    if not (existing_group.source == src and existing_group.target == tgt):
+                    if not (existing_group.source == src
+                            and existing_group.target == tgt):
                         continue
 
                     # If there is a compatible propagator group:
@@ -554,8 +565,9 @@ class DiffReasoner(Reasoner):
                             return (existing_group_id, "ignoring")
 
 
-                    # If the propagator's weight is strictly stronger than that of the group and they have the
-                    # same one enabler, then just tighten the group by changing its weight to that of the propagator.
+                    # If the propagator's weight is strictly stronger than that of
+                    # the group and they have the same one enabler, then just tighten
+                    # the group by changing its weight to that of the propagator.
                     elif wgt.is_stronger_than(existing_group.weight-BoundVal(1)):
 
                         if not (len(existing_group.potential_enablers) == 1
@@ -567,7 +579,10 @@ class DiffReasoner(Reasoner):
                             # note that since we consider the case where there's only one potential enabler,
                             # there can only be 1 intermittent propagator.
                             for i in range(len(self.propagators_database.intermittent_propagators[src])):
-                                if self.propagators_database.intermittent_propagators[src][i] == (tgt, existing_group.weight, eblr.active):
+
+                                if (self.propagators_database.intermittent_propagators[src][i]
+                                    == (tgt, existing_group.weight, eblr.active)
+                                ):
                                     self.propagators_database.intermittent_propagators[src][i] = (tgt, wgt, eblr.active)
                                     break
 
@@ -592,7 +607,9 @@ class DiffReasoner(Reasoner):
 
             self.propagators_database.propagators[created_group_id] = DiffReasoner.PropaGroup(src, tgt, wgt, None, [eblr])
             self.propagators_database.propagators_list.append(created_group_id)
-            self.propagators_database.propagators_source_and_target.setdefault((src, tgt), []).append(created_group_id)
+            self.propagators_database.propagators_source_and_target \
+                .setdefault((src, tgt), [])                         \
+                .append(created_group_id)
 
             self.propagators_database.propagator_groups_events_trail[self.state.decision_level].append(None)
 
@@ -650,7 +667,8 @@ class DiffReasoner(Reasoner):
                             self.propagators_database.propagators[propagator_group_id].weight,
                             eblr.active))
 
-                    self.propagators_database.propagator_groups_events_trail[self.state.decision_level].append((propagator_group_id, eblr))
+                    self.propagators_database.propagator_groups_events_trail[self.state.decision_level] \
+                        .append((propagator_group_id, eblr))
 
             # If an existing group was tightened (as a result of
             # a new propagator's integration into the database), then:
@@ -685,20 +703,25 @@ class DiffReasoner(Reasoner):
         # The edge will be decomposed into 4 propagators:
         # 2 "canonical", and 2 "negated" (or "inverted": swapped source and target for them).
         # 
-        # A "canonical" (source-to-target) propagator is valid when `presence(target) => edge_valid`.
-        # This is because modifying the target's domain is only meaningful if the edge is present.
-        # Analogously, a "negated" (target-to-source) propagator is valid when `presence(source) => edge_valid`.
+        # A "canonical" (source-to-target) propagator is valid
+        # when `presence(target) => edge_valid`. This is because modifying
+        # the target's domain is only meaningful if the edge is present.
+        # Analogously, a "negated" (target-to-source) propagator is valid
+        # when `presence(source) => edge_valid`.
         #
-        # As such, we need to determine a literal that is true iff a "canonical" (source-to-target) propagator
-        # is valid, as well as a literal that is true iff a "negated" (target-to-source) propagator is valid.
+        # As such, we need to determine a literal that is true iff a
+        # "canonical" (source-to-target) propagator is valid, as well as
+        # a literal that is true iff a "negated" (target-to-source) propagator is valid.
 
         # "Canonical" propagator case.
         if self.state.is_implication_true(self.state.presence_literal_of(target), edge_valid):
-            # If it is statically known that `presence(target) => edge_valid`, the propagator is always valid
+            # If it is statically known that `presence(target) => edge_valid`,
+            # the propagator is always valid
             source_to_target_propagator_valid = TRUE_LIT
         else:
-            # Given that `presence(source) & presence(target) <=> edge_valid`, we can infer that the propagator becomes valid
-            # (i.e. `presence(target) => edge_valid` holds) when `presence(source)` becomes true
+            # Given that `presence(source) & presence(target) <=> edge_valid`, we can infer
+            # that the propagator becomes valid (i.e. `presence(target) => edge_valid` holds)
+            # when `presence(source)` becomes true
             source_to_target_propagator_valid = self.state.presence_literal_of(source)
 
         # "Negated" propagator case (analogous).
@@ -734,10 +757,13 @@ class DiffReasoner(Reasoner):
         ]
 
         for p in propagators:
+
             (group_id, integration_kind) = integrate_propagator_to_database(p[0], p[1], p[2], p[3])
+
             if integration_kind == "ignoring":
                 self.propagators_database.propagators[group_id].enabler = None
                 continue
+
             postprocess_propagator_integration_into_database(group_id, integration_kind, p[3])
 
     #############################################################################
@@ -767,25 +793,33 @@ class DiffReasoner(Reasoner):
                 propagator_group = self.propagators_database.propagators[ev]
                 self.propagators_active[propagator_group.source].pop()
                 propagator_group.enabler = None
+
         self.propagation_metadata_trail[self.state.decision_level+1].clear()
 
         self.next_unprocessed_solver_event_index = self.state.num_events_at_current_decision_level
 
         for ev in reversed(self.propagators_database.propagator_groups_events_trail[self.state.decision_level+1]):
+
             if ev is None:
                 propagator_group_id = self.propagators_database.propagators_list.pop()
                 propagator_group = self.propagators_database.propagators.pop(propagator_group_id)
-                if ((propagator_group.source, propagator_group.target) in self.propagators_database.propagators_source_and_target
-                    and len(self.propagators_database.propagators_source_and_target[(propagator_group.source, propagator_group.target)]) > 0
+                
+                pg_src = propagator_group.source
+                pg_tgt = propagator_group.target
+
+                if ((pg_src, pg_tgt) in self.propagators_database.propagators_source_and_target
+                    and len(self.propagators_database.propagators_source_and_target[(pg_src, pg_tgt)]) > 0
                 ):
-                    self.propagators_database.propagators_source_and_target[(propagator_group.source, propagator_group.target)].pop()
+                    self.propagators_database.propagators_source_and_target[(pg_src, pg_tgt)].pop()
                 # NOTE: no need to reset/update self.constraints_database.next_new_constraint_index !
+
             else:
                 (propagator_group_id, enabler) = ev
                 self.propagators_database.watchlists.remove((propagator_group_id, enabler), enabler.active)
                 self.propagators_database.watchlists.remove((propagator_group_id, enabler), enabler.valid)
                 propagator_group = self.propagators_database.propagators[propagator_group_id]
                 self.propagators_database.intermittent_propagators[propagator_group.source].pop()
+
         self.propagators_database.propagator_groups_events_trail[self.state.decision_level+1].clear()
 
     #############################################################################
@@ -805,42 +839,52 @@ class DiffReasoner(Reasoner):
         theory_propagation_levels: Tuple[str, ...]=("bounds",),
     ) -> Optional[InvalidBoundUpdateInfo | ReasonerBaseExplanation]:
         """
-        Propagates all edges / propagator groups that have been marked as active since the last propagation.
+        Propagates all edges / propagator groups that have been marked as
+        active since the last propagation.
 
-        (1) First, processes each newly added inactive(*) edge / propagator group once, to check if it
-        can be added to the solver based on the literals of its extremities (i.e. minimal and maximal
-        possible values for the edge). If not make its enablers false. This step is equivalent to "bound
-        theory propagation", but needs to be done independenty because we do not have events for the initial
-        domain bound values of variables.
-            (*) A newly added edge / propagator group can be active (see `add_reified_difference_constraint`),
-            in which case it is added to pending propagator activations.
+        (1) First, processes each newly added inactive(*) edge / propagator
+        group once, to check if it can be added to the solver based on the literals
+        of its extremities (i.e. minimal and maximal possible values for the edge).
+        If not make its enablers false. This step is equivalent to "bound theory propagation",
+        but needs to be done independenty because we do not have events for
+        the initial domain bound values of variables.
+
+            (*) A newly added edge / propagator group can be active
+            (see `add_reified_difference_constraint`), in which case
+            it is added to pending propagator activations.
 
         (2):
-            (2.1) Then, propagate all literals changes.
-            
-            (2.2) And then process / loop through the edges / propagator groups pending for activation
-            (including those that were enqueued at step 2.1). This is done by:
-                
-                - Checking if the edge / propagator group is a self loop:
-                    - A positive self loop is ignored (move on to next edge / propagator)
-                    - A negative self loop is a contradiction, for a which a ReasonerExplanation is returned (to build an explanation later)
-                
-                - If not a self-loop, mark the edge / propagator group as active and propagate it with
-                the Cesta96 algorithm (which runs an incremental Bellman-Ford algorithm over active
-                edges / propagator groups).
-                The assumptions needed to do this (i.e. the edge / propagator group must be newly 
-                inserted and the constraint network / STN must be consistent) are indeed satisfied.
+        (2.1) Then, propagate all literals changes.
         
-        Finally, doing step (2.1) before (2.2) is necessary because cycle detection on the insertion of a new
-        edge / propagator group requires a consistent constraint network (STN) and no interference of external bound updates.
+        (2.2) And then process / loop through the edges / propagator groups pending for activation
+        (including those that were enqueued at step 2.1). This is done by:
+            
+            - Checking if the edge / propagator group is a self loop:
+                
+                - A positive self loop is ignored (move on to next edge / propagator)
+                
+                - A negative self loop is a contradiction, for a which a ReasonerExplanation
+                is returned (to build an explanation later)
+            
+            - If not a self-loop, mark the edge / propagator group as active and propagate it with
+            the Cesta96 algorithm (which runs an incremental Bellman-Ford algorithm over active
+            edges / propagator groups).
+            The assumptions needed to do this (i.e. the edge / propagator group must be newly 
+            inserted and the constraint network / STN must be consistent) are indeed satisfied.
+        
+        Finally, doing step (2.1) before (2.2) is necessary because cycle detection on the
+        insertion of a new edge / propagator group requires a consistent constraint
+        network (STN) and no interference of external bound updates.
         """
 
         # Step (1) (see function documentation).
         if "bounds" in theory_propagation_levels:
 
-            while self.propagators_database.next_new_constraint_index < len(self.propagators_database.propagators_list):
+            while (self.propagators_database.next_new_constraint_index < len(self.propagators_database.propagators_list)):
+
                 propagator_group = self.propagators_database.propagators[
-                    self.propagators_database.propagators_list[self.propagators_database.next_new_constraint_index]]
+                    self.propagators_database.propagators_list[
+                        self.propagators_database.next_new_constraint_index]]
                 self.propagators_database.next_new_constraint_index += 1
                 
                 if propagator_group.enabler is not None:
@@ -861,35 +905,38 @@ class DiffReasoner(Reasoner):
                             Lit(propagator_group.target.opposite, target_current_ub)))
                     self.propagation_metadata_trail[self.state.decision_level].append(None)
                     
-                    cause = Causes.ReasonerInference(id(self),
-                                                   DiffReasoner.InferenceCauses.TheoryProp(len(self.theory_propagation_causes)-1))
+                    inference_info = DiffReasoner.InferenceCauses.TheoryProp(len(self.theory_propagation_causes)-1)
+                    cause = Causes.ReasonerInference(id(self), inference_info)
 
                     for enabler in propagator_group.potential_enablers:
-                        enabler_active_neg = enabler.active.negated
 
-                        res = self.state.set_literal(enabler_active_neg,
-                                                cause)
+                        res = self.state.set_literal(enabler.active.negated, cause)
+
                         if isinstance(res, InvalidBoundUpdateInfo):
                             return res
 
         # Step (2) (see function documentation).
         while (self.next_unprocessed_solver_event_index < self.state.num_events_at_current_decision_level
-            or self.propagators_pending_for_activation
+               or self.propagators_pending_for_activation
         ):
             
             # Step (2.1) (see function documentation).
             while self.next_unprocessed_solver_event_index < self.state.num_events_at_current_decision_level:
+
                 ev = self.state._events_trail[self.state.decision_level][self.next_unprocessed_solver_event_index]
                 self.next_unprocessed_solver_event_index += 1
                 
                 # If a watched literal was newly entailed, check if makes enabling conditions of an edge / propagator
                 # group true. If so, enqueue such edges / propagator groups to pending active propagators.
                 for propagator_group_id, enabler in self.propagators_database.watchlists.elements_guarded_by(Lit(ev.signed_var, ev.new_bound_value)):
+
                     if self.state.is_entailed(enabler.active) and self.state.is_entailed(enabler.valid):
                         self.propagators_pending_for_activation.insert(0, (propagator_group_id, enabler))
                 
                 if "bounds" in theory_propagation_levels:
+
                     res = self.theory_propagate_bound(Lit(ev.signed_var, ev.new_bound_value))
+
                     if res is not None:
                         return res
                 
@@ -903,34 +950,39 @@ class DiffReasoner(Reasoner):
 
                 # Propagate bound change
                 if ev.signed_var in self.propagators_active and len(self.propagators_active[ev.signed_var]) > 0:
+
                     res = self.run_propagation_loop(ev.signed_var, False)
+
                     if res is not None:
                         return res
 
             # Step (2.2) (see function documentation).
             while self.propagators_pending_for_activation:
+
                 (propagator_group_id, enabler) = self.propagators_pending_for_activation.pop()
                 propagator_group = self.propagators_database.propagators[propagator_group_id]
 
                 if propagator_group.enabler is not None:
                     continue
+
                 propagator_group.enabler = enabler
 
                 # If we are in a self loop, we handle it separately here,
                 # since it is trivial and not supported by the propagation loop.
                 if propagator_group.source == propagator_group.target:
+
                     if propagator_group.weight >= 0:
                         continue    # positive self-loop: useless / can be ignored
                     else:
                         return ReasonerBaseExplanation((propagator_group.enabler.active,
-                                                        self.state.presence_literal_of(propagator_group.enabler.active.signed_var.var)))
+                                                        self.state.presence_literal_of(propagator_group.enabler
+                                                                                       .active.signed_var.var)))
 
                 # The edge / propagator group is not a self loop:
 
-                self.propagators_active.setdefault(propagator_group.source, []).append((
-                    propagator_group.target,
-                    propagator_group.weight,
-                    propagator_group_id))
+                self.propagators_active.setdefault(propagator_group.source, []).append((propagator_group.target,
+                                                                                        propagator_group.weight,
+                                                                                        propagator_group_id))
 
                 self.propagation_metadata_trail[self.state.decision_level].append(propagator_group_id)
 
@@ -940,10 +992,11 @@ class DiffReasoner(Reasoner):
                 # into a **consistent** constraint network / STN.
                 # Does not support self loops (handled above).
 
+                tgt_bound_val = BoundVal(self.state.bound_value_of(propagator_group.source) + propagator_group.weight)
+                inference_info = DiffReasoner.InferenceCauses.EdgeProp(propagator_group_id)
                 res = self.state.set_bound_value(propagator_group.target,
-                                            BoundVal(self.state.bound_value_of(propagator_group.source)+propagator_group.weight),
-                                            Causes.ReasonerInference(id(self),
-                                                                     DiffReasoner.InferenceCauses.EdgeProp(propagator_group_id)))
+                                                 tgt_bound_val,
+                                                 Causes.ReasonerInference(id(self), inference_info))
                 match res:
 
                     case InvalidBoundUpdateInfo():
@@ -951,13 +1004,16 @@ class DiffReasoner(Reasoner):
                     
                     case True:
                         res = self.run_propagation_loop(propagator_group.target, True)
+
                         if res is not None:
                             return res
 
                 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
                 if "edges" in theory_propagation_levels:
+
                     res = self.theory_propagate_edge(propagator_group_id)
+
                     if res is not None:
                         return res
 
@@ -1043,11 +1099,11 @@ class DiffReasoner(Reasoner):
                 assert source != target
 
                 candidate = BoundVal(source_bound + weight)
+                inference_info = DiffReasoner.InferenceCauses.EdgeProp(group_id)
 
                 res = self.state.set_bound_value(target,
-                                            candidate,
-                                            Causes.ReasonerInference(id(self),
-                                                                    DiffReasoner.InferenceCauses.EdgeProp(group_id)))
+                                                 candidate,
+                                                 Causes.ReasonerInference(id(self), inference_info))
 
                 match res:
 
@@ -1116,22 +1172,23 @@ class DiffReasoner(Reasoner):
             # If 0 -> X -> Y -> 0 forms a negative cycle, there is a contradiction and
             # we record its cause so we can retrieve it if an explanation is needed.
             # Here, we know that the update on the bound value of `literal`'s variable
-            # triggered the propagation. However, it is possible that a less constraint bound
-            # would have triggered the propagation as well. We thus replace `literal` with the
-            # smallest update that would have triggered the propagation.
+            # triggered the propagation. However, it is possible that a less constraint
+            # bound would have triggered the propagation as well. We thus replace `literal`
+            # with the smallest update that would have triggered the propagation.
             # The consequence is that the clauses inferred through explanation will be stronger.
             relaxed_literal = Lit(literal.signed_var, BoundVal(literal.bound_value - cycle_length - 1))
             # The relaxed literal would have triggered a proapgation with the cycle having exactly length -1
             assert dist_to_origin(relaxed_literal) + w + dist_y_o == -1
 
-            self.theory_propagation_causes.append(
-                DiffReasoner.TheoryPropCauses.Bounds(relaxed_literal, y_neg_lit))
+            self.theory_propagation_causes.append(DiffReasoner.TheoryPropCauses.Bounds(relaxed_literal, y_neg_lit))
             self.propagation_metadata_trail[self.state.decision_level].append(None)
 
             # Disable the edge
+
+            inference_info = DiffReasoner.InferenceCauses.TheoryProp(len(self.theory_propagation_causes)-1)
+
             self.state.set_literal(out_presence.negated,
-                              Causes.ReasonerInference(id(self),
-                                                       DiffReasoner.InferenceCauses.TheoryProp(len(self.theory_propagation_causes)-1)))
+                                   Causes.ReasonerInference(id(self), inference_info))
 
         return None
 
@@ -1141,11 +1198,13 @@ class DiffReasoner(Reasoner):
         propagator_group_id: PropaGroupId,
     ) -> Optional[InvalidBoundUpdateInfo | ReasonerBaseExplanation]:
         """
-        Perform the theory propagation that follows from the addition of the given (new) edge.
+        Perform the theory propagation that follows
+        from the addition of the given (new) edge.
 
         In essence, we find all shortest paths A -> B that contain the new edge.
         Then we check if there exist an inactive edge BA where `weight(BA) + dist(AB) < 0`.
-        For each such edge, we set its enabler to false since its addition would result in a negative cycle.
+        For each such edge, we set its enabler to false
+        since its addition would result in a negative cycle.
         """
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -1192,18 +1251,18 @@ class DiffReasoner(Reasoner):
                 if total_dist < 0 and not self.state.is_entailed(potential_presence.negated):
 
                     # careful: we are doing batched eager updates involving optional variable
-                    # When doing the shortest path computation, we followed any edge that was not proven inactive yet.
-                    # The current theory propagation, might have been preceded by an other affecting the network.
-                    # Here we thus check that the path we initially computed is still active, i.e., that
-                    # no other propagation made any of its edges inactive.
-                    # This is necessary because we need to be able to explain any change and explanation
-                    # would not follow any inactive edge when recreating the path.
-                    active = self.will_get_theory_propagation_path_succeed(
-                        pred.opposite,
-                        potential_target.opposite,
-                        propagator_group_id,
-                        successors,
-                        predecessors)
+                    # When doing the shortest path computation, we followed any edge that was
+                    # not proven inactive yet. The current theory propagation, might have been
+                    # preceded by an other affecting the network. Here we thus check that 
+                    # path we initially computed is still active, i.e., that no other propagation
+                    # made any of its edges inactive. This is necessary because we need to
+                    # be able to explain any change and explanation would not follow
+                    # any inactive edge when recreating the path.
+                    active = self.will_get_theory_propagation_path_succeed(pred.opposite,
+                                                                           potential_target.opposite,
+                                                                           propagator_group_id,
+                                                                           successors,
+                                                                           predecessors)
         
                     # If the shortest path would be made inactive, ignore this update
                     # Note that on a valid constraint network, making this change should be
@@ -1213,17 +1272,17 @@ class DiffReasoner(Reasoner):
 
                     # Record the cause so we can explain the
                     # changes resulting from making the edge inactive.
-                    self.theory_propagation_causes.append(
-                        DiffReasoner.TheoryPropCauses.Path(
-                            pred.opposite,
-                            potential_target.opposite,
-                            propagator_group_id))
+                    self.theory_propagation_causes.append(DiffReasoner.TheoryPropCauses.Path(pred.opposite,
+                                                                                             potential_target.opposite,
+                                                                                             propagator_group_id))
                     self.propagation_metadata_trail[self.state.decision_level].append(None)
                     
                     # Update to force this edge to be inactive
+
+                    inference_info = DiffReasoner.InferenceCauses.TheoryProp(len(self.theory_propagation_causes)-1)
+
                     res = self.state.set_literal(potential_presence.negated,
-                                            Causes.ReasonerInference(id(self),
-                                                                     DiffReasoner.InferenceCauses.TheoryProp(len(self.theory_propagation_causes)-1)))
+                                                 Causes.ReasonerInference(id(self), inference_info))
 
                     if isinstance(res, InvalidBoundUpdateInfo):
                         return res
@@ -1241,18 +1300,18 @@ class DiffReasoner(Reasoner):
     ) -> None:
         
         if isinstance(inference_cause, DiffReasoner.InferenceCauses.EdgeProp):
-            self.explain_bound_propagation(
-                explanation_literals,
-                literal,
-                inference_cause.propagator_group_id)
+            self.explain_bound_propagation(explanation_literals,
+                                           literal,
+                                           inference_cause.propagator_group_id)
 
         elif isinstance(inference_cause, DiffReasoner.InferenceCauses.TheoryProp):
             theory_propagation_cause = self.theory_propagation_causes[inference_cause.theory_propagation_cause_index]
 
             if isinstance(theory_propagation_cause, DiffReasoner.TheoryPropCauses.Path):
-                # We need to replace ourselves in exactly the context in which this theory propagation occurred.
-                # Undo all events until we are back in the state where this theory propagation cause
-                # had not occurred yet.
+                # We need to replace ourselves in exactly the context
+                # in which this theory propagation occurred.
+                # Undo all events until we are back in the state
+                # where this theory propagation cause had not occurred yet.
                 # FIXME: KNOWN PROBLEM: this prevents the explanation of arbitrary literals which is required by some heuristics (e.g. LRB)
                 while inference_cause.theory_propagation_cause_index < len(self.theory_propagation_causes):
                     # get an event to undo
@@ -1266,9 +1325,7 @@ class DiffReasoner(Reasoner):
                         self.propagators_active[propagator_group.source].pop()
                         propagator_group.enabler = None
             
-            self.explain_theory_propagation(
-                explanation_literals,
-                theory_propagation_cause)
+            self.explain_theory_propagation(explanation_literals, theory_propagation_cause)
 
         else:
             assert False
@@ -1308,7 +1365,9 @@ class DiffReasoner(Reasoner):
         
         if isinstance(cause, DiffReasoner.TheoryPropCauses.Path):
 
-            path = self.get_theory_propagation_path(cause.source, cause.target, cause.triggering_propagator_group_id)
+            path = self.get_theory_propagation_path(cause.source,
+                                                    cause.target,
+                                                    cause.triggering_propagator_group_id)
 
             for edge in path:
                 enabler = self.propagators_database.propagators[edge].enabler
@@ -1401,8 +1460,8 @@ class DiffReasoner(Reasoner):
         predecessors: DijkstraState,
     ) -> bool:
         """
-        This method checks whether the `get_theory_propagation_path` method would be able to find a path
-        for explaining a theory propagation.
+        This method checks whether the `get_theory_propagation_path`
+        method would be able to find a path for explaining a theory propagation.
         
         For efficiency reasons, we do not run the dijkstra algorithm.
         Instead we accept two prefilled Dijkstra state:
@@ -1517,8 +1576,9 @@ class DiffReasoner(Reasoner):
         - in the forward graph if the origin is the upper bound of a variable
         - in the backward graph is the origin is the lower bound of a variable
         
-        The functions expects a `dijkstra_state` parameter that will be cleared and contains datastructures
-        that will be used to compute the result. The distances will be set in the `distances` field of this state.
+        The functions expects a `dijkstra_state` parameter that will be
+        cleared and contains datastructures that will be used to compute the result.
+        The distances will be set in the `distances` field of this state.
         
         The distances returned are in the BoundVal format, which is agnostic of whether
         we are computing backward or forward distances. The computed distance to a
@@ -1532,11 +1592,13 @@ class DiffReasoner(Reasoner):
         
         To use Dijkstra's algorithm, we need to ensure that all edges are positive.
         We do this by using the reduced costs of the edges.
-        Given a function `value(SignedVar)` that returns the current value of a variable bound, we define the
-        *reduced distance* `red_dist` of a path `source -- dist --> target`  as   
+        Given a function `value(SignedVar)` that returns the
+        current value of a variable bound, we define the *reduced distance*
+        `red_dist` of a path `source -- dist --> target` as   
         - `red_dist = dist - value(target) + value(source)`
         - `dist = red_dist + value(target) - value(source)`
-        If the STN is fully propagated and consistent, the reduced distance is guaranteed to always be positive.
+        If the STN is fully propagated and consistent, the
+        reduced distance is guaranteed to always be positive.
         """
 
         origin_bound = self.state.bound_value_of(origin)
