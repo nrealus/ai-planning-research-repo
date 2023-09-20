@@ -21,14 +21,20 @@ plugins:
 
 nav:
   - Aries-like Solver Overview: overview.md
-
+  - Example CDCL search: cdcl_example.md
   - Reference:
     - Fundamentals: fundamentals.md
     - Constraint Expressions: constraint_expressions.md
     - Solver:
       - Common: common.md
       - Solver State: solver_state.md
-      - Solver main class: solver.md
+      - Solver Main Class: solver.md
+      - Reasoners:
+        - Reasoner: reasoner.md 
+        - SAT Reasoner: sat_reasoner.md 
+        - Difference Logic Reasoner: diff_reasoner.md 
+      - Branchers:
+        - Brancher: brancher.md
   
 extra_css:
   - stylesheets/extra_style.css
