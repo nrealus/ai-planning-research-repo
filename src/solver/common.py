@@ -1,5 +1,6 @@
 """
-TODO
+This module defines some common "helper" types used by the solver, as well as
+a "helper" or "wrapper" collection.
 """
 
 from __future__ import annotations
@@ -23,6 +24,8 @@ class SetGuardedByLiterals(Generic[T]):
     Represents a "guarded" collection/set of elements of (generic)
     type `T`. Each element is "guarded" by a literal (as well as
     all literals weaker than it, which is implied).
+
+    Implemented as a simple wrapper around a `Dict[SignedVar, Dict[BoundVal, Set[T]]]`.
 
     This class is most notably used for the implication graph on non optional
     variables in `Solver`, as well as for (watched) literals' "watchlists" in
