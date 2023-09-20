@@ -1,5 +1,8 @@
 """
-TODO
+This module defines the main high-level class of the solver.
+
+It contains (relatively) high-level methods to use when encoding a problem,
+or when writing a search / solving function.
 """
 
 from __future__ import annotations
@@ -10,7 +13,7 @@ import heapq
 from typing import Callable, Dict, List, Optional, Tuple
 
 from src.constraint_expressions import ConstrExpr, ElemConstrExpr
-from src.fundamentals import TRUE_LIT, BoundVal, Lit, SignedVar, Var
+from src.fundamentals import TRUE_LIT, BoundVal, Lit, SignedVar, Var, tighten_literals, are_tightened_literals_tautological
 from src.solver.common import (Causes, ConflictAnalysisResult, Decisions,
                                Event, InvalidBoundUpdateInfo,
                                ReasonerBaseExplanation)
@@ -35,6 +38,8 @@ class Solver():
 
         self.state: SolverState = SolverState()
 
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
         self._sat_reasoner: Optional[SATReasoner] = (SATReasoner(self.state) if use_sat_reasoner
                                                      else None)
         self._diff_reasoner: Optional[DiffReasoner] = (DiffReasoner(self.state) if use_diff_reasoner
@@ -43,6 +48,10 @@ class Solver():
         self._reasoners = tuple(r for r in (self._sat_reasoner,
                                             self._diff_reasoner)
                                 if r is not None)
+
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+        self.next_unprocessed_reified_constraint_index: int = 0
 
     @property
     def reasoners(self) -> Tuple[Reasoner,...]:
@@ -56,15 +65,6 @@ class Solver():
     def diff_reasoner(self) -> Optional[DiffReasoner]:
         return self._diff_reasoner
 
-    #############################################################################
-    # DECISION CHOICE
-    #############################################################################
-
-    # TODO
-    def choose_next_decision(self) -> Decisions.AnyDecision:
-    
-        raise NotImplementedError
-    
     #############################################################################
     # DECISION LEVEL INCREMENTATION
     #############################################################################
@@ -145,12 +145,14 @@ class Solver():
     #############################################################################
     # PROPAGATION
     #############################################################################
-
+    
     def propagate(self,
     ) -> Optional[Tuple[InvalidBoundUpdateInfo | ReasonerBaseExplanation, Reasoner]]:
         """
         The propagation method of the solver.
         
+        First, 
+
         For all reasoners, propagates new events/changes. The propagation
         process stops either when no new bound update can be inferred (success),
         or when a contradiction is detected by one of the reasoners (failure).
@@ -161,7 +163,28 @@ class Solver():
             as well as the reasoner that encountered it.
         """
 
+        while self.next_unprocessed_reified_constraint_index < len(self.state._constraints):
+
+            elem_constr_expr, constr_lit = self.state._constraints[self.next_unprocessed_reified_constraint_index]
+            
+            constr_scope_lit = self.state.presence_literal_of(constr_lit.signed_var.var)
+            
+            # If the scope of the constraint is false, it means
+            # the constraint is absent. So it is ignored.
+            if self.state.is_entailed(constr_scope_lit.negated):
+                conflict_info = None
+            else:
+                conflict_info = self._actually_post_reified_constraint((elem_constr_expr, constr_lit))
+
+            if conflict_info is not None:
+                if self.sat_reasoner is None:
+                    raise ValueError("SAT Reasoner must be defined.")
+                return (conflict_info, self.sat_reasoner)
+            
+            self.next_unprocessed_reified_constraint_index += 1
+
         while True:
+
             num_events = self.state.num_events_at_current_decision_level
 
             for reasoner in self.reasoners:
@@ -752,4 +775,198 @@ class Solver():
                                           "terms: OR, AND, and IMPLY constraints ",
                                           "require a sequence of literals."))
 
-        raise ValueError("""Constraint expression could not be interpreted.""")
+        raise ValueError("Constraint expression could not be interpreted.")
+
+    #############################################################################
+    # CONSTRAINT POSTING HELPER METHOD
+    #############################################################################
+
+    def _actually_post_reified_constraint(self,
+        constraint: Tuple[ElemConstrExpr, Lit],
+    ) -> Optional[InvalidBoundUpdateInfo]:
+        """
+        TODO
+        """
+        
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+    
+        def make_safe_for_up(
+            clause_lits: Tuple[Lit,...],
+            scope_lit: Lit,
+        ) -> Tuple[Tuple[Lit,...], Lit]:
+            """
+            NOTE: this could be generalized to look at
+            literals in the clause as potential scopes
+            """
+
+            if scope_lit == TRUE_LIT:
+                return (clause_lits, TRUE_LIT)
+            
+            # The clause can never be true, so it will have to be made absent.
+            if len(clause_lits) == 0:
+                return ((scope_lit.negated,), TRUE_LIT)
+
+            if all(self.state.is_implication_true(self.state.presence_literal_of(lit.signed_var.var),
+                                                  scope_lit)
+                                                  for lit in clause_lits):
+                return (clause_lits, scope_lit)
+
+            return (tighten_literals(clause_lits+(scope_lit.negated,)), TRUE_LIT)
+
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+        def preprocess_then_add_scoped_clause_to_sat_reasoner(
+            clause_lits: Tuple[Lit,...],
+            scope_lit: Lit,
+            clause_lits_already_tightened: bool,
+        ) -> Optional[InvalidBoundUpdateInfo]:
+            """
+            Preprocesses the clause literals and scope literal by:
+
+            - Tightening the clause literals if they weren't already
+            
+            - Removing "unnecessary" literals from the clause literals 
+            (those already known to be false). 
+                - If this removes all literals, then the clause is false 
+                and thus we must leave its scope: we set the scope literal to false.
+            
+            - Making the clause literals and the scope literal "safe" for unit
+            propagation, by (in the general case) adding the negation of the scope
+            literal to the clause literals, and changing the scope literal to TRUE_LIT.
+            
+            - Adding the "safe" clause literals and scope literal to the SATReasoner
+            as a fixed/non-learned scoped clause.
+            """
+
+            if clause_lits_already_tightened:
+                tightened_lits = tighten_literals(clause_lits)
+            else:
+                tightened_lits = clause_lits
+                
+            # Remove clause literals that are guaranteed to not become true
+            # (i.e. whose value is False / whose negation literal is entailed)
+
+            true_or_unbounded_lits = list(tightened_lits)
+
+            n = len(true_or_unbounded_lits)
+            i = 0
+            j = 0
+
+            while i < n-j:
+                if self.state.is_entailed(true_or_unbounded_lits[i].negated):
+                    true_or_unbounded_lits.pop(i)
+                    j += 1
+                else:
+                    i += 1
+
+            # If the preprocessing of the clause literals removed all of them,
+            # then the scope literal must be enforced to be false.
+
+            if len(true_or_unbounded_lits) == 0:
+
+                res = self.state.set_literal(scope_lit.negated,
+                                             Causes.Encoding()) 
+
+                return res if isinstance(res, InvalidBoundUpdateInfo) else None
+
+            # The clause literals may have literals on optional variables.
+            # Thus the clause must be made "safe" for unit propagation in the SATReasoner.
+
+            safe_clause_lits, safe_scope_lit = make_safe_for_up(tuple(true_or_unbounded_lits),
+                                                         scope_lit)
+
+            assert self.sat_reasoner is not None
+
+            self.sat_reasoner.add_new_fixed_clause_with_scope(safe_clause_lits,
+                                                              safe_scope_lit)
+            return None
+
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+        assert self.state.decision_level == 0
+
+        (elem_constr_expr, constr_lit) = constraint
+        scope_lit = self.state.presence_literal_of(constr_lit.signed_var.var)
+
+        # If the scope is False, then the constraint is absent: we thus ignore it.
+        if self.state.is_entailed(scope_lit.negated):
+            return None
+
+        match elem_constr_expr.kind, elem_constr_expr.terms:
+
+            case ElemConstrExpr.Kind.LIT, Lit() as lit:
+
+                assert self.state.is_implication_true(scope_lit,
+                                                      self.state.presence_literal_of(lit.signed_var.var))
+
+                preprocess_then_add_scoped_clause_to_sat_reasoner((constr_lit.negated, lit),
+                                                                  scope_lit,
+                                                                  False)
+                preprocess_then_add_scoped_clause_to_sat_reasoner((lit.negated, constr_lit),
+                                                                  scope_lit,
+                                                                  False)
+                return None
+
+            case (ElemConstrExpr.Kind.MAX_DIFFERENCE,
+                (Var() as from_var, Var() as to_var, int() as max_diff)
+            ):
+                assert self.diff_reasoner is not None
+
+                self.diff_reasoner.add_reified_difference_constraint(constr_lit,
+                                                                     from_var,
+                                                                     to_var,
+                                                                     max_diff)
+                return None
+
+            case ElemConstrExpr.Kind.OR, [Lit(), *_] as lits:
+
+                if self.state.is_entailed(constr_lit):
+
+                    preprocess_then_add_scoped_clause_to_sat_reasoner(lits, 
+                                                                      scope_lit, 
+                                                                      False)
+                    return None
+                
+                elif self.state.is_entailed(constr_lit.negated):
+
+                    for lit in lits:
+
+                        res = preprocess_then_add_scoped_clause_to_sat_reasoner((lit.negated,),
+                                                                                scope_lit,
+                                                                                False)
+                        if res is not None:
+                            return res
+
+                    return None
+                
+                else:
+
+                    tightened_clause_lits = tighten_literals((constr_lit.negated,)+lits)
+
+                    if are_tightened_literals_tautological(tightened_clause_lits):
+
+                        res = preprocess_then_add_scoped_clause_to_sat_reasoner(tightened_clause_lits,
+                                                                                scope_lit,
+                                                                                True)
+                        if res is not None:
+                            return res
+                    
+                    for lit in lits:
+
+                        res = preprocess_then_add_scoped_clause_to_sat_reasoner((lit.negated, constr_lit),
+                                                                                scope_lit,
+                                                                                False)
+                        if res is not None:
+                            return res
+
+                    return None
+
+            case ElemConstrExpr.Kind.AND, [Lit(), *_]:
+
+                return self._actually_post_reified_constraint((elem_constr_expr.negated,
+                                                               constr_lit.negated))
+
+            case _:
+                assert False
+
+#################################################################################
