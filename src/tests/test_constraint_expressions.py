@@ -44,11 +44,11 @@ class TestElemConstrExpr(unittest.TestCase):
         B = Var(2)
 
         self.assertEqual(ElemConstrExpr.from_lits_simplify_or((Lit.leq(A, 1),
-                                                              Lit.leq(B, 1))), 
-                         ElemConstrExpr(ElemConstrExpr.Kind.OR, (Lit.leq(A,1),
-                                                                 Lit.leq(B,1))))
+                                                               Lit.leq(B, 1))), 
+                         ElemConstrExpr(ElemConstrExpr.Kind.OR, (Lit.leq(A, 1),
+                                                                 Lit.leq(B, 1))))
 
-        self.assertEqual(ElemConstrExpr.from_lits_simplify_or((Lit.leq(A, 1),)), 
+        self.assertEqual(ElemConstrExpr.from_lits_simplify_or((Lit.leq(A, 1),)),
                          ElemConstrExpr(ElemConstrExpr.Kind.LIT, Lit.leq(A,1)))
 
         self.assertEqual(ElemConstrExpr.from_lits_simplify_or((Lit.leq(A, 1),
@@ -85,12 +85,14 @@ class TestElemConstrExpr(unittest.TestCase):
         self.assertEqual(ElemConstrExpr.from_lits_simplify_or((Lit.leq(A, 1),
                                                                Lit.leq(A, 2),
                                                                Lit.leq(B, 1))).negated,
-                        ElemConstrExpr(ElemConstrExpr.Kind.AND,(Lit.geq(A,3), Lit.geq(B,2)))) 
+                        ElemConstrExpr(ElemConstrExpr.Kind.AND,(Lit.geq(A, 3),
+                                                                Lit.geq(B, 2)))) 
 
         self.assertEqual(ElemConstrExpr.from_lits_simplify_and((Lit.leq(A, 1),
                                                                 Lit.leq(A, 2),
                                                                 Lit.leq(B, 1))).negated,
-                        ElemConstrExpr(ElemConstrExpr.Kind.OR,(Lit.geq(A,2), Lit.geq(B,2)))) 
+                        ElemConstrExpr(ElemConstrExpr.Kind.OR,(Lit.geq(A, 2), 
+                                                               Lit.geq(B, 2)))) 
 
         self.assertEqual(ElemConstrExpr.from_lits_simplify_or((Lit.leq(A, 1),
                                                                Lit.geq(A, 0),

@@ -1,5 +1,9 @@
 """
-TODO
+This module defines the main low-level class of the solver.
+
+It contains low-level methods allowing to query the state of the solver,
+as well as arguably the most important method of the whole solver:
+`set_bound_literal` (and its syntactic sugar `set_literal`). 
 """
 
 from __future__ import annotations
@@ -80,7 +84,7 @@ class SolverState():
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-        self._scopes: Dict[Tuple[Lit,...], Lit] = {}
+        self._scope_lits_of_lit_conjs: Dict[Tuple[Lit,...], Lit] = {}
         """
         Stores conjunctions of (presence) literals corresponding to (conjunctive)
         scopes that have been defined in the problem, as well as the associated
@@ -92,12 +96,12 @@ class SolverState():
         to exist in the conjunctive scope "presence(a) & presence(b)".
         """
 
-        self._scopes_reverse: Dict[Lit, Tuple[Lit,...]] = {}
+        self._scope_representative_lit_conjs: Dict[Lit, Tuple[Lit,...]] = {}
         """
         The reverse of `scopes`.
         """
 
-        self._scopes_tautologies: Dict[Lit, Lit] = {}
+        self._scope_tautologies: Dict[Lit, Lit] = {}
         """
         For each scope literal, associates a literal (on an optional variable).
         When we're in that scope (i.e. the scope literal is true, i.e. all the
@@ -128,14 +132,6 @@ class SolverState():
         """
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-#
-#        self.reasoners: List[Reasoner] = []
-#        """
-#        The set of reasoners plugged into the solver. There cannot be 2 or more
-#        reasoners of the same type.
-#        """
-#
-        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
         self._vars[False].add(ZERO_VAR)
         self._presence_literals[ZERO_VAR] = TRUE_LIT
@@ -143,9 +139,9 @@ class SolverState():
         self._bound_values[SignedVar.plus(ZERO_VAR)] = BoundVal(0)
         self._bound_values[SignedVar.minus(ZERO_VAR)] = BoundVal(0)
 
-        self._scopes[()] = TRUE_LIT
-        self._scopes_reverse[TRUE_LIT] = ()
-        self._scopes_tautologies[TRUE_LIT] = TRUE_LIT
+        self._scope_lits_of_lit_conjs[()] = TRUE_LIT
+        self._scope_representative_lit_conjs[TRUE_LIT] = ()
+        self._scope_tautologies[TRUE_LIT] = TRUE_LIT
 
     #############################################################################
     # PROPERTIES & QUERIES / GETTERS
@@ -330,24 +326,23 @@ class SolverState():
 
         if not self.is_entailed(literal):
             raise ValueError(("Literal not entailed: A literal must be entailed ",
-                             "to find its first entailing event"))
-
-        ev_index = self._bound_values_event_indices.get(literal.signed_var, None)
-
-        if ev_index is None:
-            return None
+                              "to find its first entailing event"))
 
         ev: Event
 
+        ev_index = self._bound_values_event_indices.get(literal.signed_var, None)
+
         while True:
+
+            if ev_index is None:
+                return None
+
             dl, i = ev_index
             ev = self._events_trail[dl][i]
 
-            if not ev.previous_bound_value.is_stronger_than(literal.bound_value):
-                break
-
-            ev_index = ev.previous_index
-            if ev_index is None:
+            if ev.previous_bound_value.is_stronger_than(literal.bound_value):
+                ev_index = ev.previous_index 
+            else:
                 break
         
         return ev
@@ -370,6 +365,9 @@ class SolverState():
         literal: Lit,
         cause: Causes.AnyCause,
     ) -> bool | InvalidBoundUpdateInfo:
+        """
+        Syntactic sugar for `set_bound_value`.
+        """
         
         return self.set_bound_value(literal.signed_var, literal.bound_value, cause)
 
@@ -416,8 +414,8 @@ class SolverState():
             cause: The cause for this bound update.
         
         Returns:
-            False if the update was useless, True if the update was performed
-            successfully, `InvalidBoundUpdateInfo` if a conflict was encountered.
+            False if the update was useless, True if the update was performed   \
+                successfully, `InvalidBoundUpdateInfo` if a conflict was encountered.
         """
 
         prez_lit = self.presence_literal_of(signed_var.var)
@@ -478,10 +476,12 @@ class SolverState():
             # The bound update will succeed only if implication propagation
             # is successful. A conflict will be returned otherwise.
 
-            i = self.num_events_at_current_decision_level-1
-            j = i+1
+            pending_lit = Lit(ev.signed_var, ev.new_bound_value)
 
-            while i < j:
+            i = self.num_events_at_current_decision_level-1
+            j = i
+
+            while i <= j:
 
                 pending_lit = Lit(self._events_trail[self.decision_level][i].signed_var,
                                   self._events_trail[self.decision_level][i].new_bound_value)
@@ -505,23 +505,24 @@ class SolverState():
                     # The update to the implied literal's variable's bound is not useless and is valid.
                     # It is pushed to the trail of events, and information on the previous bound is recorded.
 
-                    assert j == self.num_events_at_current_decision_level
+                    assert j+1 == self.num_events_at_current_decision_level
 
                     ev = Event(implied_lit.signed_var,
                                implied_lit.bound_value,
                                previous_bound_value=self.bound_value_of(implied_lit.signed_var),
-                               index=(self.decision_level, self.num_events_at_current_decision_level),
+                               index=(self.decision_level, j+1),
                                previous_index=self._bound_values_event_indices.get(implied_lit.signed_var, None),
                                cause=Causes.ImplicationPropagation(pending_lit))
 
                     self._events_trail[self.decision_level].append(ev)
 
                     self._bound_values[implied_lit.signed_var] = implied_lit.bound_value
-                    self._bound_values_event_indices[signed_var] = ev.index
+                    self._bound_values_event_indices[implied_lit.signed_var] = ev.index
+
                     j += 1
 
                 i += 1
-
+                
         return True
 
     # TODO: minimal domain size for uncontrollable variables ?
@@ -544,10 +545,7 @@ class SolverState():
             or self.presence_literal_of(lit_to.signed_var.var) != TRUE_LIT
         ):
             raise ValueError(("Only implications between non-optional ",
-                            "variables are supported"))
-
-        lit_from_neg = lit_from.negated
-        lit_to_neg = lit_to.negated
+                              "variables are supported"))
 
         # If the implication is implicit/obvious, no need to add it.
         if (lit_to == TRUE_LIT
@@ -560,10 +558,10 @@ class SolverState():
         # (both from => to and (not to) => (not from))
         else:
             self._non_optionals_implication_graph.add(element=lit_to,
-                                                      guard_literal=lit_from)
+                                                      literal=lit_from)
 
-            self._non_optionals_implication_graph.add(element=lit_from_neg,
-                                                      guard_literal=lit_to_neg)
+            self._non_optionals_implication_graph.add(element=lit_from.negated,
+                                                      literal=lit_to.negated)
 
         # If from_literal is true, to_literal needs to be enforced as true.
         # (Indeed (from => to) <=> ((not from) or to))
@@ -574,36 +572,52 @@ class SolverState():
 
             if isinstance(bound_update_result, InvalidBoundUpdateInfo):
                 raise ValueError(("Inconsistency on the addition of the ",
-                                "implication {0} => {1}".format(lit_from, lit_to)))
+                                  "implication {0} => {1}".format(lit_from, lit_to)))
 
         # If to_literal is false, from_literal needs to be enforced as false.
         # (Indeed ((not to) => (not from)) <=> (to or (not from)))
-        if self.is_entailed(lit_to_neg):
+        if self.is_entailed(lit_to.negated):
 
-            bound_update_result = self.set_bound_value(lit_from_neg.signed_var,
-                                                       lit_from_neg.bound_value,
+            bound_update_result = self.set_bound_value(lit_from.negated.signed_var,
+                                                       lit_from.negated.bound_value,
                                                        Causes.ImplicationPropagation(lit_to))
 
             if isinstance(bound_update_result, InvalidBoundUpdateInfo):
                 raise ValueError(("Inconsistency on the addition of the ",
-                                "implication {0} => {1}".format(lit_from, lit_to)))
+                                  "implication {0} => {1}".format(lit_from, lit_to)))
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-    def _register_new_scope(self,
+    def _register_new_scope_after_sorting(self,
         scope_as_conjunction: Tuple[Lit,...],
         scope_lit: Lit,
     ) -> None:
         """
-        Adds to the solver a conjunctive scope consisting of the given literals, and
-        corresponding to the given scope literal (i.e. it is true iff all the literals are).
+        First, sorts the given literals, then adds to the solver a conjunctive 
+        scope consisting of them, and corresponding to the given scope literal
+        (i.e. it is true iff all the literals are).
         """
 
-        if scope_as_conjunction in self._scopes:
+        scope_as_conjunction_sorted = tuple(sorted(scope_as_conjunction))
+
+        if scope_as_conjunction_sorted in self._scope_lits_of_lit_conjs:
             raise ValueError("Could not insert a new scope because it already exists.")
 
-        self._scopes[scope_as_conjunction] = scope_lit
-        self._scopes_reverse[scope_lit] = scope_as_conjunction
+        self._scope_lits_of_lit_conjs[scope_as_conjunction_sorted] = scope_lit
+        
+        # NOTE: The absence of the "not in" condition was causing a bug !
+        #
+        # REVIEW: The collection `_scope_representatives` pairs up two associated
+        # different kinds of "representatives" (as in the notion of
+        # equivalence class) of a scope: its "scope literal" and its
+        # *defining* conjunction of literals.
+        # Together with the `_scopes` collection, this allows to
+        # "bind" different conjunctions falling in the same scope.
+        #
+        # Ideally, we'd like each scope literal to point to
+        # the smallest conjunction defining the scope.
+        if scope_lit not in self._scope_representative_lit_conjs:
+            self._scope_representative_lit_conjs[scope_lit] = scope_as_conjunction_sorted
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -617,8 +631,8 @@ class SolverState():
         """
 
         if self.presence_literal_of(presence_literal.signed_var.var) != TRUE_LIT:
-            raise ValueError(("The presence literal of an optional variable must", 
-                            "not be based on an optional variable."))
+            raise ValueError(("The presence literal of an optional variable must ", 
+                              "not be based on an optional variable."))
 
         self._vars_id_counter += 1
 
@@ -669,6 +683,10 @@ class SolverState():
           adding an "artificial" constraint binding them together.
         """
 
+        expr_scope_lit = \
+            self._get_or_make_new_scope_lit_from_conjunction(
+                self._get_scope_as_conjunction(elem_constr_expr))
+
         if elem_constr_expr in self._reifications:
         
             reif_lit = self._reifications[elem_constr_expr]
@@ -677,10 +695,6 @@ class SolverState():
                 self._constraints.append((ElemConstrExpr.from_lit(reif_lit), scope_tautology_lit))
         
         else:
-
-            expr_scope_lit = \
-                self._get_or_make_new_scope_lit_from_conjunction(
-                    self._get_scope_as_conjunction(elem_constr_expr))
 
             if expr_scope_lit == self.presence_literal_of(scope_tautology_lit.signed_var.var):
 
@@ -721,8 +735,8 @@ class SolverState():
                 defined by `scope_as_conjunction`. 
         """
 
-        if scope_as_conjunction in self._scopes:
-            return self._scopes[scope_as_conjunction]
+        if scope_as_conjunction in self._scope_lits_of_lit_conjs:
+            return self._scope_lits_of_lit_conjs[scope_as_conjunction]
 
         # If scope is not already known we need to register 
         # with a new literal. There are 2 possibilities:
@@ -748,8 +762,8 @@ class SolverState():
                 simplification = scope_as_conjunction[0]
 
             # If l_2 => l_1, the conjunction can be simplified to l_2
-            elif (self.is_implication_true(scope_as_conjunction[0],
-                                         scope_as_conjunction[1])
+            elif (self.is_implication_true(scope_as_conjunction[1],
+                                           scope_as_conjunction[0])
             ):
                 simplification = scope_as_conjunction[1]
 
@@ -759,14 +773,14 @@ class SolverState():
             # need to uniquely identify the literal as the conjunction
             # of the other two in some corner cases.
             # So we create a new literal that is always false.
-            if (self.is_implication_true(scope_as_conjunction[0],
+            elif (self.is_implication_true(scope_as_conjunction[0],
                                          scope_as_conjunction[1].negated)
             ):
                 simplification = Lit.geq(self._add_new_variable((0, 1), False, TRUE_LIT), 1)
 
         if simplification is not None:
 
-            self._register_new_scope(scope_as_conjunction, simplification)
+            self._register_new_scope_after_sorting(scope_as_conjunction, simplification)
             return simplification
 
         else:
@@ -780,11 +794,11 @@ class SolverState():
                 lits.append(l.negated)
 
             self._add_elem_constraint(ElemConstrExpr.from_lits_simplify_or(lits),
-                                      self._scopes_tautologies[TRUE_LIT])           
+                                      self._scope_tautologies[TRUE_LIT])           
                                       # we know that self._scopes_tautologies[TRUE_LIT] = TRUE_LIT,
                                       # but we also keep it explicit for clarity
 
-            self._register_new_scope(scope_as_conjunction, scope_lit)
+            self._register_new_scope_after_sorting(scope_as_conjunction, scope_lit)
             return scope_lit
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -873,15 +887,15 @@ class SolverState():
 
         This is done by:
 
-            1. Keeping only the strongest literals of the "raw" required presences.
+        1. Keeping only the strongest literals of the "raw" required presences.
+    
+        2. Replacing literals defined as a conjunction of other literals by
+        that conjunction (using `_scope_representative_lit_conjs`)
         
-            2. Replacing literals defined as a conjunction of other literals by
-            that conjunction (using `_scopes_reverse`)
-            
-            3. Keeping non-tautological literals (i.e. non entailed ones).
+        3. Keeping non-tautological literals (i.e. non entailed ones).
 
-            4. Keeping non-guarded literals (i.e. removing the literals that
-            are contradicting a literal from "guards")
+        4. Keeping non-guarded literals (i.e. removing the literals that
+        are contradicting a literal from "guards")
         """
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -909,18 +923,18 @@ class SolverState():
             ):
                 required_presences[lit.signed_var] = lit.bound_value
 
-        for signed_var, bound_value in required_presences.items():
+        for signed_var, bound_value in required_presences.copy().items():
 
             lit = Lit(signed_var, bound_value)
-            lits = self._scopes_reverse.get(lit, None)
+            lits = self._scope_representative_lit_conjs.get(lit, None)
 
             if lits is not None:
-                
+
                 for l in lits:
 
                     if is_tautology(l):
                         continue
-                        
+
                     if (l.signed_var not in required_presences
                         or l.bound_value.is_stronger_than(required_presences[l.signed_var])
                     ):
@@ -974,12 +988,12 @@ class SolverState():
             The so-called tautology literal for the scope represented by `scope_lit`.
         """
 
-        if scope_lit in self._scopes_tautologies:
-            return self._scopes_tautologies[scope_lit]
+        if scope_lit in self._scope_tautologies:
+            return self._scope_tautologies[scope_lit]
 
         else:
             lit = Lit.geq(self._add_new_variable((1, 1), False, scope_lit), 1)
-            self._scopes_tautologies[scope_lit] = lit
+            self._scope_tautologies[scope_lit] = lit
             return lit
 
 #################################################################################
