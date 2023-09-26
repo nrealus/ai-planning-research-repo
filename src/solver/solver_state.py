@@ -476,8 +476,6 @@ class SolverState():
             # The bound update will succeed only if implication propagation
             # is successful. A conflict will be returned otherwise.
 
-            pending_lit = Lit(ev.signed_var, ev.new_bound_value)
-
             i = self.num_events_at_current_decision_level-1
             j = i
 
