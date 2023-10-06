@@ -172,7 +172,7 @@ class DiffReasoner(Reasoner):
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-        watchlists: SetGuardedByLiterals[Tuple[DiffReasoner.PropaGroupId, DiffReasoner.Enabler]] = field(default_factory=SetGuardedByLiterals)
+        watches: SetGuardedByLiterals[Tuple[DiffReasoner.PropaGroupId, DiffReasoner.Enabler]] = field(default_factory=SetGuardedByLiterals)
         """
         Associates literals to propagators (with an enabler) that should be activated
         when they become true.
@@ -658,8 +658,8 @@ class DiffReasoner(Reasoner):
                     # Set a watch on both `enabler.active` and `enabler.valid` literals
                     # (when one of them becomes true, we will still have to check that the
                     # other one becomes true as well)
-                    self.propagators_database.watchlists.add((propagator_group_id, eblr), eblr.active)
-                    self.propagators_database.watchlists.add((propagator_group_id, eblr), eblr.valid)
+                    self.propagators_database.watches.add((propagator_group_id, eblr), eblr.active)
+                    self.propagators_database.watches.add((propagator_group_id, eblr), eblr.valid)
 
                     self.propagators_database.intermittent_propagators.setdefault(
                         self.propagators_database.propagators[propagator_group_id].source, []).append((
@@ -815,8 +815,8 @@ class DiffReasoner(Reasoner):
 
             else:
                 (propagator_group_id, enabler) = ev
-                self.propagators_database.watchlists.remove((propagator_group_id, enabler), enabler.active)
-                self.propagators_database.watchlists.remove((propagator_group_id, enabler), enabler.valid)
+                self.propagators_database.watches.remove((propagator_group_id, enabler), enabler.active)
+                self.propagators_database.watches.remove((propagator_group_id, enabler), enabler.valid)
                 propagator_group = self.propagators_database.propagators[propagator_group_id]
                 self.propagators_database.intermittent_propagators[propagator_group.source].pop()
 
@@ -928,7 +928,7 @@ class DiffReasoner(Reasoner):
                 
                 # If a watched literal was newly entailed, check if makes enabling conditions of an edge / propagator
                 # group true. If so, enqueue such edges / propagator groups to pending active propagators.
-                for propagator_group_id, enabler in self.propagators_database.watchlists.elements_guarded_by(Lit(ev.signed_var, ev.new_bound_value)):
+                for propagator_group_id, enabler in self.propagators_database.watches.elements_guarded_by(Lit(ev.signed_var, ev.new_bound_value)):
 
                     if self.state.is_entailed(enabler.active) and self.state.is_entailed(enabler.valid):
                         self.propagators_pending_for_activation.insert(0, (propagator_group_id, enabler))

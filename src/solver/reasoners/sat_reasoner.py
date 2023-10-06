@@ -243,7 +243,7 @@ class SATReasoner(Reasoner):
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-        self.watchlists: SetGuardedByLiterals[SATReasoner.ClauseId] = SetGuardedByLiterals()
+        self.watches: SetGuardedByLiterals[SATReasoner.ClauseId] = SetGuardedByLiterals()
         """
         Represents literals' "watch lists" (lists of clauses where they appear).
 
@@ -352,7 +352,7 @@ class SATReasoner(Reasoner):
         return clause_id
 
     #############################################################################
-    # WATCHES (WATCHED LITERALS & WATCHLISTS)
+    # WATCHES (WATCHED LITERALS & watches)
     #############################################################################
 
     def _swap_watch1_and_watch2(self,
@@ -438,7 +438,7 @@ class SATReasoner(Reasoner):
         literal: Lit,
     ) -> None:
         """Adds a clause to the watch list of a literal."""
-        self.watchlists.add(clause_id, literal)
+        self.watches.add(clause_id, literal)
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -447,7 +447,7 @@ class SATReasoner(Reasoner):
         literal: Lit,
     ) -> None:
         """Removes a clause from the watch list of a literal."""
-        self.watchlists.remove(clause_id, literal)
+        self.watches.remove(clause_id, literal)
 
     #############################################################################
     # MAIN SOLVER DECISION LEVEL INCREASE & DECREASE CALLBACKS
@@ -665,15 +665,15 @@ class SATReasoner(Reasoner):
             self.next_unprocessed_solver_event_index += 1
 
             # Select clauses with a literal that is 
-            old_watchlists: Dict[BoundVal, Set[SATReasoner.ClauseId]] = \
-                self.watchlists._data.get(ev.signed_var, {})
+            old_watches: Dict[BoundVal, Set[SATReasoner.ClauseId]] = \
+                self.watches._data.get(ev.signed_var, {})
             
-            if self.watchlists.has_elements_guarded_by_literals_on(ev.signed_var):
-                self.watchlists.remove_all_on(ev.signed_var)
+            if self.watches.has_elements_guarded_by_literals_on(ev.signed_var):
+                self.watches.remove_all_on(ev.signed_var)
 
             contradicting_clause_id: Optional[SATReasoner.ClauseId] = None
 
-            for guard_bound_value, clause_ids in old_watchlists.items():
+            for guard_bound_value, clause_ids in old_watches.items():
                 watched_literal = Lit(ev.signed_var, guard_bound_value)
 
                 for clause_id in clause_ids:
