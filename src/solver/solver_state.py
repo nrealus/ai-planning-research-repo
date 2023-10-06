@@ -3,7 +3,7 @@ This module defines the main low-level class of the solver.
 
 It contains low-level methods allowing to query the state of the solver,
 as well as arguably the most important method of the whole solver:
-`set_bound_literal` (and its syntactic sugar `set_literal`). 
+`set_bound_value` (and its syntactic sugar `set_literal`). 
 """
 
 from __future__ import annotations
