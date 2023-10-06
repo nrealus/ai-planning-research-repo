@@ -42,7 +42,7 @@ class LRBBrancher(Brancher):
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-        self.watchlists_presence_vars: SetGuardedByLiterals[Var] = SetGuardedByLiterals()
+        self.watches_presence_vars: SetGuardedByLiterals[Var] = SetGuardedByLiterals()
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -74,7 +74,7 @@ class LRBBrancher(Brancher):
 
             # remember, when the presence literal of a var becomes true,
             # the var must be enqueued
-            self.watchlists_presence_vars.add(var, state.presence_literal_of(var))
+            self.watches_presence_vars.add(var, state.presence_literal_of(var))
 
             # if presence literal is already true, enqueue the var immediately
             if state.is_entailed(state.presence_literal_of(var)):
@@ -102,7 +102,7 @@ class LRBBrancher(Brancher):
             ev = state._events_trail[state.decision_level][self.next_unprocessed_solver_event_index]
             self.next_unprocessed_solver_event_index += 1
 
-            for prez_var in self.watchlists_presence_vars.elements_guarded_by(Lit(ev.signed_var,
+            for prez_var in self.watches_presence_vars.elements_guarded_by(Lit(ev.signed_var,
                                                                                   ev.new_bound_value)):
                 if prez_var not in self._prio_queue_helper_dict:
                     heapq.heappush(self.pending_vars_prio_queue, (0, prez_var))

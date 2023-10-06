@@ -28,7 +28,7 @@ class SetGuardedByLiterals(Generic[T]):
     Implemented as a simple wrapper around a `Dict[SignedVar, Dict[BoundVal, Set[T]]]`.
 
     This class is most notably used for the implication graph on non optional
-    variables in `Solver`, as well as for (watched) literals' "watchlists" in
+    variables in `Solver`, as well as for (watched) literals `watches` in
     `SATReasoner` and `DiffReasoner`.
     """
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
