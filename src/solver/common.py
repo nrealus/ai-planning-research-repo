@@ -11,30 +11,30 @@ from abc import ABC
 from typing import (Dict, Generic, List, NamedTuple, Optional, Sequence, Set,
                     Tuple, TypeVar, Union)
 
-from src.fundamentals import BoundVal, Lit, SignedVar
+from src.fundamentals import Bound, Lit, SignedVar
 
 #################################################################################
-# LITERAL GUARDED SETS / SETS GUARDED BY LITERALS
+# DOC: OK 23/10/23
 #################################################################################
 
 T = TypeVar('T')
 
-class SetGuardedByLiterals(Generic[T]):
+class SetGuardedByLits(Generic[T]):
     """
-    Represents a "guarded" collection/set of elements of (generic)
-    type `T`. Each element is "guarded" by a literal (as well as
-    all literals weaker than it, which is implied).
+    Represents a "guarded" collection of elements. Each element is
+    guarded by a literal (and implicitly all literals stronger than it).
 
-    Implemented as a simple wrapper around a `Dict[SignedVar, Dict[BoundVal, Set[T]]]`.
+    Implemented as a simple wrapper around a `Dict[SignedVar, Dict[Bound, Set[T]]]`.
 
-    This class is most notably used for the implication graph on non optional
-    variables in `Solver`, as well as for (watched) literals `watches` in
-    `SATReasoner` and `DiffReasoner`.
+    Note:
+        This class is most notably used for the implication graph on non optional
+        variables in `Solver`, as well as for (watched) literals `watches` in
+        `SATReasoner` and `DiffReasoner`.
     """
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     def __init__(self):
-        self._data: Dict[SignedVar, Dict[BoundVal, Set[T]]] = {}
+        self._data: Dict[SignedVar, Dict[Bound, Set[T]]] = {}
     
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -43,36 +43,30 @@ class SetGuardedByLiterals(Generic[T]):
         literal: Lit,
     ) -> None:
         """
-        Adds a new `element` guarded by `literal` to the colleciton.
-
-        Args:
-            element: An element to add to the collection.
-
-            literal: The literal that should guard `element`.
+        Adds a new guarded element to the collection.
         
         Raises:
-            ValueError: If `element` is already present and guarded by `literal`.
-
+            ValueError: If `element` is already present and already guarded \
+                by `literal` (or, implicitly, any literal stronger than it).
+        
         Note:
-            An element can be added when it wasn't already guarded by a
-            literal stronger than `literal`. But these elements
-            are basically duplicates, since an element being guarded
-            by a certain literal implies it being guarded by all literals
-            stronger than it. We do not make the effort to remove such a
-            duplicate if there is any. However, when using `elements_guarded_by`,
-            we return only unique elements (no duplicates), so this is not an issue.
+            An element can be added if it is absent from the collection, or if
+            it is guarded by a literal stronger than `literal`. When we
+            record this new, weaker guard, the previous guard becomes redundant.
+            However we make no effort to erase it, as it does not harm or
+            interfere with anything functionality of the class.
         """
         
         if literal.signed_var not in self._data:
             self._data[literal.signed_var] = {}
         
-        if literal.bound_value not in self._data[literal.signed_var]:
-            self._data[literal.signed_var][literal.bound_value] = set()
+        if literal.bound not in self._data[literal.signed_var]:
+            self._data[literal.signed_var][literal.bound] = set()
 
         if element in self.elements_guarded_by(literal):
             raise ValueError("Element already present (guarded by {0}).".format(literal))
         
-        self._data[literal.signed_var][literal.bound_value].add(element)
+        self._data[literal.signed_var][literal.bound].add(element)
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -81,19 +75,14 @@ class SetGuardedByLiterals(Generic[T]):
         literal: Lit,
     ) -> None:
         """
-        Removes an `element` guarded by `literal` from the colleciton.
-
-        Args:
-            element: An element to remove from the collection.
-
-            literal: The literal that guards `element`.
+        Removes a guarded element from the colleciton.
         
         Raises:
-            ValueError | KeyError: If `element` is not present  \
-                or not guarded by `literal`.
+            ValueError | KeyError: If `element` is not in the collection \
+                or is not guarded by `literal`.
         """
         
-        self._data[literal.signed_var][literal.bound_value].remove(element)
+        self._data[literal.signed_var][literal.bound].remove(element)
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -101,8 +90,8 @@ class SetGuardedByLiterals(Generic[T]):
         signed_var: SignedVar,
     ) -> None:
         """
-        Removes all elements guarded by literals on the given signed variable.
-        
+        Removes all elements guarded by any literal on the given signed variable.
+
         Raises:
             KeyError: If no guard literal on `signed_var` is registered.
         """
@@ -114,16 +103,10 @@ class SetGuardedByLiterals(Generic[T]):
     def elements_guarded_by(self,
         literal: Lit,
     ) -> Tuple[T,...]:
-        """
-        Returns all elements guarded by the given literal (as well as all
-        literals stronger than it, which is implied).
-
-        Args:
-            literal: The literal whose guarded elements to return.
-
+        """        
         Returns:
-            An immutable sequence (tuple), with no duplicates, containing   \
-                all elements guarded by the `literal`.
+            All elements guarded by `literal` (and, implicitly, all literals stronger \
+                than it). The elements returned are unique, there are no duplicates.
         """
 
         if literal.signed_var not in self._data:
@@ -131,8 +114,8 @@ class SetGuardedByLiterals(Generic[T]):
 
         res = set()
 
-        for guard_bound_value, guarded_elements in self._data[literal.signed_var].items():
-            if literal.bound_value.is_stronger_than(guard_bound_value):
+        for guard_bound, guarded_elements in self._data[literal.signed_var].items():
+            if literal.bound.is_stronger_than(guard_bound):
                 res.update(guarded_elements)
 
         return tuple(res)
@@ -143,12 +126,8 @@ class SetGuardedByLiterals(Generic[T]):
         signed_var: SignedVar
     ) -> bool:
         """
-        Args:
-            signed_var: The signed variable for which to check.
-
         Returns:
-            Whether there are any elements guarded by a literal on  \
-                the given signed variable.
+            Whether there are any elements guarded by a literal on `signed_var`.
         """
         
         return signed_var in self._data and len(self._data[signed_var]) > 0
@@ -159,55 +138,45 @@ class SetGuardedByLiterals(Generic[T]):
         literal: Lit
     ) -> bool:
         """
-        Args:
-            literal: The literal for which we want to check for.
-
         Returns:
-            Whether there are any elements guarded by the given literal     \
-                (as well as all literals stronger than it, which is implied).
+            Whether there are any elements guarded by `literal` \
+                (and, implicitly, all literals stronger than it).
         """
         
         if literal.signed_var not in self._data:
             return False
         
-        for guard_bound_value in self._data[literal.signed_var]:
-            if literal.bound_value.is_stronger_than(guard_bound_value):
+        for guard_bound in self._data[literal.signed_var]:
+            if literal.bound.is_stronger_than(guard_bound):
                 return True
         
         return False
 
 #################################################################################
-# DECISIONS
+# DOC: OK 23/10/23
 #################################################################################
 
 class Decisions(ABC):
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-    class SetLiteral(NamedTuple):
-        """
-        Represents a decision to increment the decision level and
-        to set / entail / enforce a certain literal.
-        """
-        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+    class SetLit(NamedTuple):
+        """Represents a decision to increment the decision level and enforce a certain literal."""
 
-        literal: Lit
-        """The literal to set."""
+        literal_to_set: Lit
     
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     class Restart(NamedTuple):
-        """Represents a decision to restart the search from the top decision level."""
+        """Represents a decision to backtrack to the top decision level."""
         pass
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-    AnyDecision = Union[SetLiteral,
-                        Restart]
-    """Type alias representing both types of decisions."""
+    AnyDecision = SetLit | Restart
 
 #################################################################################
-# CAUSES 
+# DOC: OK 23/10/23
 #################################################################################
 
 class Causes(ABC):
@@ -216,8 +185,8 @@ class Causes(ABC):
 
     class Decision(NamedTuple):
         """
-        This cause corresponds to a decision to update a bound
-        (i.e. a "set literal" decision).
+        Represents a cause corresponding to a decision to
+        enforce a certain literal (see `Decisions.SetLit`).
         """
         pass
 
@@ -225,7 +194,8 @@ class Causes(ABC):
 
     class Encoding(NamedTuple):
         """
-        This cause corresponds to the deactivation / forbiddance of a scope in which an
+        REVIEW?
+        Represents a cause corresponding to the deactivation of a scope in which an
         (already reified) constraint, found to be impossible to satisfy, is defined.
         In other words, this means setting the corresponding scope literal as false.
         """
@@ -235,12 +205,13 @@ class Causes(ABC):
 
     class ImplicationPropagation(NamedTuple):
         """
-        This cause corresponds to an implication propagation.
+        Represents a cause corresponding to an implication propagation.
 
-        Implication propagations are triggered on bound updates of non-optional
-        variables (notably presence variables) and concern literals that are implied
-        by the newly entailed literal. This possible thanks to the implication
-        graph on non-optional variables' literals maintained by the solver.
+        Note:
+            Implication propagations are triggered on bound updates of non optional
+            variables (notably presence variables) and concern literals that are implied
+            by the newly entailed literal. This is possible thanks to the implication
+            graph on non optional variables' literals maintained by the solver.
         """
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -251,10 +222,11 @@ class Causes(ABC):
 
     class EmptyDomain(NamedTuple):
         """
-        This cause corresponds to the prevention of an optional variable's domain
-        becoming empty, by setting its presence variable / literal to false.
+        Represents a cause corresponding to the prevention of an optional variable's
+        domain becoming empty, by setting its presence literal to false.
 
-        Note that presence variables are non-optional by definition.
+        Note:
+            Presence variables are non optional by definition.
         """
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -271,68 +243,63 @@ class Causes(ABC):
 
     class ReasonerInference(NamedTuple):
         """This cause corresponds to an inference made by a `Reasoner` during propagation."""
-        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
         reasoner_id: int
-        """The id of the `Reasoner` that made the inference."""
+        """REVIEW? The id of the `Reasoner` that made the inference."""
 
         inference_info: object          # TODO
         """The inference information"""
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-    AnyCause = Union[Decision,
-                     Encoding,
-                     ImplicationPropagation,
-                     EmptyDomain,
-                     ReasonerInference]
-    """Type alias representing all types of causes."""
+    AnyCause = Decision | Encoding | ImplicationPropagation | EmptyDomain | ReasonerInference
 
 #################################################################################
-# EVENTS
+# DOC: OK 23/10/23
 #################################################################################
 
 class Event(NamedTuple):
     """
-    Represents an event, i.e. (meta)data of bound update of a signed variable 
-    (i.e. entailment of a literal).
+    Represents an event, i.e. (meta)data on the entailment of a literal
+    (or, equivalently, a signed variable's bound update).
     """
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     signed_var: SignedVar
-    """The signed variable whose bound was updated with this event."""
+    """The signed variable whose bound was updated with the event."""
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-    new_bound_value: BoundVal
+    bound: Bound
     """
-    The new value of the signed variable's bound.
-
-    Note that it is necessarily strictly stronger than its previous bound value.
+    The new bound of the event's signed variable.
+    It is necessarily strictly stronger than its previous bound.
     """
-    
-    previous_bound_value: BoundVal
-    """The previous value that the signed variable's bound had, before this event."""
     
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-    index: Tuple[int, int]
-    """
-    The position / index of this event (in the solver's `events_trail`).
+    old_bound: Bound
+    """The previous bound that this event's signed variable had, before the event."""
     
-    It is a "double index": the first int of the tuple corresponds to the decision
-    level, and the second one corresponds to the event's index in that decision level.
-    """
-    
-    previous_index: Optional[Tuple[int, int]]
-    """
-    The position / index of the event (in the solver's `events_trail`) that set
-    the signed variable's previous bound value.
-    
-    It is a "double index": the first int of the tuple corresponds to the decision
-    level, and the second one corresponds to the event's index in that decision level.
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-    A None value however, indicates that this is the first event on its signed variable.
+    index: Tuple[int, int]  # TODO: EventIndex type ?
+    """
+    The index of the event (see `Solver.events_trail`).
+    
+    Note:
+        It is a "double index": the first int of the tuple corresponds to the decision
+        level, and the second one corresponds to the event's index in that decision level.
+    """
+    
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+    old_index: Optional[Tuple[int, int]]
+    """
+    The index of the previous event on the same signed variable (if not None).
+    This previous event set the signed variable's old bound. A None value indicates
+    that there is no earlier events on the signed variable (i.e. the event is the
+    first one on the signed variable).
     """
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -340,18 +307,22 @@ class Event(NamedTuple):
     cause: Causes.AnyCause
     """The cause of this event."""
 
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+#    @property
+#    def literal(self) -> Lit:
+#        return Lit(self.signed_var, self.bound)
+
 #################################################################################
-# INVALID BOUND UPDATE INFO & REASONER RAW EXPLANATION
+# DOC: OK 23/10/23
 #################################################################################
 
-class InvalidBoundUpdateInfo(NamedTuple):
+class InvalidBoundUpdate(NamedTuple):
     """
-    Represents an encountered conflict, corresponding to an invalid bound
-    update. (i.e. an attempt to entail a literal which would cause its
-    variable's domain to become empty).
+    Represents an encountered conflict, corresponding to an invalid bound update
+    (i.e. an attempt to entail a literal which would cause its variable's domain to become empty).
 
-    It will be analyzed as part of conflict analysis, to produce a clause
-    for the solver to "learn".
+    It will be analyzed as part of conflict analysis, to produce a clause for the solver to "learn".
     """
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -365,19 +336,19 @@ class InvalidBoundUpdateInfo(NamedTuple):
 
 class ReasonerBaseExplanation(NamedTuple):
     """
-    Represents a base / "starting point" explanation for a conflict encountered
-    by a reasoner.
+    Represents a "starting point" or "base" explanation
+    for a conflict encountered by a reasoner.
 
     It will be refined into a full explanation as part of conflict analysis,
     to produce a clause for the solver to "learn".
     """
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-    literals: Tuple[Lit,...]
+    literals: Tuple[Lit,...]    # TODO
     """The literals of the base / "starting point" explanation made by the reasoner."""
 
 #################################################################################
-# CONFLICT ANALYSIS RESULT
+# DOC: TODO
 #################################################################################
 
 class ConflictAnalysisResult(NamedTuple):
@@ -389,16 +360,16 @@ class ConflictAnalysisResult(NamedTuple):
     """
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-    asserting_clause_literals: Tuple[Lit,...]
+    asserting_clause: Tuple[Lit,...]
     """
     The literals composing the asserting clause obtained as a result of conflict analysis.
 
-    Should be tightened.
+    Should be simplified before being learned.
 
     TODO: explain what an asserting clause is.
     """
 
-    resolved_literals_storage: Dict[SignedVar, BoundVal] #REVIEW ? # Tuple[Literal,...]
+    resolved_literals: Dict[SignedVar, Bound] #REVIEW ? # Tuple[Literal,...]
     """
     The resolved literals that participate in the conflict.
     Stored as a dictionary instead of a tuple of literals.
