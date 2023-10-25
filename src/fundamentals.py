@@ -140,7 +140,7 @@ class Lit(NamedTuple):
     @property
     def neg(self) -> Lit:
         """The `Lit`'s negation (i.e. negated `Lit`)."""
-        return Lit(self.signed_var.opposite, -Bound(self.bound-1))
+        return Lit(self.signed_var.opposite, -self.bound-Bound(1))
     
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -215,10 +215,11 @@ def simplify_lits_disjunction(
         """
 
         lits: List[Lit] = sorted(literals)
+
         n = len(lits)
         i = 0
         j = 0
-        while i < n-1:
+        while i < n-1-j:
             # Because the literals are now lexicographically sorted,
             # we know that if two literals are on the same signed
             # variable, the weaker one is necessarily the next one.
@@ -239,7 +240,7 @@ def is_lits_disjunction_tautological(
     Returns:
         Whether the disjunction composed of `literals` is tautological \
             (i.e. is always true because it contains literals \
-            `[var <= a]` and `[var >= b]` with `b <= a`).
+            `[var <= a]` and `[var >= b]` with `a >= b`).
 
     Warning:
         Assumes the disjunction is in "simplified form", i.e. its literals are sorted
@@ -258,9 +259,9 @@ def is_lits_disjunction_tautological(
 
     if n == 0:
         raise ValueError(("Attempt to check whether an empty set of literals is tautological. "
-                            "Technically, an empty set of literals is indeed tautological. However, "
-                            "at no point do we want a set of literals passed to this method "
-                            "to be empty, so we raise an error to further enforce that."))
+                          "Technically, an empty set of literals is indeed tautological. However, "
+                          "at no point do we want a set of literals passed to this method "
+                          "to be empty, so we raise an error to further enforce that."))
     i = 0
     while i < n-1:
 
@@ -268,17 +269,12 @@ def is_lits_disjunction_tautological(
                 and literals[i].signed_var != literals[i+1].signed_var
         ):
             raise ValueError(("The disjunction is not in simplified form (i.e. ",
-                                "literals are not sorted or there was two or more ",
-                                "literals on the same signed variable)."))
-
-            # TODO CHECK IF WE MEET THE "TRUE" / TAUTOLOGY LITERAL ?
+                              "literals are not sorted or there was two or more ",
+                              "literals on the same signed variable)."))
 
         if literals[i].signed_var.opposite == literals[i+1].signed_var:
-            # TODO/FIXME: use a function instead of - directly ?
-            # but is_stronger_than isn't really suitable, is it ?
-            # indeed, these bounds are of different types. one
-            # is a lower bound, the other an upper one.
-            if literals[i].bound - literals[i+1].bound <= 0:
+            if literals[i].bound.is_stronger_than(literals[i+1].bound):
+#            if literals[i+1].bound >= literals[i].bound:
                 return True
         i += 1
 
