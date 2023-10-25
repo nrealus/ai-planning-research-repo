@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import unittest
 
-from src.fundamentals import TRUE_LIT, BoundVal, Lit, SignedVar, Var
-from src.solver.common import (Causes, InvalidBoundUpdateInfo,
+from src.fundamentals import TRUE_LIT, Bound, Lit, SignedVar, Var
+from src.solver.common import (Causes, InvalidBoundUpdate,
                                ReasonerBaseExplanation)
 from src.solver.reasoners.diff_reasoner import DiffReasoner
 from src.solver.solver import Solver
@@ -25,10 +25,13 @@ class TestDiffReasonerBasics(unittest.TestCase):
 
         psrc, ptgt = solver.state.presence_literal_of(src), solver.state.presence_literal_of(tgt)
 
-        valid_edge = solver.state._get_or_make_new_scope_lit_from_conjunction(
-            solver.state._process_raw_required_presences_and_guards((psrc, ptgt), (), True))
+#        valid_edge = solver.state.get_scope_representative_literal(
+#            solver.state._process_raw_required_presences_and_guards((psrc, ptgt), (), True))
+#
+#        active_edge = solver.state.get_scope_tautology_literal(valid_edge) # Note: this was correct before the refactoring
 
-        active_edge = solver.state._get_or_make_tautology_of_scope(valid_edge)
+        valid_edge = solver.state.get_scope_representative_literal((psrc, ptgt))
+        active_edge = solver.state.get_scope_tautology_literal((psrc, ptgt))
 
         assert solver.diff_reasoner is not None
 
@@ -45,7 +48,7 @@ class TestDiffReasonerBasics(unittest.TestCase):
     ) -> Lit:
         psrc, ptgt = solver.state.presence_literal_of(src), solver.state.presence_literal_of(tgt)
         
-        valid_edge = solver.state._get_or_make_new_scope_lit_from_conjunction(
+        valid_edge = solver.state.get_scope_representative_literal(
             solver.state._process_raw_required_presences_and_guards((psrc, ptgt), (), True))
         
         active_edge = Lit.geq(solver.add_new_optional_variable((0, 1), True, valid_edge), 1)
@@ -63,7 +66,7 @@ class TestDiffReasonerBasics(unittest.TestCase):
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     def mark_edge_active(self, edge: Lit, solver: Solver):
-        return solver.state.set_bound_value(edge.signed_var, edge.bound_value, Causes.Decision())
+        return solver.state.set_bound(edge.signed_var, edge.bound, Causes.Decision())
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -71,7 +74,7 @@ class TestDiffReasonerBasics(unittest.TestCase):
                 
         dists = DiffReasoner.DijkstraState()
         assert solver.diff_reasoner is not None
-        solver.diff_reasoner.distances_from(SignedVar.plus(var), dists)
+        solver.diff_reasoner._distances_from(SignedVar.plus(var), dists)
         return { v.var: d for d, v in dists.reached_nodes() }
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -80,7 +83,7 @@ class TestDiffReasonerBasics(unittest.TestCase):
 
         dists = DiffReasoner.DijkstraState()
         assert solver.diff_reasoner is not None
-        solver.diff_reasoner.distances_from(SignedVar.minus(var), dists)
+        solver.diff_reasoner._distances_from(SignedVar.minus(var), dists)
         return { v.var: -d for d, v in dists.reached_nodes() }
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -98,9 +101,9 @@ class TestDiffReasonerBasics(unittest.TestCase):
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
         def check_bounds(a_lb, a_ub, b_lb, b_ub):
-            self.assertEqual((-solver.state._bound_values[SignedVar.minus(A)], solver.state._bound_values[SignedVar.plus(A)]), 
+            self.assertEqual((-solver.state._bounds[SignedVar.minus(A)], solver.state._bounds[SignedVar.plus(A)]), 
                              (a_lb, a_ub))
-            self.assertEqual((-solver.state._bound_values[SignedVar.minus(B)], solver.state._bound_values[SignedVar.plus(B)]), 
+            self.assertEqual((-solver.state._bounds[SignedVar.minus(B)], solver.state._bounds[SignedVar.plus(B)]), 
                              (b_lb, b_ub))
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -143,9 +146,9 @@ class TestDiffReasonerBasics(unittest.TestCase):
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
         def check_bounds(a_lb, a_ub, b_lb, b_ub):
-            self.assertEqual((-solver.state._bound_values[SignedVar.minus(A)], solver.state._bound_values[SignedVar.plus(A)]), 
+            self.assertEqual((-solver.state._bounds[SignedVar.minus(A)], solver.state._bounds[SignedVar.plus(A)]), 
                              (a_lb, a_ub))
-            self.assertEqual((-solver.state._bound_values[SignedVar.minus(B)], solver.state._bound_values[SignedVar.plus(B)]), 
+            self.assertEqual((-solver.state._bounds[SignedVar.minus(B)], solver.state._bounds[SignedVar.plus(B)]), 
                              (b_lb, b_ub))
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -158,7 +161,7 @@ class TestDiffReasonerBasics(unittest.TestCase):
 
         check_bounds(0, 1, 0, 10)
         
-        solver.increment_one_decision_level()
+        solver.increment_decision_level_by_one()
 
         self.add_active_edge(A, B, 5, solver)
 
@@ -166,12 +169,12 @@ class TestDiffReasonerBasics(unittest.TestCase):
 
         check_bounds(0, 1, 0, 6)
 
-        solver.increment_one_decision_level()
+        solver.increment_decision_level_by_one()
 
         self.add_active_edge(B, A, -6, solver)
 
         self.assertIsInstance(solver.diff_reasoner.propagate(), 
-                              InvalidBoundUpdateInfo)
+                              InvalidBoundUpdate)
 
         solver.backtrack_to_decision_level(solver.state.decision_level-1)
         check_bounds(0, 1, 0, 6)
@@ -202,16 +205,16 @@ class TestDiffReasonerBasics(unittest.TestCase):
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
         def check_bounds(a_lb, a_ub, b_lb, b_ub):
-            self.assertEqual((-solver.state._bound_values[SignedVar.minus(A)], solver.state._bound_values[SignedVar.plus(A)]), 
+            self.assertEqual((-solver.state._bounds[SignedVar.minus(A)], solver.state._bounds[SignedVar.plus(A)]), 
                              (a_lb, a_ub))
-            self.assertEqual((-solver.state._bound_values[SignedVar.minus(B)], solver.state._bound_values[SignedVar.plus(B)]), 
+            self.assertEqual((-solver.state._bounds[SignedVar.minus(B)], solver.state._bounds[SignedVar.plus(B)]), 
                              (b_lb, b_ub))
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
         solver.diff_reasoner.propagate()
 
-        solver.increment_one_decision_level()
+        solver.increment_decision_level_by_one()
 
         x = self.add_inactive_edge(A, A, -1, solver)
         self.mark_edge_active(x, solver)
@@ -221,7 +224,7 @@ class TestDiffReasonerBasics(unittest.TestCase):
 
         solver.backtrack_to_decision_level(solver.state.decision_level-1)
 
-        solver.increment_one_decision_level()
+        solver.increment_decision_level_by_one()
 
         self.add_active_edge(A, B, 2, solver)
         self.add_active_edge(B, A, -3, solver)
@@ -231,7 +234,7 @@ class TestDiffReasonerBasics(unittest.TestCase):
         
         solver.backtrack_to_decision_level(solver.state.decision_level-1)
 
-        solver.increment_one_decision_level()
+        solver.increment_decision_level_by_one()
 
         self.add_active_edge(A, B, 2, solver)
         self.add_active_edge(B, A, -2, solver)
@@ -245,7 +248,7 @@ class TestDiffReasonerBasics(unittest.TestCase):
         
         solver.backtrack_to_decision_level(solver.state.decision_level-1)
 
-        solver.increment_one_decision_level()
+        solver.increment_decision_level_by_one()
 
         self.add_active_edge(A, B, 2, solver)
         self.add_active_edge(B, C, 2, solver)
@@ -267,18 +270,18 @@ class TestDiffReasonerBasics(unittest.TestCase):
         
         assert solver.diff_reasoner is not None
 
-        PA = Lit.geq(solver.add_new_non_optional_variable((0, 1), True), BoundVal(1))
+        PA = Lit.geq(solver.add_new_non_optional_variable((0, 1), True), Bound(1))
         A = solver.add_new_optional_variable((0,10), True, PA)
 
-        PB = Lit.geq(solver.add_new_presence_variable(PA), BoundVal(1))
+        PB = Lit.geq(solver.add_new_presence_variable(PA), Bound(1))
         B = solver.add_new_optional_variable((0,10), True, PB)
         
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
         def check_bounds(a_lb, a_ub, b_lb, b_ub):
-            self.assertEqual((-solver.state._bound_values[SignedVar.minus(A)], solver.state._bound_values[SignedVar.plus(A)]), 
+            self.assertEqual((-solver.state._bounds[SignedVar.minus(A)], solver.state._bounds[SignedVar.plus(A)]), 
                              (a_lb, a_ub))
-            self.assertEqual((-solver.state._bound_values[SignedVar.minus(B)], solver.state._bound_values[SignedVar.plus(B)]), 
+            self.assertEqual((-solver.state._bounds[SignedVar.minus(B)], solver.state._bounds[SignedVar.plus(B)]), 
                              (b_lb, b_ub))
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -329,8 +332,8 @@ class TestDiffReasonerBasics(unittest.TestCase):
         solver.diff_reasoner.propagate()
 
         for i, (_, var) in enumerate(vars):
-            self.assertEqual((-solver.state.bound_value_of(SignedVar.minus(var)),
-                              solver.state.bound_value_of(SignedVar.plus(var))), 
+            self.assertEqual((-solver.state.bound_of(SignedVar.minus(var)),
+                              solver.state.bound_of(SignedVar.plus(var))), 
                              (i, 20))
         
         self.assertTrue(solver.state.set_literal(Lit.leq(vars[5][1], 4), Causes.Decision()))
@@ -339,11 +342,11 @@ class TestDiffReasonerBasics(unittest.TestCase):
 
         for i, (_, var) in enumerate(vars):
             if i <= 4:
-                self.assertEqual((-solver.state.bound_value_of(SignedVar.minus(var)),
-                                  solver.state.bound_value_of(SignedVar.plus(var))), 
+                self.assertEqual((-solver.state.bound_of(SignedVar.minus(var)),
+                                  solver.state.bound_of(SignedVar.plus(var))), 
                                  (i, 20))
             else:
-                self.assertTrue(solver.state.is_entailed(solver.state.presence_literal_of(var).negated))
+                self.assertTrue(solver.state.entails(solver.state.presence_literal_of(var).neg))
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -518,19 +521,19 @@ class TestDiffReasonerBasics(unittest.TestCase):
         assert solver.diff_reasoner is not None
 
         A = solver.add_new_non_optional_variable((10, 20), True)
-        PA1 = Lit.geq(solver.add_new_non_optional_variable((0, 1), True), BoundVal(1))
+        PA1 = Lit.geq(solver.add_new_non_optional_variable((0, 1), True), Bound(1))
         A1 = solver.add_new_optional_variable((0, 30), True, PA1)
 
         B = solver.add_new_non_optional_variable((10, 20), True)
-        PB1 = Lit.geq(solver.add_new_non_optional_variable((0, 1), True), BoundVal(1))
+        PB1 = Lit.geq(solver.add_new_non_optional_variable((0, 1), True), Bound(1))
         B1 = solver.add_new_optional_variable((0, 30), True, PA1)
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
         def check_bounds(a_lb, a_ub, b_lb, b_ub):
-            self.assertEqual((-solver.state._bound_values[SignedVar.minus(A1)], solver.state._bound_values[SignedVar.plus(A1)]), 
+            self.assertEqual((-solver.state._bounds[SignedVar.minus(A1)], solver.state._bounds[SignedVar.plus(A1)]), 
                              (a_lb, a_ub))
-            self.assertEqual((-solver.state._bound_values[SignedVar.minus(B1)], solver.state._bound_values[SignedVar.plus(B1)]), 
+            self.assertEqual((-solver.state._bounds[SignedVar.minus(B1)], solver.state._bounds[SignedVar.plus(B1)]), 
                              (b_lb, b_ub))
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -555,7 +558,7 @@ class TestDiffReasonerBasics(unittest.TestCase):
         solver.diff_reasoner._propagate(("edges",))
 
         # TODO: optional propagation currently does not takes an edge whose source is not proved present
-        # self.assertTrue(solver.state.is_entailed(bottom.negated))
+        # self.assertTrue(solver.state.is_entailed(bottom.negs))
     
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -572,9 +575,9 @@ class TestDiffReasonerBasics(unittest.TestCase):
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
         def value_of(lit):
-            if solver.state.is_entailed(lit):
+            if solver.state.entails(lit):
                 return True
-            elif solver.state.is_entailed(lit.negated):
+            elif solver.state.entails(lit.neg):
                 return False
             return None
 
@@ -584,7 +587,7 @@ class TestDiffReasonerBasics(unittest.TestCase):
             assert solver.diff_reasoner is not None
 
             expl = [lit]
-            return solver.refine_explanation(expl, solver.diff_reasoner.explain).asserting_clause_literals
+            return solver.refine_explanation(expl, solver.diff_reasoner.explain).asserting_clause
     
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -601,7 +604,7 @@ class TestDiffReasonerBasics(unittest.TestCase):
         self.assertEqual(value_of(ba1), None)
         self.assertEqual(value_of(ba2), False)
 
-        self.assertEqual(len(explain_literal(ba2.negated)), 0)
+        self.assertEqual(len(explain_literal(ba2.neg)), 0)
 
         # TODO: adding a new edge does not trigger theory propagation
         # ba3 = self.add_inactive_edge(B, A, -3, solver)
@@ -626,7 +629,7 @@ class TestDiffReasonerBasics(unittest.TestCase):
         # do not mark active at the root, otherwise the constraint might be inferred as always active
         # its enabler ignored in explanations
         solver.diff_reasoner._propagate(("edges",))
-        solver.increment_one_decision_level()
+        solver.increment_decision_level_by_one()
         self.mark_edge_active(de, solver)
         
         ga0 = self.add_inactive_edge(G, A, -5, solver)
@@ -639,7 +642,7 @@ class TestDiffReasonerBasics(unittest.TestCase):
         self.assertEqual(value_of(ga1), None)
         self.assertEqual(value_of(ga2), False)
 
-        self.assertEqual(len(explain_literal(ga2.negated)), 1)
+        self.assertEqual(len(explain_literal(ga2.neg)), 1)
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -653,9 +656,9 @@ class TestDiffReasonerBasics(unittest.TestCase):
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
         def value_of(lit):
-            if solver.state.is_entailed(lit):
+            if solver.state.entails(lit):
                 return True
-            elif solver.state.is_entailed(lit.negated):
+            elif solver.state.entails(lit.neg):
                 return False
             return None
 
@@ -670,7 +673,7 @@ class TestDiffReasonerBasics(unittest.TestCase):
 
         self.assertEqual(value_of(edge_trigger), None)
 
-        solver.increment_one_decision_level()
+        solver.increment_decision_level_by_one()
         solver.state.set_literal(Lit.geq(B, 11), Causes.Decision())
 
         solver.diff_reasoner.propagate()
@@ -678,7 +681,7 @@ class TestDiffReasonerBasics(unittest.TestCase):
         self.assertEqual(value_of(edge_trigger), False)
 
         solver.backtrack_to_decision_level(0, )
-        solver.increment_one_decision_level()
+        solver.increment_decision_level_by_one()
         solver.state.set_literal(Lit.leq(A, 9), Causes.Decision())
 
         solver.diff_reasoner.propagate()
