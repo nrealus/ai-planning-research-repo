@@ -3,7 +3,7 @@ This module defines the "Difference logic reasoner"
 (aka "diff reasoner", aka "stn reasoner") of the solver.
 
 This reasoner is dedicated to handling reified difference constraints of
-the form `X + Y < c` (where `X` and `Y` are variables, and `c` is a constant).
+the form `X - Y <= c` (where `X` and `Y` are variables, and `c` is a constant).
 """
 
 from __future__ import annotations
