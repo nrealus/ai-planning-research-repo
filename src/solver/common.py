@@ -6,6 +6,14 @@ a "helper" or "wrapper" collection.
 from __future__ import annotations
 
 #################################################################################
+# FILE CONTENTS:
+# - SET GUARDED BY LITERALS
+# - DECISIONS
+# - CAUSES
+# - INVALID BOUND UPDATE
+# - REASONER BASE EXPLANATION
+# - CONFLICT ANALYSIS RESULT
+#################################################################################
 
 from abc import ABC
 from typing import (Dict, Generic, NamedTuple, Optional, Set,
@@ -381,5 +389,3 @@ class ConflictAnalysisResult(NamedTuple):
     They are typically exploited by some branching heuristics (e.g. LRB) to
     identify literals participating in conflicts.    
     """
-
-#################################################################################
