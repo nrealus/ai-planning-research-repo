@@ -101,9 +101,10 @@ class SolverState():
         be defined on non optional variables (i.e whose presence literal is TRUE_LIT).
         """
 
-        self._presence_lits_implication_graph: SetGuardedByLits[Lit] = SetGuardedByLits()
+        self._non_optional_vars_lits_implication_graph: SetGuardedByLits[Lit] = SetGuardedByLits()
         """
-        Represents an implication graph presence literals.
+        Represents an implication graph on literals on non optional variables
+        (notably - and in practice, bascially only - presence literals).
         
         Note:
             An implication `[svar1 <= a] => [svar2 <= b]` is encoded as:
@@ -273,7 +274,7 @@ class SolverState():
         # be any implications to `literal_to`. Thus we return False.
         # NOTE: This check is possible because for each (l1 -> l2) "edge" to add
         # in the implication graph, we also explicitly add a (l2.neg -> l1.neg) "edge".
-        if not self._presence_lits_implication_graph.has_elements_guarded_by(literal_to.neg):
+        if not self._non_optional_vars_lits_implication_graph.has_elements_guarded_by(literal_to.neg):
             return False
 
         # Depth first search through the implication graph, starting
@@ -304,11 +305,11 @@ class SolverState():
             # If the current literal doesn't imply anything, then it can't
             # imply possibly `literal_to`: no hope in pursuing the search
             # further in this path (because the search is depth-first).
-            if not self._presence_lits_implication_graph.has_elements_guarded_by(lit):
+            if not self._non_optional_vars_lits_implication_graph.has_elements_guarded_by(lit):
                 continue
             
             # Push literals "directly implied" by the current literal to the search stack.
-            stack.extend(self._presence_lits_implication_graph.elements_guarded_by(lit))
+            stack.extend(self._non_optional_vars_lits_implication_graph.elements_guarded_by(lit))
 
         return False
 
@@ -485,7 +486,8 @@ class SolverState():
                 return True
             
             # Perform "implication propagation" of the bound update to
-            # presence variables (using the implication graph), as the
+            # non optional variables - which in practice are often
+            # presence variables - (using the implication graph), as the
             # variable is non optional. This propagation is done by looping
             # through the direct implications of all events / bound updates
             # pushed to the trail since the method was called.
@@ -498,7 +500,7 @@ class SolverState():
                 pending_lit = Lit(self._events_trail[self.decision_level][i].signed_var,
                                   self._events_trail[self.decision_level][i].bound)
 
-                for implied_lit in self._presence_lits_implication_graph.elements_guarded_by(pending_lit):
+                for implied_lit in self._non_optional_vars_lits_implication_graph.elements_guarded_by(pending_lit):
 
                     # If the implied literal's bound is weaker than its
                     # current one, then the update is useless for it.
@@ -573,7 +575,7 @@ class SolverState():
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-    def register_presence_literals_implication(self,
+    def register_non_optional_vars_literals_implication(self,
         literal_from: Lit,
         literal_to: Lit,
     ) -> None:
@@ -605,11 +607,11 @@ class SolverState():
         # Otherwise, add the implication to the implication graph
         # (both `literal_from` => `literal_to` and (!`literal_to`) => (!`literal_from`))
         else:
-            self._presence_lits_implication_graph.add(element=literal_to,
-                                                      literal=literal_from)
+            self._non_optional_vars_lits_implication_graph.add(element=literal_to,
+                                                               literal=literal_from)
 
-            self._presence_lits_implication_graph.add(element=literal_from.neg,
-                                                      literal=literal_to.neg)
+            self._non_optional_vars_lits_implication_graph.add(element=literal_from.neg,
+                                                               literal=literal_to.neg)
 
         # If `literal_from` is true, `literal_to` needs to be enforced as true.
         # Indeed (`literal_from` => `literal_to`) <=> (!`literal_from` | `literal_to`)
@@ -774,7 +776,7 @@ class SolverState():
             lits: List[Lit] = [scope_representative_literal]
 
             for l in scope:
-                self.register_presence_literals_implication(scope_representative_literal, l)
+                self.register_non_optional_vars_literals_implication(scope_representative_literal, l)
                 lits.append(l.neg)
 
             self._add_elem_constraint(ElemConstrExpr.from_lits_or(lits),

@@ -38,7 +38,7 @@ class TestElemConstrExpr(unittest.TestCase):
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-    def test_from_lits_simplify_or(self):
+    def test_from_lits_or(self):
 
         A = Var(1)
         B = Var(2)
