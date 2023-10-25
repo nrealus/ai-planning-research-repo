@@ -9,6 +9,9 @@ as clause learning (for CDCL search) would be simply impossible without it.
 """
 
 #################################################################################
+# FILE CONTENTS:
+# - SAT REASONER CLASS
+#################################################################################
 
 from __future__ import annotations
 
@@ -18,83 +21,81 @@ import typing
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple, Set
 
-from src.fundamentals import TRUE_LIT, BoundVal, Lit
-from src.solver.common import Causes, ReasonerBaseExplanation, SetGuardedByLiterals
+from src.fundamentals import TRUE_LIT, Bound, Lit
+from src.solver.common import Causes, ReasonerBaseExplanation, SetGuardedByLits
 from src.solver.reasoners.reasoner import Reasoner
 from src.solver.solver_state import SolverState
 
 MAX_INT = 2**64
 
 #################################################################################
-# SAT REASONER
-#################################################################################
 
 class SATReasoner(Reasoner):
     """
-    Also called "Disjunctive Reasoner". It acts as a SAT solver. It
+    Aka "Disjunctive Reasoner". It acts as a SAT solver. It
     maintains the database of clauses and performs unit propagation.
 
     In essence, for each clause in the database, we look for distinct 
     literals that are not falsified by the current domains:
-
     - If all literals are false, the clause is violated and a conflict
     is reported, which will cause the search to backtrack.
-    
     - If all but one literal `l` are false, then the clause is unit
     and `l` is enforced/set.
-    
     - Otherwise, two non-false literals are selected and added to a "watch list".
     Once one of these literal is set, the clause will be reevaluated.
-    """
-    
+    """    
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
 
     def _get_literal_value(self,
         literal: Lit,
     ) -> Optional[bool]:
         """
-        Syntactic sugar around `self.state.is_entailed`.
-
-        Args:
-            literal: A literal.
+        Syntactic sugar around `SolverState.entails`.
 
         Returns:
-            True if `literal` is true (i.e. currently entailed). False if   \
-                it is false (i.e. its negation is currently entailed).      \
-                None otherwise (i.e. `literal` is unbound: it isn't yet     \
-                known to be true or false).
+            True if `literal` is true (i.e. currently entailed). False if \
+                it is false (i.e. its negation is currently entailed). \
+                None otherwise (i.e. `literal` is unbound: it isn't \
+                known to be true or false yet).
         """ 
 
-        if self.state.is_entailed(literal):
+        if self.state.entails(literal):
             return True
-        elif self.state.is_entailed(literal.negated):
+        elif self.state.entails(literal.neg):
             return False
         else:
             return None
 
     #############################################################################
-    # CLAUSE ID, CLAUSE DATA 
+    # CLAUSES | DOC: OK 25/10/23
     #############################################################################
     
+    class ClauseId(int):
+        """Represents the ID of a clause in the database."""
+        pass
+
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
     @dataclass
     class Clause():
-        """Keeps the data of a clause registered in the clause database."""
+        """Encapsulates the data of a clause in the clause database."""
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
         literals: Tuple[Lit,...]
-        """The literals of the clause (without the scope literal)."""
+        """The literals of the clause (without the scope representative literal)."""
 
-        scope_literal: Lit
+        scope_representative_literal: Lit
         """
-        The literal representing the scope in which the clause
-        (or rather its literals' variables) are defined.
+        The literal representing the scope in which the clause is defined (i.e. the
+        scope in which all the clauses' literals' variables are present / not absent)
 
-        As such, the true "meaning" of the clause can be expressed with the
-        following disjunction: `(not scope_literal) | l_1 | ... | l_n`.
+        Note:
+            As such, the true "meaning" of the clause can be expressed with the
+            following disjunction: `!scope_representative_literal | l_1 | ... | l_n`.
 
-        This also means that a clause whose literals are all false is only a
-        conflict when we cannot "get out of" its scope (i.e. make
-        its `scope_literal` False).
+            This also means that a clause whose literals are all false is
+            only a conflict when we cannot "get out of" its scope (i.e.
+            enforce its scope representative literal as false).
         """
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -145,7 +146,7 @@ class SATReasoner(Reasoner):
         ):
 
             self.literals = literals
-            self.scope_literal = scope_literal
+            self.scope_representative_literal = scope_literal
             self.learned = learned
             
             self.activity = 0
@@ -160,14 +161,10 @@ class SATReasoner(Reasoner):
             self.watch2_index = 1 if len_literals > 1 else 0
             self.unwatched_indices = list(range(2, len_literals)) if len_literals > 2 else []
 
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+    #############################################################################
+    # INIT | DOC: OK 25/10/23
+    #############################################################################
 
-    class ClauseId(int):
-        """Represents the ID of a clause in the database."""
-        pass
-
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
- 
     def __init__(self,
         state: SolverState,
         clause_activity_increase: float = 1,
@@ -217,7 +214,7 @@ class SATReasoner(Reasoner):
         self.num_conflicts_at_last_database_expansion: int = 0
 
         self.num_conflicts_allowed_before_database_expansion: int = num_conflicts_allowed_before_database_expansion
-                                                                    # TODO synchronize with restarts !!!
+                                                                    # TODO synchronize with restarts !!(?)
 
         self.database_expansion_ratio: float = database_expansion_ratio
 
@@ -228,11 +225,13 @@ class SATReasoner(Reasoner):
         self.locked_clauses: Set[SATReasoner.ClauseId] = set()
         """
         Contains all locked clauses (locked at all previous decision levels).
-        A clause that is marked as locked cannot be removed from the clause
-        database as part of database rescaling / forgetting of learned clauses.
+
+        Note:
+            A clause that is marked as locked cannot be removed from the clause
+            database as part of database rescaling / forgetting of learned clauses.
         
-        Marking a clause as locked is necessary when that clause may be needed
-        for explanation mechanisms.
+            Marking a clause as locked is necessary when that clause may be needed
+            for explanation mechanisms.
         """
 
         self.locked_clauses_trail: List[List[SATReasoner.ClauseId]] = [[]]
@@ -243,20 +242,20 @@ class SATReasoner(Reasoner):
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-        self.watches: SetGuardedByLiterals[SATReasoner.ClauseId] = SetGuardedByLiterals()
+        self.watches: SetGuardedByLits[SATReasoner.ClauseId] = SetGuardedByLits()
         """
         Represents literals' "watch lists" (lists of clauses where they appear).
 
-        Internally, a literal [signed_var <= val]'s watchlist is represented as:
-        { signed_var : { val : [clause1_id, clause2_id, ...] }}
+        Internally, a literal `[signed_var <= val]`'s watchlist is represented as:
+        `{ signed_var : { val : [clause1_id, clause2_id, ...] }}`
         """
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
         self.pending_clauses_info: List[Tuple[SATReasoner.ClauseId, Optional[Lit]]] = []
         """
-        Stores clauses that have been recorded to the database,
-        but not processed yet.
+        Stores clauses that have been recorded into the
+        database, but haven't been processed yet.
 
         The first element of the tuple is the ID of the clause to propagate.
         
@@ -269,10 +268,10 @@ class SATReasoner(Reasoner):
         a conflict involving eager propagation of optional variables.
         """
 
-        self.next_unprocessed_solver_event_index: int = 0
+        self.next_solver_event_to_process_index: int = 0
         """
-        The index of the next unprocessed (i.e. not yet propagated) event
-        in the main solver's events trail (in the current decision level).
+        The index of the next unprocessed (i.e. not yet propagated)
+        event in `SolverState._events_trail`.
         """
     
     @property
@@ -280,54 +279,56 @@ class SATReasoner(Reasoner):
         return self._state
 
     #############################################################################
-    # CLAUSE ADDITION / REGISTRATION
+    # CLAUSE REGISTRATION | DOC: OK 25/10/23
     #############################################################################
 
-    def add_new_fixed_clause_with_scope(self,
-        clause_literals: Tuple[Lit,...],
-        scope_literal: Lit,
+    def add_new_fixed_scoped_clause(self,
+#        clause: Tuple[Lit,...],
+        literals: Tuple[Lit,...],
+        scope_representative_literal: Lit,
     ) -> None:
         """
-        Adds a new non-learned clause to the clauses database
-        and to the pending clauses queue.
+        Registers a new non-learned scoped clause to the clauses database
+        and to the pending clauses queue. A scoped clause is equivalent to 
+        a non scoped clause `!scope_representative_literal | l_1 | ... | l_n`.
 
         Args:
-            clause_literals: The literals composing the clause.
+            literals: The literals composing the clause.
 
-            scope_literal: The literal representing the scope in which  \
-                the clause is defined.
+            scope_representative_literal: The literal representing the scope in \
+                which the clause is defined.
 
         Returns:
-            The ID given to the clause after being registered in the clauses database.
+            The ID with which the clause is registered in the clause database.
         """
 
-        clause_id = self._add_new_clause(clause_literals, scope_literal, False)
+        clause_id = self._add_new_clause(literals, scope_representative_literal, False)
         self.pending_clauses_info.insert(0, (clause_id, None))
         self.num_fixed_clauses += 1
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-    def add_new_learned_clause(self,
-        asserting_clause_literals: Tuple[Lit,...],
+    def add_new_learned_non_scoped_clause(self,
+#        clause: Tuple[Lit,...],
+        literals: Tuple[Lit,...],
         asserted_literal: Optional[Lit],
     ) -> None:
         """
-        Adds a new learned clause to the clauses database
+        Adds (or "learns") a new learned clause to the clauses database
         and to the pending clauses queue.
         
         Args:
-            clause_literals: The literals composing the clause.
+            literals: The literals composing the clause.
 
-            scope_literal: The literal representing the scope in which  \
-                the clause is defined.
+            literals: TODO
 
         Returns:
-            The ID given to the clause after being registered in the clauses database.
+            The ID with which the clause is registered in the clause database.
         """
 
-        assert asserted_literal is None or asserted_literal in asserting_clause_literals
+        assert asserted_literal is None or asserted_literal in literals
 
-        clause_id = self._add_new_clause(asserting_clause_literals, TRUE_LIT, True)
+        clause_id = self._add_new_clause(literals, TRUE_LIT, True)
         self.pending_clauses_info.insert(0, (clause_id, asserted_literal))
         self.num_learned_clauses += 1
         self.num_conflicts += 1
@@ -335,24 +336,21 @@ class SATReasoner(Reasoner):
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     def _add_new_clause(self,
-        clause_literals: Tuple[Lit,...],
-        scope_literal: Lit,
+#        clause: Tuple[Lit,...],
+        literals: Tuple[Lit,...],
+        scope_representative_literal: Lit,
         learned: bool,
     ) -> SATReasoner.ClauseId:
-        """
-        Adds a new clause to the clauses database.
-        Used by the higher level clause addition functions.
-        """
 
         clause_id = SATReasoner.ClauseId(self._clauses_id_counter)
         self._clauses_id_counter += 1
-        self.clauses_database[clause_id] = SATReasoner.Clause(clause_literals,
-                                                              scope_literal,
+        self.clauses_database[clause_id] = SATReasoner.Clause(literals,
+                                                              scope_representative_literal,
                                                               learned)
         return clause_id
 
     #############################################################################
-    # WATCHES (WATCHED LITERALS & watches)
+    # WATCHES (WATCHED LITERALS AND WATCH LISTS) | DOC: OK 25/10/23
     #############################################################################
 
     def _swap_watch1_and_watch2(self,
@@ -405,7 +403,7 @@ class SATReasoner(Reasoner):
                 case None:
                     return MAX_INT-1
                 case False:
-                    first_impl_ev = self.state.first_event_entailing(lit.negated)
+                    first_impl_ev = self.state.get_first_event_entailing(lit.neg)
                     if first_impl_ev is None or first_impl_ev.index[0] == 0:
                         return 0
                     return first_impl_ev.index[0]+first_impl_ev.index[1]
@@ -450,12 +448,15 @@ class SATReasoner(Reasoner):
         self.watches.remove(clause_id, literal)
 
     #############################################################################
-    # MAIN SOLVER DECISION LEVEL INCREASE & DECREASE CALLBACKS
+    # SOLVER DECISION LEVEL CHANGE CALLBACKS | DOC: OK 25/10/23
     #############################################################################
 
-    def on_solver_increment_one_decision_level(self) -> None:
+    def on_solver_increment_decision_level_by_one(self) -> None:
+        """
+        See `Reasoner.on_solver_increment_decision_level_by_one`.
+        """
         
-        self.next_unprocessed_solver_event_index = 0
+        self.next_solver_event_to_process_index = 0
 
         if len(self.locked_clauses_trail) == self.state.decision_level:
             self.locked_clauses_trail.append([])
@@ -463,15 +464,18 @@ class SATReasoner(Reasoner):
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     def on_solver_backtrack_one_decision_level(self) -> None:
+        """
+        See `Reasoner.on_solver_backtrack_one_decision_level`.
+        """
 
         for locked_clause in reversed(self.locked_clauses_trail[self.state.decision_level+1]):
             self.locked_clauses.remove(locked_clause)
         self.locked_clauses_trail[self.state.decision_level+1].clear()
 
-        self.next_unprocessed_solver_event_index = self.state.num_events_at_current_decision_level
+        self.next_solver_event_to_process_index = self.state.num_events_at_current_decision_level
 
     #############################################################################
-    # PROPAGATION
+    # PROPAGATION | DOC: OK 25/10/23
     #############################################################################
 
     def propagate(self) -> Optional[ReasonerBaseExplanation]:
@@ -479,17 +483,22 @@ class SATReasoner(Reasoner):
         Main propagation method of the SAT reasoner.
         Performs unit propagation (aka boolean constraint propagation).
 
-        First, processes all pending clauses (i.e. clauses that were
-        added to the database since last propagation but weren't processed
-        yet), and sets their asserted literal to True (if they have one).
+        Returns:
+            A base explanation for a conflict, if one is encountered. \
+                None if propagation is successful.
 
-        If none of these clauses is found to be violated, any
-        new ("enqueued") "unit information" resulting from
-        the processing of pending clauses is propagated.
+        Note:
+            First, processes all pending clauses (i.e. clauses that were
+            added to the database since last propagation but weren't processed
+            yet), and sets their asserted literal to True (if they have one).
 
-        If at any point, either during pending clauses processing or propagation,
-        a clause is found to be violated, the negation of its literals is
-        returned as a base explanation to be refined by the main solver.
+            If none of these clauses is found to be violated, any
+            new ("enqueued") "unit information" resulting from
+            the processing of pending clauses is propagated.
+
+            If at any point, either during pending clauses processing or propagation,
+            a clause is found to be violated, the negation of its literals is
+            returned as a base explanation to be refined by the main solver.
         """
 
         violated_clause_id: Optional[SATReasoner.ClauseId] = None
@@ -507,7 +516,7 @@ class SATReasoner(Reasoner):
 
             if asserted_literal is not None:
 
-                if not self.state.is_entailed(asserted_literal):
+                if not self.state.entails(asserted_literal):
                     self._set_from_unit_propagation(asserted_literal, clause_id)
 
         # If no violated clause was detected above,
@@ -525,10 +534,10 @@ class SATReasoner(Reasoner):
         # of its literals, to be used to build an explanation / asserting clause
 
         violated_clause = self.clauses_database[violated_clause_id]
-        base_explanation_lits = [lit.negated for lit in violated_clause.literals]
+        base_explanation_lits = [lit.neg for lit in violated_clause.literals]
 
-        if violated_clause.scope_literal != TRUE_LIT:
-            base_explanation_lits.append(violated_clause.scope_literal)
+        if violated_clause.scope_representative_literal != TRUE_LIT:
+            base_explanation_lits.append(violated_clause.scope_representative_literal)
             self._bump_activity(violated_clause_id)
 
         return ReasonerBaseExplanation(tuple(base_explanation_lits))
@@ -542,6 +551,9 @@ class SATReasoner(Reasoner):
         Processes a pending (i.e. newly added and not yet processed)
         clause, making no assumption on its status. The only requirement
         is that the clause should not have been processed yet.
+
+        Returns:
+            The ID of a violated clause, if one is detected. None otherwise.
         """
 
         clause = self.clauses_database[clause_id]
@@ -549,7 +561,7 @@ class SATReasoner(Reasoner):
         # If the clause only has 1 literal, the processing is simplified
         if clause.watch1 == clause.watch2:
 
-            self._add_watch(clause_id, clause.watch1.negated)
+            self._add_watch(clause_id, clause.watch1.neg)
 
             match self._get_literal_value(clause.watch1):
                 # If the literal is known to be true, the clause is satisfied.
@@ -557,7 +569,7 @@ class SATReasoner(Reasoner):
                     return None 
                 # If the literal is known to be false, the clause is violated.
                 case False:
-                    return self._process_violated_clause(clause_id)
+                    return self._process_possibly_violated_clause(clause_id)
                 # If the literal is unbound, it must be set to true
                 # (because it's the only literal of the clause).
                 case None:
@@ -579,8 +591,8 @@ class SATReasoner(Reasoner):
         # The state is unchanged and a watch is set. 
         if watch1_value is True:
 
-            self._add_watch(clause_id, clause.watch1.negated)
-            self._add_watch(clause_id, clause.watch2.negated)
+            self._add_watch(clause_id, clause.watch1.neg)
+            self._add_watch(clause_id, clause.watch2.neg)
 
             return None
 
@@ -589,17 +601,17 @@ class SATReasoner(Reasoner):
         # well (because of watched literal selection priorities)
         elif watch1_value is False:
 
-            self._add_watch(clause_id, clause.watch1.negated)
-            self._add_watch(clause_id, clause.watch2.negated)
+            self._add_watch(clause_id, clause.watch1.neg)
+            self._add_watch(clause_id, clause.watch2.neg)
 
-            return self._process_violated_clause(clause_id)
+            return self._process_possibly_violated_clause(clause_id)
 
         # If the 1st and 2nd watched literal are unbound,
         # the state is unchanged and a watch is set.
         elif watch2_value is None:
 
-            self._add_watch(clause_id, clause.watch1.negated)
-            self._add_watch(clause_id, clause.watch2.negated)
+            self._add_watch(clause_id, clause.watch1.neg)
+            self._add_watch(clause_id, clause.watch2.neg)
 
             return None
 
@@ -609,8 +621,8 @@ class SATReasoner(Reasoner):
         # Set up the watch and (attempt to) set the 1st watched literal to true.
         else:
 
-            self._add_watch(clause_id, clause.watch1.negated)
-            self._add_watch(clause_id, clause.watch2.negated)
+            self._add_watch(clause_id, clause.watch1.neg)
+            self._add_watch(clause_id, clause.watch2.neg)
 
             self._set_from_unit_propagation(clause.watch1, clause_id)
 
@@ -618,19 +630,22 @@ class SATReasoner(Reasoner):
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     
-    def _process_violated_clause(self,
+    def _process_possibly_violated_clause(self,
         clause_id: SATReasoner.ClauseId,
     ) -> Optional[SATReasoner.ClauseId]:
         """
-        Processes a clause that is violated. This is done by deactivating
-        the clause if possible (i.e. setting its scope literal to False)
-        to avoid a conflict. If it's impossible, we are at conflict.
+        Processes a clause that is possibly violated (i.e. all its literals
+        except its scope's representative literal are known to be false) by attempting
+        to deactivate it. This is done by enforcing its scope representative literal
+        to be false) to avoid a conflict. If the scope representative literal cannot
+        be made false, the clause is indeed violated and we have conflict.
 
-        Returns None if the clause was made deactivated (or if it already was deactivated),
-        or clause_id if the clause is known to be active (i.e. cannot be deactivated).
+        Returns:
+            None if the clause was successfully deactivated (or was already deactivated),\
+                or its ID if it's indeed violated (i.e. cannot be deactivated).
         """
         
-        scope_literal = self.clauses_database[clause_id].scope_literal
+        scope_literal = self.clauses_database[clause_id].scope_representative_literal
 
         match self._get_literal_value(scope_literal):
 
@@ -641,7 +656,7 @@ class SATReasoner(Reasoner):
                 return None
 
             case None:
-                self._set_from_unit_propagation(scope_literal.negated, clause_id)
+                self._set_from_unit_propagation(scope_literal.neg, clause_id)
                 return None
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -653,19 +668,21 @@ class SATReasoner(Reasoner):
         integrated to the database before this method is called (i.e. the queue
         of pending clauses must be empty).
             
-        If a clause is found to be violated, returns its ID. Otherwise, returns None.
+        Returns:
+            The ID of a violated clause, if one is detected. None otherwise.
 
-        This method can be seen as the equivalent of the "enqueued" facts
-        to propagate in minisat / sat solvers).
+        Note:
+            This method can be seen as equivalent of the "enqueued facts"
+            to propagate in MiniSat like solvers).
         """
 
         # Loop through yet unprocessed events, accumulated since the last call to this function.
-        while self.next_unprocessed_solver_event_index < self.state.num_events_at_current_decision_level:
-            ev = self.state._events_trail[self.state.decision_level][self.next_unprocessed_solver_event_index]
-            self.next_unprocessed_solver_event_index += 1
+        while self.next_solver_event_to_process_index < self.state.num_events_at_current_decision_level:
+            ev = self.state._events_trail[self.state.decision_level][self.next_solver_event_to_process_index]
+            self.next_solver_event_to_process_index += 1
 
             # Select clauses with a literal that is 
-            old_watches: Dict[BoundVal, Set[SATReasoner.ClauseId]] = \
+            old_watches: Dict[Bound, Set[SATReasoner.ClauseId]] = \
                 self.watches._data.get(ev.signed_var, {})
             
             if self.watches.has_elements_guarded_by_literals_on(ev.signed_var):
@@ -681,11 +698,11 @@ class SATReasoner(Reasoner):
                     # If we haven't found a contradicting clause yet, and the event
                     # made the watched literal become true, we propagate the clause.
                     if (contradicting_clause_id is None
-                        and ev.new_bound_value.is_stronger_than(watched_literal.bound_value)
-                        and not ev.previous_bound_value.is_stronger_than(watched_literal.bound_value)
+                        and ev.bound.is_stronger_than(watched_literal.bound)
+                        and not ev.old_bound.is_stronger_than(watched_literal.bound)
                     ):
                         if (not self._propagate_clause(clause_id,
-                                                      Lit(ev.signed_var, ev.new_bound_value))
+                                                      Lit(ev.signed_var, ev.bound))
                         ):
                             contradicting_clause_id = clause_id
 
@@ -700,18 +717,20 @@ class SATReasoner(Reasoner):
 
     def _propagate_clause(self, 
         clause_id: SATReasoner.ClauseId,
-        lit: Lit,
+        literal: Lit,
     ) -> bool:
         """
-        Propagates a clause that is watching a literal lit that became true.
+        Propagates a clause that is watching a literal that became true.
         lit should be one of the literals watched by the clause.
+
         If the clause is:
          - pending: reset another watch and return true
          - unit: reset watch, enqueue the implied literal and return true
          - violated: reset watch and return false
 
-        Counter intuitive: this method is only called after removing the watch
-        and we are responsible for resetting a valid watch !
+        Note:
+            Counter intuitive: this method is only called after removing the watch
+            and we are responsible for resetting a valid watch !
         """
 
         clause = self.clauses_database[clause_id]
@@ -719,18 +738,18 @@ class SATReasoner(Reasoner):
         # If the clause only has one literal and it's false, it is violated
         if clause.watch1 == clause.watch2:
 
-            self._add_watch(clause_id, lit)
-            return self._process_violated_clause(clause_id) is None
+            self._add_watch(clause_id, literal)
+            return self._process_possibly_violated_clause(clause_id) is None
 
-        if lit.entails(clause.watch1.negated):
+        if literal.entails(clause.watch1.neg):
 
             self._swap_watch1_and_watch2(clause_id)
         
         # If the 1st watched literal is true, the clause is satisfied.
         # The watch is restored.
-        if self.state.is_entailed(clause.watch1):
+        if self.state.entails(clause.watch1):
 
-            self._add_watch(clause_id, clause.watch2.negated)
+            self._add_watch(clause_id, clause.watch2.neg)
             return True
 
         # Search for a true or unbounded literal in the other literals
@@ -738,24 +757,24 @@ class SATReasoner(Reasoner):
         for i in range(len(clause.unwatched_indices)):
 
             cached_unwatched = clause.unwatched(i)
-            if not self.state.is_entailed(cached_unwatched.negated):
+            if not self.state.entails(cached_unwatched.neg):
 
                 self._swap_watch2_and_unwatched_i(clause_id, i)
-                self._add_watch(clause_id, cached_unwatched.negated)
+                self._add_watch(clause_id, cached_unwatched.neg)
                 return True
         
         # If all searched for literals were false, then the clause is unit.
         # The watch must be restored and propagation performed.
-        self._add_watch(clause_id, clause.watch2.negated)
+        self._add_watch(clause_id, clause.watch2.neg)
 
         cached_watch1 = clause.watch1
 
-        if self.state.is_entailed(cached_watch1):
+        if self.state.entails(cached_watch1):
             return True
 
-        # If the clause is violated, deactivate it if possible
-        elif self.state.is_entailed(cached_watch1.negated):
-            return self._process_violated_clause(clause_id) is None
+        # If the clause is possibly violated, deactivate it if possible
+        elif self.state.entails(cached_watch1.neg):
+            return self._process_possibly_violated_clause(clause_id) is None
 
         else:
             self._set_from_unit_propagation(cached_watch1, clause_id)
@@ -795,7 +814,7 @@ class SATReasoner(Reasoner):
             #     solver.clauses_db.set_lbd(propagating_clause_id, lbd)
 
     #############################################################################
-    # EXPLANATION
+    # EXPLANATION | DOC: OK 25/10/23
     #############################################################################
 
     def explain(self,
@@ -804,7 +823,7 @@ class SATReasoner(Reasoner):
         inference_cause: Causes.ReasonerInference,
     ) -> None:
         """
-        TODO
+        See `Reasoner.explain`.
         """
 
         _, inference_info = inference_cause
@@ -817,10 +836,10 @@ class SATReasoner(Reasoner):
         # However, it is not necessarily the case with eager propagation of optionals.
         for lit in clause.literals:
             if not lit.entails(literal):
-                explanation_literals.append(lit.negated)
+                explanation_literals.append(lit.neg)
 
     #############################################################################
-    # CLAUSE DATABASE SCALING, ACTIVITIES
+    # CLAUSE DATABASE SCALING, ACTIVITIES | DOC: OK 25/10/23
     #############################################################################
     
     def _scale_database(self) -> None:
@@ -872,10 +891,10 @@ class SATReasoner(Reasoner):
                     clause = self.clauses_database[clause_id]
 
                     if clause.watch1 == clause.watch2:
-                        self._remove_watch(clause_id, clause.watch1.negated)
+                        self._remove_watch(clause_id, clause.watch1.neg)
                     else:
-                        self._remove_watch(clause_id, clause.watch1.negated)
-                        self._remove_watch(clause_id, clause.watch2.negated)
+                        self._remove_watch(clause_id, clause.watch1.neg)
+                        self._remove_watch(clause_id, clause.watch2.neg)
 
                     self.clauses_database.pop(clause_id)
                     self.num_learned_clauses -= 1

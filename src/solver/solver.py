@@ -912,8 +912,8 @@ class Solver():
 
             assert self.sat_reasoner is not None
 
-            self.sat_reasoner.add_new_fixed_clause_with_scope(safe_clause,
-                                                              safe_scope_representative_lit)
+            self.sat_reasoner.add_new_fixed_scoped_clause(safe_clause,
+                                                          safe_scope_representative_lit)
             return None
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
