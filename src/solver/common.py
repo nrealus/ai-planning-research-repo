@@ -8,8 +8,8 @@ from __future__ import annotations
 #################################################################################
 
 from abc import ABC
-from typing import (Dict, Generic, List, NamedTuple, Optional, Sequence, Set,
-                    Tuple, TypeVar, Union)
+from typing import (Dict, Generic, NamedTuple, Optional, Set,
+                    Tuple, TypeVar)
 
 from src.fundamentals import Bound, Lit, SignedVar
 
