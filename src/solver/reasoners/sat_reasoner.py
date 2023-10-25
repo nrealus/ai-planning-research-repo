@@ -8,13 +8,11 @@ It is the most "basic" reasoner of the solver and is absolutely required,
 as clause learning (for CDCL search) would be simply impossible without it.
 """
 
+from __future__ import annotations
+
 #################################################################################
 # FILE CONTENTS:
 # - SAT REASONER CLASS
-#################################################################################
-
-from __future__ import annotations
-
 #################################################################################
 
 import typing
