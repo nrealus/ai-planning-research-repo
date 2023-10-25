@@ -583,7 +583,7 @@ class Solver():
         
         lit = Lit.geq(var, 1)
         self.state.register_and_sort_scope((lit,), lit)
-        self.state.register_presence_literals_implication(lit, scope_representative_literal)
+        self.state.register_non_optional_vars_literals_implication(lit, scope_representative_literal)
         
         return var
 
