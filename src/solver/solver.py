@@ -824,7 +824,7 @@ class Solver():
         `constraint` to the appropriate reasoner.
 
         Returns:
-            A conflict if one was encountered when attempting to post the `constraint`.
+            A conflict if one was encountered when attempting to post `constraint`.
         """
         
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
