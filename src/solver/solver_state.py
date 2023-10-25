@@ -191,7 +191,8 @@ class SolverState():
         signed_var: SignedVar,
     ) -> Bound:
         """
-        Returns the bound of `signed_var` (at the current decision level).
+        Returns:
+            The bound of `signed_var` (at the current decision level).
         """
         return self._bounds[signed_var]
 
@@ -229,7 +230,8 @@ class SolverState():
         var: Var,
     ) -> Lit:
         """
-        Returns the presence literal of `var`.
+        Returns:
+            The presence literal of `var`.
         """
         return self._presence_lits[var]
 
@@ -239,7 +241,8 @@ class SolverState():
         literal: Lit,
     ) -> bool:
         """
-        Returns whether `literal` is entailed by the solver (at the current decision level).
+        Returns:
+            Whether `literal` is entailed by the solver (at the current decision level).
         """
 
         return self.bound_of(literal.signed_var).is_stronger_than(literal.bound)
@@ -251,8 +254,9 @@ class SolverState():
         literal_to: Lit,
     ) -> bool:
         """
-        Returns whether the implication `literal_from` => `literal_to` is entailed
-        by the solver (at the current decision level).
+        Returns:
+            whether the implication `literal_from` => `literal_to` is entailed \
+                by the solver (at the current decision level).
         """
         
         # Obvious cases where the implication is known to be true.
@@ -328,8 +332,9 @@ class SolverState():
         literal: Lit,
     ) -> Optional[Event]:
         """
-        Returns the earliest first event that makes `literal` true, if there is one.
-        Otherwise (if there are no events on `literal`'s signed variable), returns None.
+        Returns:
+            The earliest first event that makes `literal` true, if there is one. \
+                Otherwise (if there are no events on `literal`'s signed variable), returns None.
 
         Raises:
             ValueError: if `literal` isn't currently entailed.
@@ -671,10 +676,10 @@ class SolverState():
         scope: Tuple[Lit,...],
     ) -> Lit:
         """
-        Returns the tautology literal for the scope defined by `scope`.
-
-        If `scope` isn't registered yet, we register it first
-        and then return its tautology literal.
+        Returns:
+            The tautology literal for the scope defined by `scope`. \
+                If `scope` wasn't registered yet, registers it first \
+                and then returns its tautology literal.
         """
         
 #        scope_sorted = sorted(scope)
@@ -695,10 +700,10 @@ class SolverState():
         scope: Tuple[Lit,...],
     ) -> Lit:
         """
-        Returns the representative literal for the scope defined by `scope`.
-
-        If `scope` isn't registered yet, we register it first
-        and then return its representative literal.
+        Returns:
+            The representative literal for the scope defined by `scope`. \
+                If `scope` wasn't registered yet, registers it first \
+                and then returns its representative literal.
         
         Note:
             In some cases, when the scope is composed of 1 or 2 literals,
@@ -848,14 +853,8 @@ class SolverState():
         elem_constr_expr: ElemConstrExpr,
     ) -> Tuple[Lit,...]:
         """
-        Returns literals whose conjunction defines the scope
-        of the given elementary constraint expression.
-
-        Args:
-            elem_constr_expr: The elementary constraint expression whose scope we want.
-        
         Returns:
-            A conjunction of literals which defines the scope of `elem_constr_expr`.
+            The scope of `elem_constr_expr`.
         """
 
         raw_required_presences, raw_guards = self._get_raw_required_presences_and_guards(elem_constr_expr)
