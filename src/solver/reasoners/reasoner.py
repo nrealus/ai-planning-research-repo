@@ -14,16 +14,19 @@ by other reasoners, until nothing new can be inferred.
 from __future__ import annotations
 
 #################################################################################
+# FILE CONTENTS:
+# - REASONER BASE CLASS
+#################################################################################
 
 from abc import ABC, abstractmethod
 from typing import List, Optional
 
 from src.fundamentals import Lit
-from src.solver.common import (Causes, InvalidBoundUpdateInfo,
+from src.solver.common import (Causes, InvalidBoundUpdate,
                                ReasonerBaseExplanation)
 
 #################################################################################
-# REASONER
+# DOC: OK 25/10/23
 #################################################################################
 
 class Reasoner(ABC):
@@ -44,10 +47,10 @@ class Reasoner(ABC):
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     @abstractmethod
-    def on_solver_increment_one_decision_level(self) -> None:
+    def on_solver_increment_decision_level_by_one(self) -> None:
         """
-        Updates the internal state of the reasoner when the decision level is
-        incremented by 1 (which happens when applying a set literal decision).
+        Updates the internal state of the reasoner when
+        `Solver.increment_decision_level_by_one` is called.
         """
         pass
 
@@ -56,18 +59,20 @@ class Reasoner(ABC):
     @abstractmethod
     def on_solver_backtrack_one_decision_level(self) -> None:
         """
-        Updates the internal state of the reasoner when the decision level is
-        decreased by 1 (which happens when backtracking one level (or more)).
+        Updates the internal state of the reasoner when `Solver` backtracks one level.
         """
         pass
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     @abstractmethod
-    def propagate(self) -> Optional[InvalidBoundUpdateInfo | ReasonerBaseExplanation]:
+    def propagate(self) -> Optional[InvalidBoundUpdate | ReasonerBaseExplanation]:
         """
         Propagates the accumulated events to the reasoner (namely to its
         specialized constraints) and performs specialized inference.
+
+        Returns:
+            None if the propagation was successful, and a conflict if one is encountered.
         """
         pass
 
@@ -75,20 +80,20 @@ class Reasoner(ABC):
 
     @abstractmethod
     def explain(self,
-        explanation_literals: List[Lit],
+        explanation: List[Lit],
         literal: Lit,
         inference_cause: Causes.ReasonerInference,
     ) -> None:
         """REVIEW
         Contributes to building a "full" explanation by adding to it
-        literals l_1, ... l_n, such that l_1 & ... & l_n => literal.
+        literals `l_1, ... l_n`, such that `l_1 & ... & l_n => literal`.
 
         Args:
-            explanation_literals: The list of literals making up the explanation.   \
-                Modified by the function!
+            explanation: The list of literals making up the explanation. \
+                Modified by the function.
 
-            literal: TODO
+            literal: The literal whose implying literals we want to add to the explanation.
 
-            inference_cause: TODO
+            inference_cause: TODO.
         """
         pass

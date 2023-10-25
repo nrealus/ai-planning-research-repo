@@ -226,7 +226,7 @@ class Solver():
 
             literal: The literal whose implying literals we want to add to the explanation.
 
-            cause: The cause for the event that lead to the contradiction that we're explaining.
+            cause: TODO.
 
             explain_function: An external function that may participate in building \
                 the explanation (basically the `explain` function of a relevant `Reasoner`).
