@@ -286,7 +286,9 @@ class Solver():
         Note: 
             Given an invalid bound update of a literal `l`, returns an asserting
             clause `l_1 & ... & l_n => (!l_dec)` (i.e. `!l_1 | ... | !l_n | !l_dec`) where:
+            
             - the literals 'l_i' are entailed at the previous decision level (of the current state)
+            
             - the literal 'l_dec' is the decisions that was taken at the current decision level
 
             The update of 'l' must not directly originate from a decision, as it is
@@ -486,10 +488,13 @@ class Solver():
 
         Returns:
             A tuple interpreted as follows:
+
                 - 1st element indicates whether the clause is conflicting at the \
                     top decision level (which would prove unsatisfiability).
+                
                 - 2nd element indicates the appropriate backtrack level.
-                - 3rd element indicates asserted at that level.
+                
+                - 3rd element indicates the literal asserted at that level (if any).
         
         Note:
             Normally, in the 1UIP backtracking scheme (1st Unique Implication Point),
