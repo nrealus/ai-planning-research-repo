@@ -5,6 +5,12 @@ This module defines the basic, fundamental building blocks used in the project.
 from __future__ import annotations
 
 #################################################################################
+# FILE CONTENTS:
+# - VARIABLES
+# - SIGNED VARIABLES
+# - LITERALS
+# - ATOMS
+#################################################################################
 
 from typing import List, NamedTuple, Sequence, Tuple
 
@@ -279,197 +285,36 @@ def is_lits_disjunction_tautological(
     return False
 
 #################################################################################
-# DOC: OK 23/10/23
-#################################################################################
-# 
-# class LitsDisjunction(Tuple[Lit,...]):
-#     """Represents a disjunctive set of literals (aka disjunction of literals, aka disjunction)."""
-# 
-#     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-# 
-#     @property
-#     def simplified(self) -> LitsDisjunction:
-#         """
-#         Returns:
-#             A simplified disjunction. The simplification sorts the literals \
-#                 (as tuples, in lexicographic order) and only keeps the \
-#                 weakest literal for each signed variable.
-#         """
-# 
-#         lits: List[Lit] = sorted(self)
-#         n = len(lits)
-#         i = 0
-#         j = 0
-#         while i < n-1:
-#             # Because the literals are now lexicographically sorted,
-#             # we know that if two literals are on the same signed
-#             # variable, the weaker one is necessarily the next one.
-#             if lits[i].entails(lits[i+1]):
-#                 lits.pop(i)
-#                 j += 1
-#             else:
-#                 i += 1
-# 
-#         return LitsDisjunction(lits)
-# 
-#     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-# 
-# #    @property
-#     def is_tautological(self) -> bool:
-#         """
-#         Returns:
-#             Whether the disjunction is tautological (i.e. is always true because \
-#                 it contains literals `[var <= a]` and `[var >= b]` with `b <= a`).
-# 
-#         Warning:
-#             Assumes the disjunction is in simplified form, i.e. its literals are sorted \
-#                 (in lexicographic order) they're all on different signed variables. \
-#                 A simplified disjunction can be obtained using `simplified`.
-# 
-#         Raises:
-#             ValueError: If the disjunction is empty (i.e. contains no literals).
-#             ValueError: If the disjunction is not in simplified form.
-#         """
-# 
-#         n = len(self)
-# 
-#         if n == 0:
-#             raise ValueError(("Attempt to check whether an empty set of literals is tautological. "
-#                               "Technically, an empty set of literals is indeed tautological. However, "
-#                               "at no point do we want a set of literals passed to this method "
-#                               "to be empty, so we raise an error to further enforce that."))
-#         i = 0
-#         while i < n-1:
-# 
-#             if not (self[i] < self[i+1]
-#                     and self[i].signed_var != self[i+1].signed_var
-#             ):
-#                 raise ValueError(("The disjunction is not in simplified form (i.e. ",
-#                                   "literals are not sorted or there was two or more ",
-#                                   "literals on the same signed variable)."))
-# 
-#              # TODO CHECK IF WE MEET THE "TRUE" / TAUTOLOGY LITERAL ?
-# 
-#             if self[i].signed_var.opposite == self[i+1].signed_var:
-#                 # TODO/FIXME: use a function instead of - directly ?
-#                 # but is_stronger_than isn't really suitable, is it ?
-#                 # indeed, these bounds are of different types. one
-#                 # is a lower bound, the other an upper one.
-#                 if self[i].bound - self[i+1].bound <= 0:
-#                     return True
-#             i += 1
-# 
-#         return False
-# 
-#################################################################################
-# 
-#################################################################################
-# 
-# class LitsDisjunctiveSet(): # TODO: rename into Minimal Disjunctive Set ?
-# 
-#     def __init__(self,
-#         lits: Sequence[Lit],
-#     ):
-#         self._lits_dict: Dict[SignedVar, Bound] = {}
-#         for lit in lits:
-#             self.insert(lit)
-# 
-#     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-# 
-#     def insert(self,
-#         lit: Lit
-#     ) -> None:
-#         if (lit.signed_var not in self._lits_dict
-#             or self._lits_dict[lit.signed_var].is_stronger_than(lit.bound)
-#         ):
-#             self._lits_dict[lit.signed_var] = lit.bound
-# 
-#     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-# 
-#     def remove(self,
-#         lit: Lit
-#     ) -> None:
-#         self.insert(lit.neg)
-# 
-#     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-# 
-#     def is_tautological(self) -> bool:
-#         
-#         for signed_var, bound in self._lits_dict.items():
-#             if signed_var.opposite in self._lits_dict:
-#                 if bound + self._lits_dict[signed_var.opposite] <= 0:
-#                     return True
-#         return False
-# 
-#     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-# 
-#     @property
-#     def as_sorted_tuple(self) -> Tuple[Lit, ...]:
-#         return tuple(sorted(Lit(signed_var, bound) for signed_var, bound in self._lits_dict.items()))
-# 
-#################################################################################
-# 
-#################################################################################
-# 
-# class LitsConjunctiveSet():
-# 
-#     def __init__(self,
-#         lits: Sequence[Lit],
-#     ):
-#         self._lits_dict: Dict[SignedVar, Bound] = {}
-#         for lit in lits:
-#             self.insert(lit)
-# 
-#     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-# 
-#     def insert(self,
-#         lit: Lit
-#     ) -> None:
-#         if (lit.signed_var not in self._lits_dict
-#             or lit.bound.is_stronger_than(self._lits_dict[lit.signed_var])
-#         ):
-#             self._lits_dict[lit.signed_var] = lit.bound
-# 
-#     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-# 
-#     def remove(self,
-#         lit: Lit
-#     ) -> None:
-#         if lit.signed_var in self._lits_dict:
-#             self._lits_dict[lit.signed_var] = Bound(lit.bound+1)
-# 
-#     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-# 
-#     def is_contradictory(self) -> bool:
-#         
-#         for signed_var, bound in self._lits_dict.items():
-#             if signed_var.opposite in self._lits_dict:
-#                 if bound + self._lits_dict[signed_var.opposite] >= 0:
-#                     return True
-#         return False
-# 
-#     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-# 
-#     @property
-#     def as_sorted_tuple(self) -> Tuple[Lit, ...]:
-#         return tuple(sorted(Lit(signed_var, bound) for signed_var, bound in self._lits_dict.items()))
-# 
-#################################################################################
 # DOC: TODO
 #################################################################################
 
 class BoolAtom(NamedTuple):
-    lit: Lit
+    var: Var
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 class IntAtom(NamedTuple):
     var: Var
     offset_cst: int
 
-class FixedPointAtom(NamedTuple):
-    num_int_atom: IntAtom
-    denom: int
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+class FracAtom(NamedTuple('FracAtom',[('numer_int_atom', IntAtom), ('denom', int)])):
+    __slots__ = ()
+    def __new__(cls,
+        numer_int_atom: IntAtom,
+        denom: int,
+    ):
+        if denom <= 0:
+            raise ValueError("`FracAtom.denom` must be strictly positive.")
+        return super(FracAtom, cls).__new__(cls, numer_int_atom=numer_int_atom, denom=denom)
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+SymbType_PH = int
 
 class SymbAtom(NamedTuple):
-    int_view_atom: IntAtom  # TODO ?
+    int_view_atom: IntAtom
+    symb_type: SymbType_PH
 
-Atom = BoolAtom | IntAtom | FixedPointAtom | SymbAtom
+# Atom = BoolAtom | IntAtom | FracAtom | SymbAtom

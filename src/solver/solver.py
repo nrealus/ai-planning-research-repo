@@ -8,13 +8,17 @@ or when writing a search / solving function.
 from __future__ import annotations
 
 #################################################################################
+# FILE CONTENTS:
+# - MAIN SOLVER CLASS | HIGH LEVEL API AND MACHINERY
+#################################################################################
 
 import heapq
 from typing import Callable, Dict, List, Optional, Tuple
 
 from src.constraint_expressions import ConstrExpr, ElemConstrExpr
 from src.fundamentals import (TRUE_LIT, Bound, Lit, SignedVar, Var,
-                              simplify_lits_disjunction, is_lits_disjunction_tautological)
+                              simplify_lits_disjunction, is_lits_disjunction_tautological,
+                              BoolAtom, IntAtom, FracAtom, SymbAtom)
 from src.solver.common import (Causes, ConflictAnalysisResult,
                                Event, InvalidBoundUpdate,
                                ReasonerBaseExplanation)
@@ -663,7 +667,7 @@ class Solver():
         elementary constraint expressions, each of which corresponds to either
         single literal, or a "max difference" elementary constraint expression. 
         Both of these elementary constraint expressions are then reified resulting
-        in two reification literals. Finally, an "AND" elementary constraint
+        in two reification literals. Finally, an "and" elementary constraint
         expression combining these two reification literals is returned.
         """
 
@@ -682,7 +686,7 @@ class Solver():
             reif_lit = Lit.geq(self.state.add_new_variable((0,1), True, scope_representative_lit), 1)
 
             self.state._reifications[elem_constr_expr] = reif_lit
-            self.state._reifications[elem_constr_expr.negated] = reif_lit.neg
+            self.state._reifications[elem_constr_expr.neg] = reif_lit.neg
             self.state._constraints.append((elem_constr_expr, reif_lit))
 
             return reif_lit
@@ -690,115 +694,120 @@ class Solver():
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
         def preprocess_eq_int_atoms(
-            var_left: Var,
-            offset_left: int,
-            var_right: Var,
-            offset_right: int,
+            int_atom_left: IntAtom,
+            int_atom_right: IntAtom,
         ) -> ElemConstrExpr:
 
-            if var_left == var_right:
+            if int_atom_left.var == int_atom_right.var:
                 return ElemConstrExpr.from_lit(TRUE_LIT)
 
-            leq12_elem_form = ElemConstrExpr.from_int_atoms_leq(var_left, offset_left,
-                                                                var_right, offset_right)
-            leq21_elem_form = ElemConstrExpr.from_int_atoms_leq(var_right, offset_right,
-                                                                var_left, offset_left)
+            leq12_elem_form = ElemConstrExpr.from_int_atoms_leq(int_atom_left, int_atom_right)
+            leq21_elem_form = ElemConstrExpr.from_int_atoms_leq(int_atom_right, int_atom_left)
+
             leq12_reif_lit = get_or_make_reification_of_elem_constr_expr(leq12_elem_form)
             leq21_reif_lit = get_or_make_reification_of_elem_constr_expr(leq21_elem_form)
 
-            return ElemConstrExpr.from_lits_simplify_and((leq12_reif_lit, leq21_reif_lit))  # FIXME: or of negs ?
+            return ElemConstrExpr.from_lits_and((leq12_reif_lit, leq21_reif_lit))  # FIXME: or of negs ?
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
         
-        def preprocess_eq_bool_vars(
-            var1: Var,
-            var2: Var,
+        def preprocess_eq_bool_atoms(
+            bool_atom1: BoolAtom,
+            bool_atom2: BoolAtom,
         ) -> ElemConstrExpr:
 
-            if var1 == var2:
+            if bool_atom1.var == bool_atom2.var:
                 return ElemConstrExpr.from_lit(TRUE_LIT)
 
-            lit1 = Lit.geq(var1, 1)
-            lit2 = Lit.geq(var2, 1)
+            lit1 = Lit.geq(bool_atom1.var, 1)
+            lit2 = Lit.geq(bool_atom2.var, 1)
 
-            imply12_elem_form = ElemConstrExpr.from_lits_simplify_or((lit1.neg, lit2))
-            imply21_elem_form = ElemConstrExpr.from_lits_simplify_or((lit2.neg, lit1))
+            imply12_elem_form = ElemConstrExpr.from_lits_or((lit1.neg, lit2))
+            imply21_elem_form = ElemConstrExpr.from_lits_or((lit2.neg, lit1))
 
             imply12_reif_lit = get_or_make_reification_of_elem_constr_expr(imply12_elem_form)
             imply21_reif_lit = get_or_make_reification_of_elem_constr_expr(imply21_elem_form)
 
-            return ElemConstrExpr.from_lits_simplify_and((imply12_reif_lit, imply21_reif_lit))  # FIXME: or of negs ?
+            return ElemConstrExpr.from_lits_and((imply12_reif_lit, imply21_reif_lit))  # FIXME: or of negs ?
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
         match constr_expr.terms:
 
-            case ((Var() as var_left, int() as offset_left), 
-                (Var() as var_right, int() as offset_right)
-            ):
+            case IntAtom(), IntAtom():
+                int_atom_left, int_atom_right = constr_expr.terms
+            
                 match constr_expr.kind:
 
                     case ConstrExpr.Kind.LEQ:
-                        return ElemConstrExpr.from_int_atoms_leq(var_left, offset_left,
-                                                                 var_right, offset_right)
+                        return ElemConstrExpr.from_int_atoms_leq(int_atom_left, int_atom_right)
                     case ConstrExpr.Kind.LT:
-                        return ElemConstrExpr.from_int_atoms_leq(var_left, offset_left,
-                                                                 var_right, offset_right-1)
+                        return ElemConstrExpr.from_int_atoms_leq(int_atom_left, IntAtom(int_atom_right.var,
+                                                                                        int_atom_right.offset_cst-1))
                     case ConstrExpr.Kind.GEQ:
-                        return ElemConstrExpr.from_int_atoms_leq(var_right, offset_right,
-                                                                 var_left, offset_left)
+                        return ElemConstrExpr.from_int_atoms_leq(int_atom_right, int_atom_left)
                     case ConstrExpr.Kind.GT:
-                        return ElemConstrExpr.from_int_atoms_leq(var_right, offset_right,
-                                                                 var_left, offset_left-1)
+                        return ElemConstrExpr.from_int_atoms_leq(int_atom_right, IntAtom(int_atom_left.var,
+                                                                                         int_atom_left.offset_cst-1))
                     case ConstrExpr.Kind.EQ:
-                        return preprocess_eq_int_atoms(var_left, offset_left,
-                                                       var_right, offset_right)
+                        return preprocess_eq_int_atoms(int_atom_left, int_atom_right)
                     case ConstrExpr.Kind.NEQ:
-                        return preprocess_eq_int_atoms(var_left, offset_left,
-                                                       var_right, offset_right).negated
+                        return preprocess_eq_int_atoms(int_atom_left, int_atom_right).neg
                     case _:
-                        raise ValueError(("Incompatible constraint type and ",
-                                          "terms: for pairs of integer atoms ",
-                                          "(variable + offset), only LEQ, LT, ",
-                                          "GEQ, GT, EQ and NEQ constraints are defined."))
+                        assert False
 
-            case Var() as var1, Var() as var2:
+            case FracAtom(), FracAtom():
+
+                assert constr_expr.terms[0].denom == constr_expr.terms[1].denom
+                int_atom_left = constr_expr.terms[0].numer_int_atom
+                int_atom_right = constr_expr.terms[1].numer_int_atom
+
+                match constr_expr.kind:
+
+                    case ConstrExpr.Kind.LEQ:
+                        return ElemConstrExpr.from_int_atoms_leq(int_atom_left, int_atom_right)
+                    case ConstrExpr.Kind.LT:
+                        return ElemConstrExpr.from_int_atoms_leq(int_atom_left, IntAtom(int_atom_right.var,
+                                                                                        int_atom_right.offset_cst-1))
+                    case ConstrExpr.Kind.GEQ:
+                        return ElemConstrExpr.from_int_atoms_leq(int_atom_right, int_atom_left)
+                    case ConstrExpr.Kind.GT:
+                        return ElemConstrExpr.from_int_atoms_leq(int_atom_right, IntAtom(int_atom_left.var,
+                                                                                         int_atom_left.offset_cst-1))
+                    case ConstrExpr.Kind.EQ:
+                        return preprocess_eq_int_atoms(int_atom_left, int_atom_right)
+                    case ConstrExpr.Kind.NEQ:
+                        return preprocess_eq_int_atoms(int_atom_left, int_atom_right).neg
+                    case _:
+                        assert False
+
+            case BoolAtom(), BoolAtom():
+                bool_atom1, bool_atom2 = constr_expr.terms
 
                 match constr_expr.kind:
 
                     case ConstrExpr.Kind.EQ:
-                        return preprocess_eq_bool_vars(var1, var2)
-
+                        return preprocess_eq_bool_atoms(bool_atom1, bool_atom2)
                     case ConstrExpr.Kind.NEQ:
-                        return preprocess_eq_bool_vars(var1, var2).negated
-
+                        return preprocess_eq_bool_atoms(bool_atom1, bool_atom2).neg
                     case _:
-                        raise ValueError(("Incompatible constraint type and ",
-                                          "terms: for pairs of boolean variables, ",
-                                          "only EQ, and NEQ constraints are defined."))
+                        assert False
 
             case [Lit(), *_] as lits: 
 
                 match constr_expr.kind:
 
                     case ConstrExpr.Kind.OR:
-                        return ElemConstrExpr.from_lits_simplify_or(lits)
-
+                        return ElemConstrExpr.from_lits_or(lits)
                     case ConstrExpr.Kind.AND:
-                        return ElemConstrExpr.from_lits_simplify_and(tuple(lit.neg for lit in lits))
-
+                        return ElemConstrExpr.from_lits_and(tuple(lit.neg for lit in lits))
                     case ConstrExpr.Kind.IMPLY:
-                        if len(lits) == 2:
-                            lit_from, lit_to = lits[0], lits[1]
-                            return ElemConstrExpr.from_lits_simplify_or((lit_from.neg, lit_to))
-                        else:
-                            raise ValueError(("Incorrect number of terms: ",
-                                              "IMPLY constraints require",
-                                              "exactly two literals."))
+                        if len(lits) != 2:
+                            assert False
+                        lit_from, lit_to = lits[0], lits[1]
+                        return ElemConstrExpr.from_lits_or((lit_from.neg, lit_to))
                     case _:
-                        raise ValueError(("Incompatible constraint type and ",
-                                          "terms: OR, AND, and IMPLY constraints ",
-                                          "require a sequence of literals."))
+                        assert False
 
         raise ValueError("Constraint expression could not be interpreted.")
 
@@ -989,7 +998,7 @@ class Solver():
 
             case ElemConstrExpr.Kind.AND, [Lit(), *_]:
 
-                return self._post_constraint_to_reasoners((elem_constr_expr.negated, constr_lit.neg))
+                return self._post_constraint_to_reasoners((elem_constr_expr.neg, constr_lit.neg))
 
             case _:
                 assert False

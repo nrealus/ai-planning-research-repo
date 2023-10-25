@@ -9,6 +9,9 @@ as well as arguably the most important method of the whole solver:
 from __future__ import annotations
 
 #################################################################################
+# FILE CONTENTS:
+# - SOLVER STATE CLASS | LOW LEVEL API AND MACHINERY
+#################################################################################
 
 from typing import Dict, List, NamedTuple, Optional, Set, Tuple
 
@@ -769,7 +772,7 @@ class SolverState():
                 self.register_presence_literals_implication(scope_representative_literal, l)
                 lits.append(l.neg)
 
-            self._add_elem_constraint(ElemConstrExpr.from_lits_simplify_or(lits),
+            self._add_elem_constraint(ElemConstrExpr.from_lits_or(lits),
                                       self._scopes_representative_lits[TRUE_LIT].tautology_literal)           
             # we know that self._scopes_info_reverse[TRUE_LIT].tautology_literal = TRUE_LIT,
             # but we choose to keep it explicit for clarity
@@ -826,7 +829,7 @@ class SolverState():
             if expr_scope_representative_lit == self.presence_literal_of(constr_value_lit.signed_var.var):
 
                 self._reifications[elem_constr_expr] = constr_value_lit
-                self._reifications[elem_constr_expr.negated] = constr_value_lit.neg
+                self._reifications[elem_constr_expr.neg] = constr_value_lit.neg
                 self._constraints.append((elem_constr_expr, constr_value_lit))
             
             else:
@@ -834,7 +837,7 @@ class SolverState():
                 reif_lit = Lit.geq(self.add_new_variable((0,1), True, expr_scope_representative_lit), 1)
 
                 self._reifications[elem_constr_expr] = reif_lit
-                self._reifications[elem_constr_expr.negated] = reif_lit.neg
+                self._reifications[elem_constr_expr.neg] = reif_lit.neg
                 self._constraints.append((elem_constr_expr, reif_lit))
 
                 self._constraints.append((ElemConstrExpr.from_lit(reif_lit), constr_value_lit))

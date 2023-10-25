@@ -10,27 +10,27 @@ by the decomposing "high-level" constraint expressions.
 from __future__ import annotations
 
 #################################################################################
+# FILE CONTENTS:
+# - HIGH LEVEL CONSTRAINT EXPRESSIONS
+# - LOW LEVEL CONSTRAINT EXPRESSIONS
+#################################################################################
 
 from enum import Enum, auto
 from typing import NamedTuple, Sequence, Tuple, Union
 
-from src.fundamentals import (FALSE_LIT, TRUE_LIT, ZERO_VAR, Lit, Var,
-                              are_tightened_literals_tautological,
-                              tighten_literals)
+from src.fundamentals import (FALSE_LIT, TRUE_LIT, ZERO_VAR, Lit, Var, 
+                              simplify_lits_disjunction, is_lits_disjunction_tautological,
+                              BoolAtom, IntAtom, FracAtom, SymbAtom)
 
 #################################################################################
-# ("NATURAL") CONSTRAINT EXPRESSIONS
+# DOC: OK 25/10/23
 #################################################################################
 
 class ConstrExpr(NamedTuple):
     """
     Represents a "high-level" or "natural" constraint, specified by the user.
-
-    Warning:
-        No errors will be raised if an incorrect / inconsistent / incompatible\
-            instantiation is made (i.e. constraint type and terms are inconsistent).\
-            However, errors may be raised during further processing, if the\
-            expression cannot be interpreted.
+    They are preprocessed / interpreted by the solver into "low-level" constraints,
+    which it uses internally.
     """
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -48,163 +48,250 @@ class ConstrExpr(NamedTuple):
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     kind: Kind
-    """Represents the type or kind of constraint."""
 
-    terms: Union[Tuple[Var, Var],
-                 Tuple[Tuple[Var, int], Tuple[Var, int]],                            
-                 Tuple[Lit,...]]
-    """
-    Contains the terms of the constraint.
-
-    The kind of constraint will have to match the types of terms to be
-    successfully interpreted. The possibles types are the following:
-
-    -`Tuple[Var, Var]`: 2 boolean variables. For `EQ` and `NEQ` constraints.
-
-    -`Tuple[Tuple[Var, int], Tuple[Var, int]]`: 2 integer "atoms". An integer\
-        "atom" is a variable + a constant (integer) offset. For `LEQ`, `LT`, `GEQ`,\
-        `GT`, `EQ`, `NEQ` constraints.
-        
-    -`Tuple[Lit,...]`: any number of literals. For `OR`, `AND`, `IMPLY` constraints.\
-        IMPLY constraints require excatly two literals, however.
-    """
+    terms: Union[Tuple[BoolAtom, BoolAtom],
+                 Tuple[IntAtom, IntAtom],
+                 Tuple[FracAtom, FracAtom],
+                 Tuple[SymbAtom, SymbAtom],
+                 Tuple[Lit,...],
+                 Tuple[Lit, Lit]]
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-        
+
     @classmethod
     def leq(cls,
-        var_left: Var,
-        offset_left: int,
-        var_right: Var,
-        offset_right: int,
+        int_or_frac_atoms_pair: Tuple[IntAtom, IntAtom] | Tuple[FracAtom, FracAtom]
     ) -> ConstrExpr:
         """
         Returns:
-            A "high-level" constraint expression for the\
-            constraint `var_left+offset_left <= var_right+offset_right`.
+            A "high-level" expression for the "<=" (less than or equal to, aka leq) constraint, \
+                between two `IntAtom`s or two `FracAtom`s.
+
+        Raises:
+            ValueError: If a pair of `FracAtom`s has different denominators.
         """
-        return ConstrExpr(ConstrExpr.Kind.LEQ, ((var_left, offset_left),
-                                                (var_right, offset_right)))
+        match int_or_frac_atoms_pair:
+
+            case IntAtom(), IntAtom():
+                return ConstrExpr(ConstrExpr.Kind.LEQ, int_or_frac_atoms_pair)
+
+            case FracAtom(_, denom_left), FracAtom(_, denom_right):
+                if denom_left != denom_right:
+                    raise ValueError("`FracAtom`s are required to have the same denominator to be comparable.")
+                return ConstrExpr(ConstrExpr.Kind.LEQ, int_or_frac_atoms_pair)
+            
+            case _:
+                assert False
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     @classmethod
     def lt(cls,
-        var_left: Var,
-        offset_left: int,
-        var_right: Var,
-        offset_right: int,
+        int_or_frac_atoms_pair: Tuple[IntAtom, IntAtom] | Tuple[FracAtom, FracAtom]
     ) -> ConstrExpr:
         """
         Returns:
-            A "high-level" constraint expression for the\
-            `var_left+offset_left < var_right+offset_right`.
+            A "high-level" expression for the "<" (strictly less than, aka lt) constraint, \
+                between two `IntAtom`s or two `FracAtom`s.
+
+        Raises:
+            ValueError: If a pair of `FracAtom`s has different denominators.
         """
-        return ConstrExpr(ConstrExpr.Kind.LT, ((var_left, offset_left),
-                                               (var_right, offset_right)))
+        match int_or_frac_atoms_pair:
+
+            case IntAtom(), IntAtom():
+                return ConstrExpr(ConstrExpr.Kind.LT, int_or_frac_atoms_pair)
+
+            case FracAtom(_, denom_left), FracAtom(_, denom_right):
+                if denom_left != denom_right:
+                    raise ValueError("`FracAtom`s are required to have the same denominator to be comparable.")
+                return ConstrExpr(ConstrExpr.Kind.LT, int_or_frac_atoms_pair)
+            
+            case _:
+                assert False
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     @classmethod
     def geq(cls,
-        var_left: Var,
-        offset_left: int,
-        var_right: Var,
-        offset_right: int,
+        int_or_frac_atoms_pair: Tuple[IntAtom, IntAtom] | Tuple[FracAtom, FracAtom]
     ) -> ConstrExpr:
         """
         Returns:
-            A "high-level" constraint expression for the\
-            `var_left+offset_left >= var_right+offset_right`.
+            A "high-level" expression for the ">=" (greater than or equal to, aka geq) constraint, \
+                between two `IntAtom`s or two `FracAtom`s.
+
+        Raises:
+            ValueError: If a pair of `FracAtom`s has different denominators.
         """
-        return ConstrExpr(ConstrExpr.Kind.GEQ, ((var_left, offset_left),
-                                                (var_right, offset_right)))
+        match int_or_frac_atoms_pair:
+
+            case IntAtom(), IntAtom():
+                return ConstrExpr(ConstrExpr.Kind.GEQ, int_or_frac_atoms_pair)
+
+            case FracAtom(_, denom_left), FracAtom(_, denom_right):
+                if denom_left != denom_right:
+                    raise ValueError("`FracAtom`s are required to have the same denominator to be comparable.")
+                return ConstrExpr(ConstrExpr.Kind.GEQ, int_or_frac_atoms_pair)
+            
+            case _:
+                assert False
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     @classmethod
     def gt(cls,
-        var_left: Var,
-        offset_left: int,
-        var_right: Var,
-        offset_right: int,
+        int_or_frac_atoms_pair: Tuple[IntAtom, IntAtom] | Tuple[FracAtom, FracAtom]
     ) -> ConstrExpr:
         """
         Returns:
-            A "high-level" constraint expression for the\
-            `var_left+offset_left > var_right+offset_right`.
+            A "high-level" expression for the ">" (greater than, aka gt) constraint, \
+                between two `IntAtom`s or two `FracAtom`s.
+
+        Raises:
+            ValueError: If a pair of `FracAtom`s has different denominators.
         """
-        return ConstrExpr(ConstrExpr.Kind.GT, ((var_left, offset_left),
-                                               (var_right, offset_right)))
+        match int_or_frac_atoms_pair:
+
+            case IntAtom(), IntAtom():
+                return ConstrExpr(ConstrExpr.Kind.GT, int_or_frac_atoms_pair)
+
+            case FracAtom(_, denom_left), FracAtom(_, denom_right):
+                if denom_left != denom_right:
+                    raise ValueError("`FracAtom`s are required to have the same denominator to be comparable.")
+                return ConstrExpr(ConstrExpr.Kind.GT, int_or_frac_atoms_pair)
+            
+            case _:
+                assert False
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     @classmethod
     def eq(cls,
-        terms: Tuple[Var, Var] | Tuple[Tuple[Var, int], Tuple[Var, int]],
+        bool_int_frac_or_sym_atoms_pair: Union[Tuple[BoolAtom, BoolAtom],
+                                               Tuple[IntAtom, IntAtom],
+                                               Tuple[FracAtom, FracAtom],
+                                               Tuple[SymbAtom, SymbAtom]]
     ) -> ConstrExpr:
         """
         Returns:
-            A "high-level" constraint expression for the constraint\
-                `terms[0][0]+terms[0][1] == terms[1][0]+terms[1][1]` if 2 integer atoms are given.                
-            A "high-level" constraint expression for the constraint\
-                `terms[0] == terms[1]` if 2 boolean variables are given.
+            A "high-level" expression for the "=" (equality, aka eq) constraint, \
+                between two `BoolAtom`s, two `IntAtom`s, two `FracAtom`s, or two `SymbAtom`s.
+
+        Raises:
+            ValueError: If a pair of `FracAtom`s has different denominators, \
+                or a pair of `SymbAtom`s has different types.                
         """
-        return ConstrExpr(ConstrExpr.Kind.EQ, terms)
+        match bool_int_frac_or_sym_atoms_pair:
+
+            case BoolAtom(), BoolAtom():
+                return ConstrExpr(ConstrExpr.Kind.EQ, bool_int_frac_or_sym_atoms_pair)
+
+            case IntAtom(), IntAtom():
+                return ConstrExpr(ConstrExpr.Kind.EQ, bool_int_frac_or_sym_atoms_pair)
+
+            case FracAtom(_, denom_left), FracAtom(_, denom_right):
+                if denom_left != denom_right:
+                    raise ValueError("`FracAtom`s are required to have the same denominator to be comparable.")
+                return ConstrExpr(ConstrExpr.Kind.EQ, bool_int_frac_or_sym_atoms_pair)
+            
+            case SymbAtom(_, symb_type_left), SymbAtom(_, symb_type_right):
+                if symb_type_left != symb_type_right:
+                    raise ValueError("`SymbAtom`s are required to have the same symbol type to be comparable.")
+                return ConstrExpr(ConstrExpr.Kind.EQ, bool_int_frac_or_sym_atoms_pair)
+            
+            case _:
+                assert False
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     @classmethod
     def neq(cls,
-        terms: Tuple[Var, Var] | Tuple[Tuple[Var, int], Tuple[Var, int]],
+        bool_int_frac_or_sym_atoms_pair: Union[Tuple[BoolAtom, BoolAtom],
+                                               Tuple[IntAtom, IntAtom],
+                                               Tuple[FracAtom, FracAtom],
+                                               Tuple[SymbAtom, SymbAtom]]
     ) -> ConstrExpr:
         """
         Returns:
-            A "high-level" constraint expression for the constraint\
-                `terms[0][0]+terms[0][1] != terms[1][0]+terms[1][1]` if 2 integer atoms are given.                
-            A "high-level" constraint expression for the constraint\
-                `terms[0] != terms[1]` if 2 boolean variables are given.
+            A "high-level" expression for the "!=" (inequality, aka neq) constraint, \
+                between two `BoolAtom`s, two `IntAtom`s, two `FracAtom`s, or two `SymbAtom`s.
+        
+        Raises:
+            ValueError: If a pair of `FracAtom`s has different denominators, \
+                or a pair of `SymbAtom`s has different types.     
         """
-        return ConstrExpr(ConstrExpr.Kind.NEQ, terms)
+        match bool_int_frac_or_sym_atoms_pair:
+
+            case BoolAtom(), BoolAtom():
+                return ConstrExpr(ConstrExpr.Kind.NEQ, bool_int_frac_or_sym_atoms_pair)
+
+            case IntAtom(), IntAtom():
+                return ConstrExpr(ConstrExpr.Kind.NEQ, bool_int_frac_or_sym_atoms_pair)
+
+            case FracAtom(_, denom_left), FracAtom(_, denom_right):
+                if denom_left != denom_right:
+                    raise ValueError("`FracAtom`s are required to have the same denominator to be comparable.")
+                return ConstrExpr(ConstrExpr.Kind.NEQ, bool_int_frac_or_sym_atoms_pair)
+            
+            case SymbAtom(_, symb_type_left), SymbAtom(_, symb_type_right):
+                if symb_type_left != symb_type_right:
+                    raise ValueError("`SymbAtom`s are required to have the same symbol type to be comparable.")
+                return ConstrExpr(ConstrExpr.Kind.NEQ, bool_int_frac_or_sym_atoms_pair)
+            
+            case _:
+                assert False
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     @classmethod
     def or_(cls,
-        terms: Tuple[Lit,...],
+        literals: Tuple[Lit,...],
     ) -> ConstrExpr:
         """
         Returns:
-            A "high-level" constraint expression for the constraint `terms[0] | ... | terms[n]`.
+            A "high-level" expression for the "or" (disjunction) constraint, on a non empty set of `Lit`s.
+
+        Raises:
+            ValueError: If `literals` is empty.
         """
-        return ConstrExpr(ConstrExpr.Kind.OR, terms)
+        if len(literals) == 0:
+            raise ValueError("A non empty set of literals is required to build a high-level 'or' constraint expression.")
+
+        return ConstrExpr(ConstrExpr.Kind.OR, literals)
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     @classmethod
     def and_(cls,
-        terms: Tuple[Lit,...]
+        literals: Tuple[Lit,...]
     ) -> ConstrExpr:
         """
         Returns:
-            A "high-level" constraint expression for the constraint `terms[0] & ... & terms[n]`.
+            A "high-level" expression for the "and" (conjunction) constraint, on a non empty set of `Lit`s.
+
+        Raises:
+            ValueError: If `literals` is empty.
         """
-        return ConstrExpr(ConstrExpr.Kind.AND, terms)
+        if len(literals) == 0:
+            raise ValueError("A non empty set of literals is required to build a high-level 'and' constraint expression.")
+
+        return ConstrExpr(ConstrExpr.Kind.AND, literals)
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     @classmethod
     def imply(cls,
-        terms: Tuple[Lit, Lit],
+        literals_pair: Tuple[Lit, Lit],
     ) -> ConstrExpr:
         """
         Returns:
-            A "high-level" constraint expression for the constraint `terms[0] => terms[1]`.
+            A "high-level" expression for the "imply" (implication) constraint `literals_pair[0] => literals_pair[1]`.
         """
-        return ConstrExpr(ConstrExpr.Kind.IMPLY, terms)
+        return ConstrExpr(ConstrExpr.Kind.IMPLY, literals_pair)
 
 #################################################################################
-# "ELEMENTARY" CONSTRAINT EXPRESSIONS
+# DOC: OK 25/10/23
 #################################################################################
 
 class ElemConstrExpr(NamedTuple):
@@ -212,12 +299,6 @@ class ElemConstrExpr(NamedTuple):
     Represents a "low-level" or "elementary" constraint to be used internally
     by the solver. They are integrated to the solver during processing / interpretation
     of "high-level" constraints.
-
-    Warning:
-        No errors will be raised if an incorrect / inconsistent / incompatible\
-            instantiation is made (i.e. constraint type and terms are inconsistent).\
-            However, errors may be raised during further processing, if the\
-            expression cannot be interpreted.
     """
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -231,40 +312,30 @@ class ElemConstrExpr(NamedTuple):
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     kind: Kind
-    """Represents the type or kind of constraint."""
 
     terms: Union[Lit,
                  Tuple[Lit,...],
                  Tuple[Var, Var, int]]
-    """
-    Contains the terms of the constraint.
-
-    The kind of constraint will have to match the types of terms to be
-    successfully interpreted. The possibles types are the following:
-
-    -`Lit`: 1 literal. For LIT constraints. (but `OR` and `AND` as well).
-
-    -`Tuple[Lit,...]`: any number of literals. For `OR` and `AND` constraints.
-        
-    -`Tuple[Var, Var, int]`: For `MAX_DIFFERENCE` constraints (`target - source <= weight`).
-    """
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     @property
-    def negated(self) -> ElemConstrExpr:
-        """The negated elementary constraint expression."""
+    def neg(self) -> ElemConstrExpr:
+        """
+        Returns:
+            The negated "low-level" constraint expression.
+        """
 
         match self.kind, self.terms:
 
             case ElemConstrExpr.Kind.LIT, Lit() as lit:
-                return ElemConstrExpr(ElemConstrExpr.Kind.LIT, lit.negated)
+                return ElemConstrExpr(ElemConstrExpr.Kind.LIT, lit.neg)
 
             case ElemConstrExpr.Kind.OR, [Lit(), *_] as lits:
-                return ElemConstrExpr(ElemConstrExpr.Kind.AND, tuple(lit.negated for lit in lits))
+                return ElemConstrExpr(ElemConstrExpr.Kind.AND, tuple(lit.neg for lit in lits))
 
             case ElemConstrExpr.Kind.AND, [Lit(), *_] as lits:
-                return ElemConstrExpr(ElemConstrExpr.Kind.OR, tuple(lit.negated for lit in lits))
+                return ElemConstrExpr(ElemConstrExpr.Kind.OR, tuple(lit.neg for lit in lits))
 
             case (ElemConstrExpr.Kind.MAX_DIFFERENCE,
                   (Var() as from_var, Var() as to_var, int() as max_diff)
@@ -278,16 +349,19 @@ class ElemConstrExpr(NamedTuple):
 
     @classmethod
     def from_int_atoms_leq(cls,
-        var_left: Var,
-        offset_left: int,
-        var_right: Var,
-        offset_right: int,
+        int_atom_left: IntAtom,
+        int_atom_right: IntAtom,
     ) -> ElemConstrExpr:
         """
-        TODO
+        Returns:
+            A "low-level" constraint expression interpreting a "less than or equal" \
+                comparison between two `IntAtom`s.
         """
 
-        offset_diff = offset_right - offset_left
+        var_left: Var = int_atom_left.var
+        var_right: Var = int_atom_right.var
+
+        offset_diff: int = int_atom_right.offset_cst - int_atom_left.offset_cst
 
         if var_left == var_right:
             if offset_diff >= 0:
@@ -302,7 +376,7 @@ class ElemConstrExpr(NamedTuple):
             return ElemConstrExpr.from_lit(Lit.geq(var_right, -offset_diff))
 
         else:
-            return ElemConstrExpr.from_max_diff(var_left, var_right, offset_diff)
+            return ElemConstrExpr.from_vars_max_diff(var_left, var_right, offset_diff)
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -311,67 +385,68 @@ class ElemConstrExpr(NamedTuple):
         literal: Lit,
     ) -> ElemConstrExpr:
         """
-        TODO
+        Returns:
+            A "low-level" constraint expression interpreting the entailment \
+                of the single literal `literal`.
         """
         return ElemConstrExpr(ElemConstrExpr.Kind.LIT, literal)
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     @classmethod
-    def from_lits_simplify_or(cls,
+    def from_lits_or(cls,
         literals: Sequence[Lit],
     ) -> ElemConstrExpr:
         """
-        TODO
+        Returns:
+            A "low-level" constraint expression interpreting the disjunction of the given literals.
         """
-
         if len(literals) == 0:
             return ElemConstrExpr.from_lit(FALSE_LIT)
 
-        tightened_literals = tighten_literals(literals)
+        simplified_lits_disjunction = simplify_lits_disjunction(literals)
 
-        if len(tightened_literals) == 1:
-            return ElemConstrExpr.from_lit(tightened_literals[0])
+        if len(simplified_lits_disjunction) == 1:
+            return ElemConstrExpr.from_lit(simplified_lits_disjunction[0])
 
-        elif are_tightened_literals_tautological(tightened_literals):
+        elif is_lits_disjunction_tautological(simplified_lits_disjunction):
             return ElemConstrExpr.from_lit(TRUE_LIT)
 
-        return ElemConstrExpr(ElemConstrExpr.Kind.OR, tightened_literals)
+        return ElemConstrExpr(ElemConstrExpr.Kind.OR, simplified_lits_disjunction)
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     @classmethod
-    def from_lits_simplify_and(cls,
+    def from_lits_and(cls,
         literals: Sequence[Lit]
     ) -> ElemConstrExpr:
         """
-        TODO
+        Returns:
+            A "low-level" constraint expression interpreting the conjunction of the given literals.
         """
-
         if len(literals) == 0:
             return ElemConstrExpr.from_lit(TRUE_LIT)
 
-        tightened_neg_literals = tighten_literals(tuple(lit.negated
-                                                        for lit in literals))
-        if len(tightened_neg_literals) == 1:
-            return ElemConstrExpr.from_lit(tightened_neg_literals[0].negated)
+        simplified_neg_lits_disjunction = simplify_lits_disjunction([lit.neg for lit in literals])
 
-        elif are_tightened_literals_tautological(tightened_neg_literals):
+        if len(simplified_neg_lits_disjunction) == 1:
+            return ElemConstrExpr.from_lit(simplified_neg_lits_disjunction[0].neg)
+
+        elif is_lits_disjunction_tautological(simplified_neg_lits_disjunction):
             return ElemConstrExpr.from_lit(FALSE_LIT)
 
-        return ElemConstrExpr(ElemConstrExpr.Kind.AND, tuple(lit.negated for lit in tightened_neg_literals))
+        return ElemConstrExpr(ElemConstrExpr.Kind.AND, tuple(lit.neg for lit in simplified_neg_lits_disjunction))
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     @classmethod
-    def from_max_diff(cls,
+    def from_vars_max_diff(cls,
         var_from: Var,
         var_to: Var,
         max_diff: int,
     ) -> ElemConstrExpr:
         """
-        TODO
+        Returns:
+            A "low-level" constraint expression interpreting `var_to - var_from <= max_diff`.
         """
         return ElemConstrExpr(ElemConstrExpr.Kind.MAX_DIFFERENCE, (var_from, var_to, max_diff))
-
-#################################################################################
