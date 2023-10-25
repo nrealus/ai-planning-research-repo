@@ -1,6 +1,5 @@
 """
-This module defines some common "helper" types used by the solver, as well as
-a "helper" or "wrapper" collection.
+This module defines some important "helper" types used by the solver.
 """
 
 from __future__ import annotations
