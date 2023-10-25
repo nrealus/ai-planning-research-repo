@@ -12,7 +12,7 @@ import heapq
 from typing import Callable, Dict, List, Set, Tuple
 
 from src.fundamentals import Lit, Var
-from src.solver.common import Causes, Decisions, SetGuardedByLiterals
+from src.solver.common import Causes, Decisions, SetGuardedByLits
 from src.solver.branchers.brancher import Brancher
 from src.solver.solver_state import SolverState
 
@@ -42,7 +42,7 @@ class LRBBrancher(Brancher):
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-        self.watches_presence_vars: SetGuardedByLiterals[Var] = SetGuardedByLiterals()
+        self.watches_presence_vars: SetGuardedByLits[Var] = SetGuardedByLits()
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -77,7 +77,7 @@ class LRBBrancher(Brancher):
             self.watches_presence_vars.add(var, state.presence_literal_of(var))
 
             # if presence literal is already true, enqueue the var immediately
-            if state.is_entailed(state.presence_literal_of(var)):
+            if state.entails(state.presence_literal_of(var)):
                 heapq.heappush(self.pending_vars_prio_queue, (0, var))
                 self._prio_queue_helper_dict[var] = 0
                 self.num_conflicts_at_var_assignment[var] = 0
@@ -103,7 +103,7 @@ class LRBBrancher(Brancher):
             self.next_unprocessed_solver_event_index += 1
 
             for prez_var in self.watches_presence_vars.elements_guarded_by(Lit(ev.signed_var,
-                                                                                  ev.new_bound_value)):
+                                                                                  ev.bound)):
                 if prez_var not in self._prio_queue_helper_dict:
                     heapq.heappush(self.pending_vars_prio_queue, (0, prez_var))
                     self._prio_queue_helper_dict[prez_var] = 0
