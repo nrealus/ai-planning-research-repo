@@ -152,7 +152,7 @@ class Solver():
     ) -> Optional[Tuple[InvalidBoundUpdate | ReasonerBaseExplanation, Reasoner]]:
         """
         Propagates the changes accumulated since the last call to this method,
-        until nothing new can be infferred.
+        until nothing new can be inferred.
 
         Returns:
             None if the propagation was successful, and a tuple if a conflict \
