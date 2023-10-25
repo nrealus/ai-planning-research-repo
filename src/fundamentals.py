@@ -285,17 +285,26 @@ def is_lits_disjunction_tautological(
 #################################################################################
 
 class BoolAtom(NamedTuple):
+    """
+    TODO
+    """
     var: Var
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 class IntAtom(NamedTuple):
+    """
+    TODO
+    """
     var: Var
     offset_cst: int
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 class FracAtom(NamedTuple('FracAtom',[('numer_int_atom', IntAtom), ('denom', int)])):
+    """
+    TODO
+    """
     __slots__ = ()
     def __new__(cls,
         numer_int_atom: IntAtom,
@@ -310,6 +319,9 @@ class FracAtom(NamedTuple('FracAtom',[('numer_int_atom', IntAtom), ('denom', int
 SymbType_PH = int
 
 class SymbAtom(NamedTuple):
+    """
+    TODO
+    """
     int_view_atom: IntAtom
     symb_type: SymbType_PH
 

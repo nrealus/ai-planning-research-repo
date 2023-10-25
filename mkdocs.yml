@@ -8,19 +8,22 @@ plugins:
     handlers:
       python:
         options:
+          allow_inspection: false
           docstring_section_style: list
           docstring_style: google
-#          group_by_category: false
-          heading_level: 3
+          heading_level: 5
           members_order: source
-          show_category_heading: true
-          show_if_no_docstring: true
+          merge_init_into_class: true
+          separate_signature: true
+          show_category_heading: false
+          show_if_no_docstring: false
           show_signature_annotations: true
-          show_root_heading: false
+          show_source: false
           show_root_toc_entry: false
 
 nav:
-  - Aries-like Solver Overview: overview.md
+  - Home: index.md
+  - Overview: overview.md
   - Example CDCL search: cdcl_example.md
   - Reference:
     - Fundamentals: fundamentals.md
@@ -37,4 +40,4 @@ nav:
         - Brancher: brancher.md
   
 extra_css:
-  - stylesheets/extra_style.css
+ - stylesheets/extra_style.css

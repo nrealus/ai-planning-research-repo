@@ -319,7 +319,7 @@ class SATReasoner(Reasoner):
         Args:
             literals: The literals composing the clause.
 
-            literals: TODO
+            asserted_literal: TODO
 
         Returns:
             The ID with which the clause is registered in the clause database.

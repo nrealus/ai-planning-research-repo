@@ -421,15 +421,20 @@ class SolverState():
 
         Note:
             The update is:
+
             - Useless when either the variable is optional and absent 
             or the current bound is stronger than the suggested one.
+            
             - Failed when it leads to an empty domain for a non optional variable.
+            
             - Successful when it doesn't lead to an empty domain for a non optional variable.
 
             When we detect that applying the update would lead to the domain
             of `signed_var`'s variable to be empty (i.e. lower bound strictly
             greater than upper bound), there are 2 possibilities:
+            
             - If the variable is non-optional, immediately return a `InvalidBoundUpdate`.
+            
             - If the variable is optional, sets the new bound and attempts to set
             the negation of the variable's presence literal with a new call to
             `set_bound`. The results of this recursive call are then returned.

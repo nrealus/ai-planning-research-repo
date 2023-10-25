@@ -143,9 +143,13 @@ class DiffReasoner(Reasoner):
         Note:
             Each difference constraint / STN edge (i.e. `v2-v1 <= d`, i.e. `v1 -d-> v2`)
             added is converted into 4 propagators, which correspond to:
+
             - the forward (source -> target) view of the "canonical" (i.e. "normal") edge
+
             - the backward (target -> source) view of the "canonical" (i.e. "normal") edge
+            
             - the forward (source -> target) view of the "negated" (i.e. negation of canonical) edge
+            
             - the backward (target -> source) view of the "negated" (i.e. negation of canonical) edge
 
             Make no mistake, at no point will those 4 propagators be part of the same group !
@@ -501,19 +505,19 @@ class DiffReasoner(Reasoner):
             a propagator group "bundles" propagators which only differ by enabling conditions).
             For each new propagator, this is done by either:
 
-                - Merging / adding the new propagator into an existing group
-                of propagators, by adding its enabler to their `potential_enablers`.
-                
-                - Tightening an already active existing group of propagators
-                (superseded by the new propagator), by setting their weight to
-                the new propagator's weight.
-                
-                - Ignoring the new propagator, if it is redundant with an
-                existing one (i.e. if its weight is weaker than an existing
-                propagator's with the same enabling conditions).
-                
-                - Creating a new propagator group with the new propagator's enabler,
-                if there are no existing propagators with the same source and target.
+            - Merging / adding the new propagator into an existing group
+            of propagators, by adding its enabler to their `potential_enablers`.
+            
+            - Tightening an already active existing group of propagators
+            (superseded by the new propagator), by setting their weight to
+            the new propagator's weight.
+            
+            - Ignoring the new propagator, if it is redundant with an
+            existing one (i.e. if its weight is weaker than an existing
+            propagator's with the same enabling conditions).
+            
+            - Creating a new propagator group with the new propagator's enabler,
+            if there are no existing propagators with the same source and target.
 
             NOTE that merging, tightening, or ignoring is only done when the solver
             is at the top decision level. Beyond the top decision level, we always choose 
@@ -522,14 +526,14 @@ class DiffReasoner(Reasoner):
 
             3. Postprocess the integration of the new propagator. The two possibilities are the following:
                 
-                - Either set the propagators of the group (to which the new propagator was added)
-                as pending for activation, if the enabling conditions of the new propagator
-                are satisfied (`active` and `valid` literals of its enabler are true).
-                
-                - Or set watch on the enabling conditions of the new propagator (the `active`
-                and `valid` literals of its enabler), if they aren't known to be true yet, so
-                that we're notified when one of them becomes true. (If both of them are true,
-                the propagator group will be staged as pending for activation).
+            - Either set the propagators of the group (to which the new propagator was added)
+            as pending for activation, if the enabling conditions of the new propagator
+            are satisfied (`active` and `valid` literals of its enabler are true).
+            
+            - Or set watch on the enabling conditions of the new propagator (the `active`
+            and `valid` literals of its enabler), if they aren't known to be true yet, so
+            that we're notified when one of them becomes true. (If both of them are true,
+            the propagator group will be staged as pending for activation).
         """
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
