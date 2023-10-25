@@ -244,16 +244,17 @@ class SATReasoner(Reasoner):
         """
         Represents literals' "watch lists" (lists of clauses where they appear).
 
-        Internally, a literal `[signed_var <= val]`'s watchlist is represented as:
-        `{ signed_var : { val : [clause1_id, clause2_id, ...] }}`
+        Note:
+            Internally, a literal `[signed_var <= val]`'s watchlist is represented as:
+            `{ signed_var : { val : [clause1_id, clause2_id, ...] }}`
         """
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
         self.pending_clauses_info: List[Tuple[SATReasoner.ClauseId, Optional[Lit]]] = []
         """
-        Stores clauses that have been recorded into the
-        database, but haven't been processed yet.
+        A queue that stores clauses that have been recorded
+        into the database, but haven't been processed yet.
 
         The first element of the tuple is the ID of the clause to propagate.
         
