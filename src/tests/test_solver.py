@@ -299,7 +299,7 @@ class TestSolverBasics(unittest.TestCase):
         if err is not None:
             clause_literals = \
                 solver.explain_invalid_bound_update(err, dummy_reasoner_explain)    \
-                    .asserting_clause
+                    .asserting_clause_literals
             # we have three rules
             #  -  !(n <= 4) || !(n >= 5)   (conflict)
             #  -  !a || (n <= 4)           (clause a)

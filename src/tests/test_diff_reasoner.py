@@ -587,7 +587,7 @@ class TestDiffReasonerBasics(unittest.TestCase):
             assert solver.diff_reasoner is not None
 
             expl = [lit]
-            return solver.refine_explanation(expl, solver.diff_reasoner.explain).asserting_clause
+            return solver.refine_explanation(expl, solver.diff_reasoner.explain).asserting_clause_literals
     
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
