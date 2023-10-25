@@ -8,9 +8,9 @@ from __future__ import annotations
 
 from typing import Optional, Tuple
 
-from src.fundamentals import Lit, tighten_literals
+from src.fundamentals import Lit, simplify_lits_disjunction
 from src.solver.common import (Causes, ConflictAnalysisResult, Decisions,
-                               InvalidBoundUpdateInfo,
+                               InvalidBoundUpdate,
                                ReasonerBaseExplanation)
 from src.solver.branchers.brancher import Brancher
 from src.solver.solver import Solver
@@ -156,7 +156,7 @@ def search(
             conflict_analysis_info: ConflictAnalysisResult
 
             match conflict_info:
-                case InvalidBoundUpdateInfo():
+                case InvalidBoundUpdate():
                     conflict_analysis_info = solver.explain_invalid_bound_update(conflict_info,
                                                                                  reasoner.explain)
                 case ReasonerBaseExplanation():
@@ -168,9 +168,10 @@ def search(
             if len(conflict_analysis_info.asserting_clause_literals) == 0:
                 return "INCONSISTENT"
 
-            tightened_asserting_clause_literals = tighten_literals(conflict_analysis_info.asserting_clause_literals)
+            simplified_asserting_clause_literals = simplify_lits_disjunction(conflict_analysis_info
+                                                                             .asserting_clause_literals)
 
-            brancher.on_after_conflict_analysis(tightened_asserting_clause_literals,
+            brancher.on_after_conflict_analysis(simplified_asserting_clause_literals,
                                                 reasoner.explain,
                                                 solver.state)
 
@@ -178,7 +179,7 @@ def search(
 
             (is_clause_conflicting_at_top_level,
             decision_level_to_backtrack_to,
-            asserted_literal) = solver.get_decision_level_to_backtrack_to(tightened_asserting_clause_literals)
+            asserted_literal) = solver.get_decision_level_to_backtrack_to(simplified_asserting_clause_literals)
 
             if is_clause_conflicting_at_top_level:
                 return "INCONSISTENT"
@@ -186,8 +187,8 @@ def search(
             brancher.on_before_backtracking(decision_level_to_backtrack_to, solver.state)
 
             solver.backtrack_to_decision_level(decision_level_to_backtrack_to)
-            solver.sat_reasoner.add_new_learned_clause(tightened_asserting_clause_literals,
-                                                       asserted_literal)
+            solver.sat_reasoner.add_new_learned_non_scoped_clause(simplified_asserting_clause_literals,
+                                                                  asserted_literal)
 
         else:
 
@@ -206,9 +207,9 @@ def search(
                     brancher.on_before_backtracking(0, solver.state)
                     solver.backtrack_to_decision_level(0)
                     
-                case Decisions.SetLiteral(lit):
+                case Decisions.SetLit(lit):
 
-                    solver.increment_one_decision_level()
+                    solver.increment_decision_level_by_one()
                     solver.state.set_literal(lit, Causes.Decision())
                 case _:
                     assert False

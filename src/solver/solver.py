@@ -361,7 +361,7 @@ class Solver():
 
         # Literals that are beyond the current decision and
         # will be part of the final asserting clause.
-        asserting_clause: List[Lit] = []
+        asserting_clause_literals: List[Lit] = []
 
         resolved_literals: Dict[SignedVar, Bound] = {}
 
@@ -390,7 +390,7 @@ class Solver():
                         heapq.heappush(prio_queue, ((-ev_i_dl, -ev_i), lit))
 
                     elif ev_i_dl < self.state.decision_level:
-                        asserting_clause.append(lit.neg)
+                        asserting_clause_literals.append(lit.neg)
 
                     else:
                         assert False
@@ -400,7 +400,7 @@ class Solver():
                 # this propagation to occur, it must be part of the clause
                 # for correctness.
                 else:
-                    asserting_clause.append(lit.neg)
+                    asserting_clause_literals.append(lit.neg)
                 
             # If the queue is empty, it means that all literals in the clause
             # will be at decision levels earlier than the current decision level.
@@ -410,7 +410,7 @@ class Solver():
             #
             # Corollary: if ev_i_dl is 0, the derived clause must be empty.
             if not prio_queue:
-                return ConflictAnalysisResult(tuple(asserting_clause),
+                return ConflictAnalysisResult(tuple(asserting_clause_literals),
                                               resolved_literals)
             
             # At this point, we haven't reached the 1st UIP yet.
@@ -446,8 +446,8 @@ class Solver():
             # Thus, to finish building the asserting clause, we just
             # need to add 'not lit' to asserting_clause_literals.
             if not prio_queue:
-                asserting_clause.append(lit.neg)
-                return ConflictAnalysisResult(tuple(asserting_clause),
+                asserting_clause_literals.append(lit.neg)
+                return ConflictAnalysisResult(tuple(asserting_clause_literals),
                                               resolved_literals)
 
             # Now, we need to backtrack until the latest falsifying event.
@@ -478,11 +478,11 @@ class Solver():
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     def get_decision_level_to_backtrack_to(self,
-        asserting_clause: Tuple[Lit,...],
+        asserting_clause_literals: Tuple[Lit,...],
     ) -> Tuple[bool, int, Optional[Lit]]:
         """
         Args:
-            asserting_clause: The literals composing an asserting clause.
+            asserting_clause_literals: The literals composing an asserting clause.
 
         Returns:
             A tuple interpreted as follows:
@@ -508,7 +508,7 @@ class Solver():
 
         asserted_literal: Optional[Lit] = None
 
-        for literal in asserting_clause:
+        for literal in asserting_clause_literals:
 
             if not (self.state.bound_of(literal.neg.signed_var)
                     .is_stronger_than(literal.neg.bound)
@@ -830,7 +830,7 @@ class Solver():
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     
         def make_safe_for_unit_propag(
-            clause: Tuple[Lit,...],
+            clause_literals: Tuple[Lit,...],
             scope_representative_lit: Lit,
         ) -> Tuple[Tuple[Lit,...], Lit]:
             """
@@ -839,34 +839,34 @@ class Solver():
             """
 
             if scope_representative_lit == TRUE_LIT:
-                return (clause, TRUE_LIT)
+                return (clause_literals, TRUE_LIT)
             
             # The clause can never be true, so it will have to be made absent.
-            if len(clause) == 0:
+            if len(clause_literals) == 0:
                 return ((scope_representative_lit.neg,), TRUE_LIT)
 
             if all(self.state.entails_implication(self.state.presence_literal_of(lit.signed_var.var),
                                                   scope_representative_lit)
-                                                  for lit in clause):
-                return (clause, scope_representative_lit)
+                                                  for lit in clause_literals):
+                return (clause_literals, scope_representative_lit)
 
-            return (simplify_lits_disjunction(clause+(scope_representative_lit.neg,)), TRUE_LIT)
+            return (simplify_lits_disjunction(clause_literals+(scope_representative_lit.neg,)), TRUE_LIT)
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
         def preprocess_then_add_scoped_clause_to_sat_reasoner(
-            clause: Tuple[Lit,...],
+            clause_literals: Tuple[Lit,...],
             scope_representative_literal: Lit,
             clause_already_in_simplified_form: bool,
         ) -> Optional[InvalidBoundUpdate]:
             """
-            Preprocesses the `clause` and the `scope_representative_literal` by:
-            - Simplifying the `clause` (if wasn't already).
-            - Removing unnecessary (already known to be false) literals from `clause`.
+            Preprocesses the `clause_literals` and the `scope_representative_literal` by:
+            - Simplifying the `clause_literals` (if wasn't already).
+            - Removing unnecessary (already known to be false) literals from `clause_literals`.
                 - If this removes all literals / results in the clause being empty,
                 then the clause is false and thus we must leave it scope.
                 So `scope_representative_literal` is set to false.
-            - Making the literals of `clause` and the `scope_representative_literal`
+            - Making the literals of `clause_literals` and the `scope_representative_literal`
             "safe" for unit propagation, by (in the general case) adding the negation
             of scope representative literal to the clause, and changing it to TRUE_LIT.
             - Adding the "safe" clause and scope representative literal to the `SATReasoner`
@@ -874,14 +874,14 @@ class Solver():
             """
 
             if clause_already_in_simplified_form:
-                simplified_clause = simplify_lits_disjunction(clause)
+                simplified_clause_literals = simplify_lits_disjunction(clause_literals)
             else:
-                simplified_clause = clause
+                simplified_clause_literals = clause_literals
                 
             # Remove clause literals that are guaranteed to not become true
             # (i.e. whose value is False / whose negation literal is entailed)
 
-            true_or_unbounded_lits = list(simplified_clause)
+            true_or_unbounded_lits = list(simplified_clause_literals)
 
             n = len(true_or_unbounded_lits)
             i = 0
@@ -907,12 +907,12 @@ class Solver():
             # The clause literals may have literals on optional variables.
             # Thus the clause must be made "safe" for unit propagation in the SATReasoner.
 
-            safe_clause, safe_scope_representative_lit = make_safe_for_unit_propag(tuple(true_or_unbounded_lits),
-                                                                                   scope_representative_literal)
+            safe_clause_literals, safe_scope_representative_lit = make_safe_for_unit_propag(tuple(true_or_unbounded_lits),
+                                                                                            scope_representative_literal)
 
             assert self.sat_reasoner is not None
 
-            self.sat_reasoner.add_new_fixed_scoped_clause(safe_clause,
+            self.sat_reasoner.add_new_fixed_scoped_clause(safe_clause_literals,
                                                           safe_scope_representative_lit)
             return None
 

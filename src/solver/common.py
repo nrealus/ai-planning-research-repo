@@ -368,7 +368,7 @@ class ConflictAnalysisResult(NamedTuple):
     """
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-    asserting_clause: Tuple[Lit,...]
+    asserting_clause_literals: Tuple[Lit,...]
     """
     The literals composing the asserting clause obtained as a result of conflict analysis.
 
