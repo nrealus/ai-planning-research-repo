@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import unittest
 
-from src.fundamentals import SignedVar, BoundVal, Lit, TRUE_LIT
-from src.solver.common import Causes, InvalidBoundUpdateInfo
+from src.fundamentals import SignedVar, Bound, Lit, TRUE_LIT
+from src.solver.common import Causes, InvalidBoundUpdate
 from src.solver.solver import Solver
 
 #################################################################################
@@ -14,7 +14,7 @@ class TestSolverBasics(unittest.TestCase):
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-    def test_non_optional_vars_set_bound_values(self):
+    def test_non_optional_vars_set_literal(self):
 
         solver = Solver(use_sat_reasoner=False,
                         use_diff_reasoner=False)
@@ -44,8 +44,8 @@ class TestSolverBasics(unittest.TestCase):
 
         self.assertEqual(solver.state.set_literal(Lit.geq(A, 10),
                                                   Causes.Decision()),
-                         InvalidBoundUpdateInfo(Lit.geq(A, 10),
-                                                Causes.Decision()))
+                         InvalidBoundUpdate(Lit.geq(A, 10),
+                                            Causes.Decision()))
 
         solver._undo_and_return_latest_event_at_current_decision_level()
 
@@ -54,12 +54,12 @@ class TestSolverBasics(unittest.TestCase):
 
         self.assertEqual(solver.state.set_literal(Lit.leq(A, 0),
                                                   Causes.Decision()),
-                         InvalidBoundUpdateInfo(Lit.leq(A, 0),
-                                                Causes.Decision()))
+                         InvalidBoundUpdate(Lit.leq(A, 0),
+                                            Causes.Decision()))
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-    def test_optional_vars_set_bound_values(self):
+    def test_optional_vars_set_literal(self):
 
         solver = Solver(use_sat_reasoner=False,
                         use_diff_reasoner=False)
@@ -70,12 +70,12 @@ class TestSolverBasics(unittest.TestCase):
 
         P1 = solver.add_new_non_optional_variable((0, 1), True)
         P1lit = Lit.geq(P1, 1)
-        solver.state._register_implication_between_literals_on_non_optional_vars(P1lit, TRUE_LIT)
+        solver.state.register_non_optional_vars_literals_implication(P1lit, TRUE_LIT)
         # The variable of P1 is always present.
 
         P2 = solver.add_new_non_optional_variable((0, 1), True)
         P2lit = Lit.geq(P2, 1)
-        solver.state._register_implication_between_literals_on_non_optional_vars(P2lit, P1lit)
+        solver.state.register_non_optional_vars_literals_implication(P2lit, P1lit)
         # The variable of P2 is present when P1 is true (P1 acts as a scope literal)
 
         # A is present if P2 is true
@@ -91,34 +91,34 @@ class TestSolverBasics(unittest.TestCase):
                                                   Causes.Decision()),
                          True)
 
-        self.assertEqual(solver.state.bound_value_of(SignedVar.minus(A)), -5)
-        self.assertEqual(solver.state.bound_value_of(SignedVar.plus(A)), 5)
-        self.assertEqual(solver.state.bound_value_of(SignedVar.minus(P1)), 0)
-        self.assertEqual(solver.state.bound_value_of(SignedVar.plus(P1)), 1)
-        self.assertEqual(solver.state.bound_value_of(SignedVar.minus(P2)), 0)
-        self.assertEqual(solver.state.bound_value_of(SignedVar.plus(P2)), 1)
+        self.assertEqual(solver.state.bound_of(SignedVar.minus(A)), -5)
+        self.assertEqual(solver.state.bound_of(SignedVar.plus(A)), 5)
+        self.assertEqual(solver.state.bound_of(SignedVar.minus(P1)), 0)
+        self.assertEqual(solver.state.bound_of(SignedVar.plus(P1)), 1)
+        self.assertEqual(solver.state.bound_of(SignedVar.minus(P2)), 0)
+        self.assertEqual(solver.state.bound_of(SignedVar.plus(P2)), 1)
 
         # Make the domain of A empty, this shuold imply that P2 is false
         solver.state.set_literal(Lit.geq(A, 6),
                                  Causes.Decision())
 
-        self.assertEqual(solver.state.bound_value_of(SignedVar.minus(A)), -5)
-        self.assertEqual(solver.state.bound_value_of(SignedVar.plus(A)), 5)
-        self.assertEqual(solver.state.bound_value_of(SignedVar.minus(P1)), 0)
-        self.assertEqual(solver.state.bound_value_of(SignedVar.plus(P1)), 1)
-        self.assertEqual(solver.state.bound_value_of(SignedVar.minus(P2)), 0)
-        self.assertEqual(solver.state.bound_value_of(SignedVar.plus(P2)), 0)
+        self.assertEqual(solver.state.bound_of(SignedVar.minus(A)), -5)
+        self.assertEqual(solver.state.bound_of(SignedVar.plus(A)), 5)
+        self.assertEqual(solver.state.bound_of(SignedVar.minus(P1)), 0)
+        self.assertEqual(solver.state.bound_of(SignedVar.plus(P1)), 1)
+        self.assertEqual(solver.state.bound_of(SignedVar.minus(P2)), 0)
+        self.assertEqual(solver.state.bound_of(SignedVar.plus(P2)), 0)
 
         # Make P1 true, this should have no impact
         solver.state.set_literal(Lit.geq(P1, 1),
                                  Causes.Decision())
 
-        self.assertEqual(solver.state.bound_value_of(SignedVar.minus(A)), -5)
-        self.assertEqual(solver.state.bound_value_of(SignedVar.plus(A)), 5)
-        self.assertEqual(solver.state.bound_value_of(SignedVar.minus(P1)), -1)
-        self.assertEqual(solver.state.bound_value_of(SignedVar.plus(P1)), 1)
-        self.assertEqual(solver.state.bound_value_of(SignedVar.minus(P2)), 0)
-        self.assertEqual(solver.state.bound_value_of(SignedVar.plus(P2)), 0)
+        self.assertEqual(solver.state.bound_of(SignedVar.minus(A)), -5)
+        self.assertEqual(solver.state.bound_of(SignedVar.plus(A)), 5)
+        self.assertEqual(solver.state.bound_of(SignedVar.minus(P1)), -1)
+        self.assertEqual(solver.state.bound_of(SignedVar.plus(P1)), 1)
+        self.assertEqual(solver.state.bound_of(SignedVar.minus(P2)), 0)
+        self.assertEqual(solver.state.bound_of(SignedVar.plus(P2)), 0)
 
         # Make P2 have an empty domain, this should imply that P1
         # is false, which is a contradiction with out previous decision
@@ -126,8 +126,8 @@ class TestSolverBasics(unittest.TestCase):
 
         self.assertEqual(solver.state.set_literal(Lit.leq(P2, -1),
                                                   Causes.Decision()),
-                        InvalidBoundUpdateInfo(Lit.leq(P2, -1),
-                                               Causes.Decision()))
+                        InvalidBoundUpdate(Lit.leq(P2, -1),
+                                           Causes.Decision()))
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -141,7 +141,7 @@ class TestSolverBasics(unittest.TestCase):
 
         # returns true if presence(A) => presence(B)
         def only_present_with(A, B):
-            return solver.state.is_implication_true(solver.state.presence_literal_of(A),
+            return solver.state.entails_implication(solver.state.presence_literal_of(A),
                                                     solver.state.presence_literal_of(B))
 
         P = solver.add_new_non_optional_variable((0,1), True)
@@ -190,40 +190,38 @@ class TestSolverBasics(unittest.TestCase):
 
         # Part 1 : checking "obvious" implications, due to the current values of variables)
 
-        self.assertTrue(solver.state.is_implication_true(Lit.leq(A, 10), Lit.leq(B, 10)))
-        self.assertFalse(solver.state.is_implication_true(Lit.leq(A, 10), Lit.leq(B, 9)))
-        self.assertTrue(solver.state.is_implication_true(Lit.geq(A, 11), Lit.leq(B, 9)))
-        self.assertFalse(solver.state.is_implication_true(Lit.leq(A, 9), Lit.leq(B, 9)))
+        self.assertTrue(solver.state.entails_implication(Lit.leq(A, 10), Lit.leq(B, 10)))
+        self.assertFalse(solver.state.entails_implication(Lit.leq(A, 10), Lit.leq(B, 9)))
+        self.assertTrue(solver.state.entails_implication(Lit.geq(A, 11), Lit.leq(B, 9)))
+        self.assertFalse(solver.state.entails_implication(Lit.leq(A, 9), Lit.leq(B, 9)))
 
         # Part 2 : checking "obvious" "implicit" implications (like [A<=0] => [A<=1]).
 
-        self.assertTrue(solver.state.is_implication_true(Lit.leq(A,0), Lit.leq(A,0)))
-        self.assertTrue(solver.state.is_implication_true(Lit.leq(A,0), Lit.leq(A,1)))
-        self.assertFalse(solver.state.is_implication_true(Lit.leq(A,0), Lit.leq(B,0)))
-        self.assertFalse(solver.state.is_implication_true(Lit.leq(A,0), Lit.leq(A,-1)))
+        self.assertTrue(solver.state.entails_implication(Lit.leq(A,0), Lit.leq(A,0)))
+        self.assertTrue(solver.state.entails_implication(Lit.leq(A,0), Lit.leq(A,1)))
+        self.assertFalse(solver.state.entails_implication(Lit.leq(A,0), Lit.leq(B,0)))
+        self.assertFalse(solver.state.entails_implication(Lit.leq(A,0), Lit.leq(A,-1)))
 
         # Part 3 : checking "unobvious" implications (both "explicit" and "implicit",
         # related to the "explicit" ones)
 
-        solver.state._register_implication_between_literals_on_non_optional_vars(Lit.leq(A,1),
-                                                                                 Lit.leq(B,1))
+        solver.state.register_non_optional_vars_literals_implication(Lit.leq(A,1), Lit.leq(B,1))
 
-        self.assertTrue(solver.state.is_implication_true(Lit.leq(A,1), Lit.leq(B,1)))
-        self.assertTrue(solver.state.is_implication_true(Lit.leq(A,0), Lit.leq(B,1)))
-        self.assertTrue(solver.state.is_implication_true(Lit.leq(A,1), Lit.leq(B,2)))
-        self.assertTrue(solver.state.is_implication_true(Lit.leq(A,0), Lit.leq(B,2)))
-        self.assertFalse(solver.state.is_implication_true(Lit.leq(A,1), Lit.leq(B,0)))
-        self.assertFalse(solver.state.is_implication_true(Lit.leq(A,1), Lit.leq(B,0)))
+        self.assertTrue(solver.state.entails_implication(Lit.leq(A,1), Lit.leq(B,1)))
+        self.assertTrue(solver.state.entails_implication(Lit.leq(A,0), Lit.leq(B,1)))
+        self.assertTrue(solver.state.entails_implication(Lit.leq(A,1), Lit.leq(B,2)))
+        self.assertTrue(solver.state.entails_implication(Lit.leq(A,0), Lit.leq(B,2)))
+        self.assertFalse(solver.state.entails_implication(Lit.leq(A,1), Lit.leq(B,0)))
+        self.assertFalse(solver.state.entails_implication(Lit.leq(A,1), Lit.leq(B,0)))
 
-        solver.state._register_implication_between_literals_on_non_optional_vars(Lit.leq(B,2),
-                                                                                 Lit.leq(C,2))
+        solver.state.register_non_optional_vars_literals_implication(Lit.leq(B,2), Lit.leq(C,2))
 
-        self.assertTrue(solver.state.is_implication_true(Lit.leq(A,1), Lit.leq(B,1)))
-        self.assertTrue(solver.state.is_implication_true(Lit.leq(A,1), Lit.leq(C,2)))
-        self.assertTrue(solver.state.is_implication_true(Lit.leq(A,1), Lit.leq(C,3)))
-        self.assertFalse(solver.state.is_implication_true(Lit.leq(A,1), Lit.leq(C,1)))
-        self.assertTrue(solver.state.is_implication_true(Lit.leq(A,0), Lit.leq(C,2)))
-        self.assertFalse(solver.state.is_implication_true(Lit.leq(A,2), Lit.leq(C,2)))
+        self.assertTrue(solver.state.entails_implication(Lit.leq(A,1), Lit.leq(B,1)))
+        self.assertTrue(solver.state.entails_implication(Lit.leq(A,1), Lit.leq(C,2)))
+        self.assertTrue(solver.state.entails_implication(Lit.leq(A,1), Lit.leq(C,3)))
+        self.assertFalse(solver.state.entails_implication(Lit.leq(A,1), Lit.leq(C,1)))
+        self.assertTrue(solver.state.entails_implication(Lit.leq(A,0), Lit.leq(C,2)))
+        self.assertFalse(solver.state.entails_implication(Lit.leq(A,2), Lit.leq(C,2)))
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -242,12 +240,12 @@ class TestSolverBasics(unittest.TestCase):
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     
         def optional_domain(v):
-            lb = -solver.state.bound_value_of(SignedVar.minus(v))
-            ub = solver.state.bound_value_of(SignedVar.plus(v))
+            lb = -solver.state.bound_of(SignedVar.minus(v))
+            ub = solver.state.bound_of(SignedVar.plus(v))
 
-            if solver.state.is_entailed(solver.state.presence_literal_of(v)):
+            if solver.state.entails(solver.state.presence_literal_of(v)):
                 return (True, (lb, ub))
-            elif solver.state.is_entailed(solver.state.presence_literal_of(v).negated):
+            elif solver.state.entails(solver.state.presence_literal_of(v).neg):
                 return None
             else:
                 return (False, (lb, ub))
@@ -267,13 +265,13 @@ class TestSolverBasics(unittest.TestCase):
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
         
         def propag():
-            if solver.state.is_entailed(a):
+            if solver.state.entails(a):
                 res = solver.state.set_literal(Lit.leq(n, 4), Causes.ReasonerInference(0, 0))
-                if isinstance(res, InvalidBoundUpdateInfo):
+                if isinstance(res, InvalidBoundUpdate):
                     return res
-            if solver.state.is_entailed(b):
+            if solver.state.entails(b):
                 res = solver.state.set_literal(Lit.geq(n, 5), Causes.ReasonerInference(0, 1))
-                if isinstance(res, InvalidBoundUpdateInfo):
+                if isinstance(res, InvalidBoundUpdate):
                     return res
             return None
 
@@ -281,11 +279,11 @@ class TestSolverBasics(unittest.TestCase):
 
         propag()
 
-        solver.increment_one_decision_level()
+        solver.increment_decision_level_by_one()
         solver.state.set_literal(a, Causes.Decision())
 
-        self.assertEqual((-solver.state.bound_value_of(SignedVar.minus(a.signed_var.var)),
-                          solver.state.bound_value_of(SignedVar.plus(a.signed_var.var))),
+        self.assertEqual((-solver.state.bound_of(SignedVar.minus(a.signed_var.var)),
+                          solver.state.bound_of(SignedVar.plus(a.signed_var.var))),
                          (1, 1))
 
         propag()
@@ -294,14 +292,14 @@ class TestSolverBasics(unittest.TestCase):
 
         solver.state.set_literal(Lit.geq(n, 1), Causes.Decision())
 
-        solver.increment_one_decision_level()
+        solver.increment_decision_level_by_one()
         solver.state.set_literal(b, Causes.Decision())
 
         err = propag()
         if err is not None:
             clause_literals = \
                 solver.explain_invalid_bound_update(err, dummy_reasoner_explain)    \
-                    .asserting_clause_literals
+                    .asserting_clause
             # we have three rules
             #  -  !(n <= 4) || !(n >= 5)   (conflict)
             #  -  !a || (n <= 4)           (clause a)
@@ -310,7 +308,7 @@ class TestSolverBasics(unittest.TestCase):
             # and last rules for the literal (n >= 5):
             #   !(n <= 4) || !b
             #   !b || (n > 4)      (equivalent to previous)
-            self.assertEqual(clause_literals, (Lit.geq(n, 5), b.negated))
+            self.assertEqual(clause_literals, (Lit.geq(n, 5), b.neg))
 
         else:
             self.assertFalse(True)
@@ -323,21 +321,21 @@ class TestSolverBasics(unittest.TestCase):
         solver = Solver(use_sat_reasoner=False,
                         use_diff_reasoner=False)
 
-        def scoped_disj(clause_lits, scope):
+        def scoped_disj(clause_lits, scope_representative_lit):
 
-            if scope == TRUE_LIT:
-                return (clause_lits, scope)
+            if scope_representative_lit == TRUE_LIT:
+                return (clause_lits, scope_representative_lit)
 
             if len(clause_lits) == 0:
-                return ((scope.negated,), TRUE_LIT)
+                return ((scope_representative_lit.neg,), TRUE_LIT)
 
-            if all(solver.state.is_implication_true(
-                solver.state.presence_literal_of(l.signed_var.var), scope)
+            if all(solver.state.entails_implication(
+                solver.state.presence_literal_of(l.signed_var.var), scope_representative_lit)
                 for l in clause_lits
             ):
-                return (clause_lits, scope)
+                return (clause_lits, scope_representative_lit)
 
-            return (clause_lits+(scope.negated,), TRUE_LIT)
+            return (clause_lits+(scope_representative_lit.neg,), TRUE_LIT)
             
         PX = Lit.geq(solver.add_new_presence_variable(TRUE_LIT), 1)
         X1 = Lit.geq(solver.add_new_optional_variable((0, 1), True, PX), 1)
@@ -346,7 +344,7 @@ class TestSolverBasics(unittest.TestCase):
         PY = Lit.geq(solver.add_new_presence_variable(TRUE_LIT), 1)
 
         PXY = \
-            solver.state._get_or_make_new_scope_lit_from_conjunction( \
+            solver.state.get_scope_representative_literal( \
                 solver.state._process_raw_required_presences_and_guards((PX, PY), (), True))
         XY = Lit.geq(solver.add_new_optional_variable((0, 1), True, PXY), 1)
 
@@ -360,6 +358,6 @@ class TestSolverBasics(unittest.TestCase):
 
         self.assertEqual(scoped_disj((XY,), PXY), ((XY,), PXY))
 
-        self.assertEqual(scoped_disj((X1,), PXY), ((X1, PXY.negated), TRUE_LIT))
+        self.assertEqual(scoped_disj((X1,), PXY), ((X1, PXY.neg), TRUE_LIT))
 
 #################################################################################
