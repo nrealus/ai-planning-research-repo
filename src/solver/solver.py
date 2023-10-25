@@ -629,7 +629,7 @@ class Solver():
             scope: The scope in which the constraint must hold.
 
         Returns:
-            The scope's tautology literal.
+            The `scope`'s tautology literal.
 
         Note:
             Internally, `constr_expr` is preprocessed into a low-level, elementary

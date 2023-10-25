@@ -778,23 +778,20 @@ class SolverState():
             return scope_representative_literal
 
     #############################################################################
-    # ELEMENTARY CNSTRAINT REGISTRATION HELPERS | DOC: TODO 23/10/23
+    # ELEMENTARY CONSTRAINT REGISTRATION HELPERS | DOC: TODO 23/10/23
     #############################################################################
 
     def _add_elem_constraint(self,
         elem_constr_expr: ElemConstrExpr,
         constr_value_lit: Lit,
-    ) -> ElemConstrExpr:
+    ) -> None:
         """
         "Binds" `elem_constr_expr` with `constr_value_lit` (i.e. reigsters the fact
-        that `elem_constr_expr` must be hold iff `constr_value_lit` is entailed).
-
-        Returns:
-            A reification literal for `elem_constr_expr`.
+        that `elem_constr_expr` must hold iff `constr_value_lit` is entailed).
 
         Note:
-            To find a suitable reification literal for `elem_constr_expr`,
-            3 possible cases are considered:
+            To find a suitable reification literal
+            for `elem_constr_expr`, 3 possible cases are considered:
 
             - `elem_constr_expr` is already reified (which is possible if a constraint
               decomposed into the same "elementary form" was added earlier, or if it
@@ -840,10 +837,7 @@ class SolverState():
                 self._reifications[elem_constr_expr.negated] = reif_lit.neg
                 self._constraints.append((elem_constr_expr, reif_lit))
 
-                if constr_value_lit != reif_lit:
-                    self._constraints.append((ElemConstrExpr.from_lit(reif_lit), constr_value_lit))
-                
-        return elem_constr_expr
+                self._constraints.append((ElemConstrExpr.from_lit(reif_lit), constr_value_lit))
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
