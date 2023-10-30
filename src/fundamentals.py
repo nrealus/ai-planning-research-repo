@@ -12,7 +12,7 @@ from __future__ import annotations
 # - ATOMS
 #################################################################################
 
-from typing import List, NamedTuple, Sequence, Tuple
+from typing import Dict, List, NamedTuple, Optional, Sequence, Tuple
 
 #################################################################################
 # DOC: OK 23/10/23
@@ -316,13 +316,41 @@ class FracAtom(NamedTuple('FracAtom',[('numer_int_atom', IntAtom), ('denom', int
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-SymbType_PH = int
-
 class SymbAtom(NamedTuple):
     """
     TODO
     """
     int_view_atom: IntAtom
-    symb_type: SymbType_PH
+    symb_type: SymbType_WIP
 
-# Atom = BoolAtom | IntAtom | FracAtom | SymbAtom
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+Atom = BoolAtom | IntAtom | FracAtom | SymbAtom
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+class SymbType_WIP(str):
+
+    def is_subtype_of(self,
+        other_symb_type: SymbType_WIP,
+        symb_type_hierarchy: SymbTypeHierarchy,
+    ) -> bool:
+        
+        if (self not in symb_type_hierarchy.parents
+            or other_symb_type not in symb_type_hierarchy.parents
+        ):
+            raise ValueError("Symbolic type not registered in type hierarchy.")
+        
+        p: Optional[SymbType_WIP] = self
+        while p is not None:
+            if p == other_symb_type:
+                return True
+            p = symb_type_hierarchy.parents[p]
+
+        return False
+
+class SymbTypeHierarchy(NamedTuple):
+    parents: Dict[SymbType_WIP, Optional[SymbType_WIP]] = {} # {SymbType_WIP("object"): None}
+    children: Dict[SymbType_WIP, Tuple[SymbType_WIP,...]] = {}
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
