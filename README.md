@@ -20,7 +20,7 @@ In no particular order, here is a list of (possibly overlapping) general (high-l
 
 Also, there are two other important capabilities that we think a general system such as the one we envision should support. However, we defer them and **do not** consider addressing them, as we think they are quite independent (except maybe **L**) of the features from the list above:
 - **K**: In addition to descriptive planning models, use of operational planning models as well.
-- **L**: Partial observability (...?)
+- **L**: Partial observability (which we think is "fairly reframable" into full observability)
 - **M**: Goal reasoning in the form of the following capabilities: addition, retraction, or modification of a (or set of) top level task/goal to pursue.
 
 Again, note that many of the high-level features we listed **overlap** and **intertwine**, and so in our effort to combine them, we should not approach them all individually.
