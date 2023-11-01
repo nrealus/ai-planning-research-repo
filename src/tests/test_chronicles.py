@@ -6,7 +6,7 @@ import unittest
 
 from typing import Dict
 
-from src.fundamentals import BoolAtom, IntAtom, FracAtom, SymbAtom, Atom, ZERO_VAR, TRUE_LIT, SymbType_WIP
+from src.fundamentals import Lit, BoolAtom, IntAtom, FracAtom, SymbAtom, Atom, ZERO_VAR, TRUE_LIT, SymbType_WIP
 from src.solver.solver import Solver
 from src.planning_and_acting.common import ChronicleId, Chronicle, Task, Constraint, Condition, Effect, SubTask, StateVar
 from src.planning_and_acting.planning import instantiate_chronicle_template
@@ -22,7 +22,7 @@ class TestChronicles(unittest.TestCase):
         solver = Solver(use_sat_reasoner=False,
                         use_diff_reasoner=False)
 
-        templ_prez = BoolAtom(solver.add_new_presence_variable(TRUE_LIT))
+        templ_prez = BoolAtom(Lit.geq(solver.add_new_presence_variable(TRUE_LIT), 1))
         templ_start = FracAtom(IntAtom(solver.add_new_optional_variable((0, 10), True, TRUE_LIT), 0), 1)
         templ_end = FracAtom(IntAtom(solver.add_new_optional_variable((5, 15), True, TRUE_LIT), 0), 1)
         templ_t1 = FracAtom(IntAtom(solver.add_new_optional_variable((2, 6), True, TRUE_LIT), 0), 1)

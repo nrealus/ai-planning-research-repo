@@ -288,7 +288,7 @@ class BoolAtom(NamedTuple):
     """
     TODO
     """
-    var: Var
+    literal: Lit
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 

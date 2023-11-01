@@ -45,9 +45,9 @@ def atoms_unifiable(
             return False
 
     match atom1:
-        case BoolAtom(var):
-            l1, u1 = (-solver.state.bound_of(SignedVar.minus(var)),
-                      solver.state.bound_of(SignedVar.plus(var)))
+        case BoolAtom(literal):
+            l1, u1 = (-solver.state.bound_of(SignedVar.minus(literal.signed_var.var)),
+                      solver.state.bound_of(SignedVar.plus(literal.signed_var.var)))
         case IntAtom(var, offset_cst):
             l1, u1 = (-solver.state.bound_of(SignedVar.minus(var)) + offset_cst,
                       solver.state.bound_of(SignedVar.plus(var)) + offset_cst)
@@ -59,9 +59,9 @@ def atoms_unifiable(
                       solver.state.bound_of(SignedVar.plus(int_view_atom.var)) + int_view_atom.offset_cst)
     
     match atom2:
-        case BoolAtom(var):
-            l2, u2 = (-solver.state.bound_of(SignedVar.minus(var)),
-                      solver.state.bound_of(SignedVar.plus(var)))
+        case BoolAtom(literal):
+            l2, u2 = (-solver.state.bound_of(SignedVar.minus(literal.signed_var.var)),
+                      solver.state.bound_of(SignedVar.plus(literal.signed_var.var)))
         case IntAtom(var, offset_cst):
             l2, u2 = (-solver.state.bound_of(SignedVar.minus(var)) + offset_cst,
                       solver.state.bound_of(SignedVar.plus(var)) + offset_cst)
@@ -195,7 +195,7 @@ def populate_instances_problem(
                 if atom_sequences_unifiable(subtask.task, chr_templ.task, solver):
 
                     new_chr_inst = instantiate_chronicle_template(chronicle_templates[chr_templ_id],
-                                                                  chr_inst.presence_literal,
+                                                                  chr_inst.presence.literal,
                                                                   { atom:subtask.task[i] for i, atom in enumerate(chr_templ.task) },
                                                                   solver)
                     chr_inst_id_counter += 1
@@ -231,14 +231,14 @@ def instantiate_chronicle_template(
         bool_atom: BoolAtom,
         presence_literal: Lit, 
     ) -> BoolAtom:
-        if bool_atom.var == ZERO_VAR:
-            var = ZERO_VAR
+        if bool_atom.literal.signed_var == ZERO_VAR:
+            return bool_atom
         else:
-            var = solver.add_new_optional_variable((-solver.state.bound_of(SignedVar.minus(bool_atom.var)),
-                                                    solver.state.bound_of(SignedVar.plus(bool_atom.var))),
+            var = solver.add_new_optional_variable((-solver.state.bound_of(SignedVar.minus(bool_atom.literal.signed_var.var)),
+                                                    solver.state.bound_of(SignedVar.plus(bool_atom.literal.signed_var.var))),
                                                    True,
                                                    presence_literal)
-        return BoolAtom(var)
+            return BoolAtom(Lit(SignedVar(var, bool_atom.literal.signed_var.sign), bool_atom.literal.bound))
         
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -296,63 +296,62 @@ def instantiate_chronicle_template(
     sub = substitution.copy()
 
     if chronicle_template.presence not in substitution:
-        sub[chronicle_template.presence] = BoolAtom(solver.add_new_presence_variable(scope_representative_literal))
+        sub[chronicle_template.presence] = BoolAtom(Lit.geq(solver.add_new_presence_variable(scope_representative_literal), 1))
 
-    presence_atom = sub[chronicle_template.presence]
-    assert isinstance(presence_atom, BoolAtom)
-    presence_literal = Lit.geq(presence_atom.var, 1)
+    presence = sub[chronicle_template.presence]
+    assert isinstance(presence, BoolAtom)
 
     if chronicle_template.start not in sub:
-        sub[chronicle_template.start] = new_frac_atom_from(chronicle_template.start, presence_literal)
+        sub[chronicle_template.start] = new_frac_atom_from(chronicle_template.start, presence.literal)
 
     if chronicle_template.end not in sub:
-        sub[chronicle_template.end] = new_frac_atom_from(chronicle_template.end, presence_literal)
+        sub[chronicle_template.end] = new_frac_atom_from(chronicle_template.end, presence.literal)
 
     if chronicle_template.task is not None:
         for p in chronicle_template.task[1:]:
             if p not in sub:
-                sub[p] = new_atom_from(p, presence_literal)
+                sub[p] = new_atom_from(p, presence.literal)
 
     for cstr in chronicle_template.constraints:
         for term in cstr.terms:
             if term not in sub:
-                sub[term] = new_atom_from(term, presence_literal)
+                sub[term] = new_atom_from(term, presence.literal)
 
     for cond in chronicle_template.conditions:
         if cond.start not in sub:
-            sub[cond.start] = new_frac_atom_from(cond.start, presence_literal)
+            sub[cond.start] = new_frac_atom_from(cond.start, presence.literal)
         if cond.end not in sub:
-            sub[cond.end] = new_frac_atom_from(cond.end, presence_literal)
+            sub[cond.end] = new_frac_atom_from(cond.end, presence.literal)
         for p in cond.state_var[1:]:
             if p not in sub:
-                sub[p] = new_atom_from(p, presence_literal)
+                sub[p] = new_atom_from(p, presence.literal)
         if cond.value not in sub:
-            sub[cond.value] = new_atom_from(cond.value, presence_literal)
+            sub[cond.value] = new_atom_from(cond.value, presence.literal)
 
     for eff in chronicle_template.effects:
         if eff.transition_start not in sub:
-            sub[eff.transition_start] = new_frac_atom_from(eff.transition_start, presence_literal)
+            sub[eff.transition_start] = new_frac_atom_from(eff.transition_start, presence.literal)
         if eff.persistence_start not in sub:
-            sub[eff.persistence_start] = new_frac_atom_from(eff.persistence_start, presence_literal)
+            sub[eff.persistence_start] = new_frac_atom_from(eff.persistence_start, presence.literal)
         for t in eff.min_persistence_end:
             if t not in sub:
-                sub[t] = new_frac_atom_from(t, presence_literal)
+                sub[t] = new_frac_atom_from(t, presence.literal)
         for p in eff.state_var[1:]:
             if p not in sub:
-                sub[p] = new_atom_from(p, presence_literal)
+                sub[p] = new_atom_from(p, presence.literal)
         if eff.value not in sub:
-            sub[eff.value] = new_atom_from(eff.value, presence_literal)
+            sub[eff.value] = new_atom_from(eff.value, presence.literal)
 
     for st in chronicle_template.subtasks:
         if st.start not in sub:
-            sub[st.start] = new_frac_atom_from(st.start, presence_literal)
+            sub[st.start] = new_frac_atom_from(st.start, presence.literal)
         if st.end not in sub:
-            sub[st.end] = new_frac_atom_from(st.end, presence_literal)
+            sub[st.end] = new_frac_atom_from(st.end, presence.literal)
         for p in st.task[1:]:
             if p not in sub:
-                sub[p] = new_atom_from(p, presence_literal)
+                sub[p] = new_atom_from(p, presence.literal)
 
-    return Chronicle(presence_atom,
+    return Chronicle(presence,
                      sub[chronicle_template.start],
                      sub[chronicle_template.end],
                      (chronicle_template.task[0],)+tuple(sub[p] for p in chronicle_template.task[1:]) \
@@ -431,7 +430,7 @@ def encode_instances_problem(
 
             effects_persistence_ends[(chr_id, i)] = FracAtom(IntAtom(solver.add_new_optional_variable((0, MAX_INT),
                                                                                                       True, # TODO
-                                                                                                      chr_.presence_literal),
+                                                                                                      chr_.presence.literal),
                                                                      0),
                                                              eff.transition_start.denom)
 
@@ -455,7 +454,7 @@ def _encode_conditions_end_after_start(
     for _, chr_ in instances_problem.chronicle_instances.items():
         for cond in chr_.conditions:
             solver.add_scoped_constraint(ConstrExpr.leq((cond.start, cond.end)),
-                                         (chr_.presence_literal,))
+                                         (chr_.presence.literal,))
 
     solver.propagate()
 
@@ -465,7 +464,86 @@ def _encode_internal_chronicle_consistency(
     instances_problem: InstancesProblem,
     solver: Solver,
 ) -> None:
-    ...
+
+    for _, chr_ in instances_problem.chronicle_instances.items():
+
+        for cstr in chr_.constraints:
+            match cstr.kind:
+                case Constraint.Kind.TABLE:
+                    ...             # TODO
+                case Constraint.Kind.LEQ:
+                    match cstr.terms:
+                        case (IntAtom(), IntAtom()) | (FracAtom(), FracAtom()):
+                            solver.add_scoped_constraint(ConstrExpr.leq((cstr.terms)), (chr_.presence.literal,))
+                        case FracAtom(), IntAtom():
+                            pass    # TODO
+                        case IntAtom(), FracAtom():
+                            pass    # TODO
+                        case _:
+                            assert False
+                case Constraint.Kind.LT:
+                    match cstr.terms:
+                        case (IntAtom(), IntAtom()) | (FracAtom(), FracAtom()):
+                            solver.add_scoped_constraint(ConstrExpr.lt((cstr.terms)), (chr_.presence.literal,))
+                        case FracAtom(), IntAtom():
+                            pass    # TODO
+                        case IntAtom(), FracAtom():
+                            pass    # TODO
+                        case _:
+                            assert False
+                case Constraint.Kind.EQ:
+                    match cstr.terms:
+                        case ((IntAtom(), IntAtom()) | (FracAtom(), FracAtom()) | (BoolAtom(), BoolAtom()) | (SymbAtom(), SymbAtom())):
+                            solver.add_scoped_constraint(ConstrExpr.eq((cstr.terms)), (chr_.presence.literal,))
+                        case FracAtom(), IntAtom():
+                            pass    # TODO
+                        case IntAtom(), FracAtom():
+                            pass    # TODO
+                        case _:
+                            assert False
+                case Constraint.Kind.NEQ:
+                    match cstr.terms:
+                        case ((IntAtom(), IntAtom()) | (FracAtom(), FracAtom()) | (BoolAtom(), BoolAtom()) | (SymbAtom(), SymbAtom())):
+                            solver.add_scoped_constraint(ConstrExpr.neq((cstr.terms)), (chr_.presence.literal,))
+                        case FracAtom(), IntAtom():
+                            pass    # TODO
+                        case IntAtom(), FracAtom():
+                            pass    # TODO
+                        case _:
+                            assert False
+#                case Constraint.Kind.LIN:
+#                    ...             # TODO
+                case Constraint.Kind.OR:
+                    if all(isinstance(a, BoolAtom) for a in cstr.terms):
+                        solver.add_scoped_constraint(ConstrExpr.or_(tuple(ba.literal for ba in cstr.terms)), (chr_.presence.literal,)) # type: ignore
+                    else:
+                        assert False
+                case Constraint.Kind.DUR_REQ:
+                    ...             # TODO
+                case Constraint.Kind.DUR_CTG:
+                    ...             # TODO
+                case _:
+                    assert False
+
+    for _, chr_ in instances_problem.chronicle_instances.items():
+        if len(chr_.subtasks) == 0:
+            # FIXME "horizon" !!
+            solver.add_scoped_constraint(ConstrExpr.leq((chr_.end, FracAtom(IntAtom(ZERO_VAR, MAX_INT), 1))), (chr_.presence.literal,))
+        solver.add_scoped_constraint(ConstrExpr.leq((chr_.start, chr_.end)), (chr_.presence.literal,))
+        for st in chr_.subtasks:
+            solver.add_scoped_constraint(ConstrExpr.leq((st.start, st.end)), (chr_.presence.literal,))
+            solver.add_scoped_constraint(ConstrExpr.leq((chr_.start, st.start)), (chr_.presence.literal,))
+            solver.add_scoped_constraint(ConstrExpr.leq((st.end, chr_.end)), (chr_.presence.literal,))
+    
+    # add_decomposition_constraints(...)    # here ? or maybe in another function ? I would prefer the latter (encode_refinement_and_motivation)
+    # add_symetry_breaking_constraints(...)
+    
+    solver.propagate()
+
+    # num_removed_chronicles = 0
+    # for _, chr_ in instances_problem.chronicle_instances.items():
+    #     if solver.state.entails(chr_.presence.literal.neg):
+    #         num_removed_chronicles += 1
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -473,7 +551,7 @@ def _encode_effects_end_after_start(
     instances_problem: InstancesProblem,
     effects_persistence_ends: Dict[Tuple[ChronicleId, int], FracAtom],
     solver: Solver,
-) -> Dict[Tuple[ChronicleId, int], FracAtom]:
+) -> None:
 
     for chr_id, chr_ in instances_problem.chronicle_instances.items():
         for i, eff in enumerate(chr_.effects):
@@ -481,16 +559,14 @@ def _encode_effects_end_after_start(
             persistence_end = effects_persistence_ends[(chr_id, i)]
 
             solver.add_scoped_constraint(ConstrExpr.leq((eff.transition_start, eff.persistence_start)),
-                                         (chr_.presence_literal, ))
+                                         (chr_.presence.literal,))
             solver.add_scoped_constraint(ConstrExpr.leq((eff.persistence_start, persistence_end)),
-                                         (chr_.presence_literal, ))
+                                         (chr_.presence.literal,))
             for min_pers_end in eff.min_persistence_end:
                 solver.add_scoped_constraint(ConstrExpr.leq((min_pers_end, persistence_end)),
-                                             (chr_.presence_literal, ))
+                                             (chr_.presence.literal,))
 
     solver.propagate()
-
-    return effects_persistence_ends
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 

@@ -33,16 +33,18 @@ class Constraint(NamedTuple):
         TABLE = auto()
         LEQ = auto()
         LT = auto()
-        GEQ = auto()
-        GT = auto()
         EQ = auto()
         NEQ = auto()
+    #    LINSUM = auto()
+        OR = auto()
+        AND = auto()
         DUR_REQ = auto()
         DUR_CTG = auto()
 
     kind: Constraint.Kind
     terms: Tuple[Atom, ...]
     # value: Optional[Lit]  # Comment from Aries: If set, this constraint should be reified so that it is always equal to value.
+    # TODO: like for FracAtom, make it so incorrent number of terms raises an error on instantiation
 
 class Condition(NamedTuple):
     start: FracAtom
@@ -77,10 +79,6 @@ class Chronicle():
     effects: List[Effect]
     subtasks: List[SubTask]
     # cost: Optional[LinrAtom]   # TODO TODO TODO !
-
-    @property
-    def presence_literal(self) -> Lit:
-        return Lit.geq(self.presence.var, 1)
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # 
