@@ -2,7 +2,7 @@
 
 A long-term personal research project in AI planning and acting, which began in spring of 2020 (with a somewhat of a break in 2021-2022). This file is **WORK IN PROGRESS**, so there **will** be blanks, unclear wording, and other imperfections below.
 
-## Introduction
+# Introduction
 
 The main aim of this long-term project is to build a system/architecture/framework for **integrated planning and acting** (aka integrated planning, execution, and monitoring) with a particular focus on the aspects of **time** and **uncertainty**. In the last few years, a lot of progress has been made on the integration of planning, execution, and monitoring. Also, the notions of time and uncertainty have been studied for a long time in planning, but only individually or in limited combination. Thus there's an **extremely exciting gap to fill** in combining advances on planning, acting (execution, monitoring...), time, and uncertainty. We believe that filling this gap will allow AI systems to tackle a very wide range of real-world problems in a general, comprehensive fashion.
 
@@ -57,7 +57,7 @@ Here's a list of the sources which we're particularly inspired by, with an indic
 - [[13]]()
   - **A**, ...
 
-## Research directions and ideas
+# Research directions and ideas
 
 The baseline for our work is the [Aries](https://github.com/plaans/aries) project. It is a hybrid CP/SAT solver aimed at tackling planning problems by encoding them into constraint satisfaction problems. Aries is able to address hierarchical temporal and numeric planning. A project developed alongside Aries is [SOMPAS](https://github.com/plaans/aries), which is an acting system inspired by RAE, and whose focus is on: guidance of online acting using continuous planning, resource management, and conversion of operational models (defined by a custom acting language) into (hierarchical) chronicles, which are (temporal) descriptive models used by Aries.
 
@@ -65,7 +65,7 @@ Uncertainty is the only important capability not addressed by these projects, wh
 
 To do that, we will actually have to design a new acting system, for which we already have some ideas that we will present below. But first, a few words about what kinds of uncertainty we want to address.
 
-### Temporal uncertainty (planning aspect)
+## Temporal uncertainty (planning aspect)
 
 Temporal uncertainty is about contingent (aka uncontrollable) temporal variables (aka timepoints), which the system cannot control (i.e. cannot what value to set them / when to schedule them). Their scheduled time, set by Nature, can only be observed by us. Note that we assume full observability of contingent timepoints, because we think that the case of partial controllability can be reframed into full observability.
 
@@ -80,7 +80,7 @@ However, it is important to keep in mind that what we described is irrelevant du
 - "lift back" the assignments to timepoints that the solver did (while keeping the assignments to non-temporal variables), obtaining a PSTN
 - check risk-bounded / chance constrained dynamic controllability of that PSTN.
 
-### Non temporal uncertainty (planning aspect)
+## Non temporal uncertainty (planning aspect)
 
 Intuitively, we want to have contingent / uncontrollable / random non temporal variables in chronicles, with a bayesian network (or influence diagram) describing their conditional probability tables / trees. The motivation for that is that we want to be able to specify chance constraints in the chronicle's constraints and/or optimization of expected utilities / costs, instead of deterministic ones.
 
@@ -94,11 +94,11 @@ In the general case of stochastic constraint problems / programming, chance cons
   - (...anything else...?)
 - 2nd direction, which would be address to chance constraints directly. The 2 last avenues for the 1st direction apply to this 2nd direction as well.
 
-### Mixed temporal & non temporal uncertainty
+## Mixed temporal & non temporal uncertainty
 
 We haven't thought this a lot for now, but we believe it may be possible to make our approaches for temporal and non temporal uncertainty "collaborate".
 
-### Acting
+## Acting
 
 To our knowledge, there no actors yet that are able to support temporal and non-temporal uncertainty in an online, interleaved planning and acting setting. Indeed, the notions of policies, temporal plans, and contingent plans, can be difficult to stitch together. Indeed, for now the only "unified" mathematical framework for this would be that of POMDPs, which are very often computationally intractable.
 
