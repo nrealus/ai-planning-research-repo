@@ -721,14 +721,11 @@ class Solver():
             bool_atom2: BoolAtom,
         ) -> ElemConstrExpr:
 
-            if bool_atom1.var == bool_atom2.var:
+            if bool_atom1.literal == bool_atom2.literal:
                 return ElemConstrExpr.from_lit(TRUE_LIT)
 
-            lit1 = Lit.geq(bool_atom1.var, 1)
-            lit2 = Lit.geq(bool_atom2.var, 1)
-
-            imply12_elem_form = ElemConstrExpr.from_lits_or((lit1.neg, lit2))
-            imply21_elem_form = ElemConstrExpr.from_lits_or((lit2.neg, lit1))
+            imply12_elem_form = ElemConstrExpr.from_lits_or((bool_atom1.literal.neg, bool_atom2.literal))
+            imply21_elem_form = ElemConstrExpr.from_lits_or((bool_atom2.literal.neg, bool_atom1.literal))
 
             imply12_reif_lit = get_or_make_reification_of_elem_constr_expr(imply12_elem_form)
             imply21_reif_lit = get_or_make_reification_of_elem_constr_expr(imply21_elem_form)
@@ -749,11 +746,6 @@ class Solver():
                     case ConstrExpr.Kind.LT:
                         return ElemConstrExpr.from_int_atoms_leq(int_atom_left, IntAtom(int_atom_right.var,
                                                                                         int_atom_right.offset_cst-1))
-                    case ConstrExpr.Kind.GEQ:
-                        return ElemConstrExpr.from_int_atoms_leq(int_atom_right, int_atom_left)
-                    case ConstrExpr.Kind.GT:
-                        return ElemConstrExpr.from_int_atoms_leq(int_atom_right, IntAtom(int_atom_left.var,
-                                                                                         int_atom_left.offset_cst-1))
                     case ConstrExpr.Kind.EQ:
                         return preprocess_eq_int_atoms(int_atom_left, int_atom_right)
                     case ConstrExpr.Kind.NEQ:
@@ -774,11 +766,6 @@ class Solver():
                     case ConstrExpr.Kind.LT:
                         return ElemConstrExpr.from_int_atoms_leq(int_atom_left, IntAtom(int_atom_right.var,
                                                                                         int_atom_right.offset_cst-1))
-                    case ConstrExpr.Kind.GEQ:
-                        return ElemConstrExpr.from_int_atoms_leq(int_atom_right, int_atom_left)
-                    case ConstrExpr.Kind.GT:
-                        return ElemConstrExpr.from_int_atoms_leq(int_atom_right, IntAtom(int_atom_left.var,
-                                                                                         int_atom_left.offset_cst-1))
                     case ConstrExpr.Kind.EQ:
                         return preprocess_eq_int_atoms(int_atom_left, int_atom_right)
                     case ConstrExpr.Kind.NEQ:
@@ -798,18 +785,18 @@ class Solver():
                     case _:
                         assert False
 
-            case [Lit(), *_] as lits: 
+            case [Lit(), *_]: 
 
                 match constr_expr.kind:
 
                     case ConstrExpr.Kind.OR:
-                        return ElemConstrExpr.from_lits_or(lits)
+                        return ElemConstrExpr.from_lits_or(constr_expr.terms)
                     case ConstrExpr.Kind.AND:
-                        return ElemConstrExpr.from_lits_and(tuple(lit.neg for lit in lits))
+                        return ElemConstrExpr.from_lits_and(tuple(lit.neg for lit in constr_expr.terms))
                     case ConstrExpr.Kind.IMPLY:
-                        if len(lits) != 2:
+                        if len(constr_expr.terms) != 2:
                             assert False
-                        lit_from, lit_to = lits[0], lits[1]
+                        lit_from, lit_to = constr_expr.terms[0], constr_expr.terms[1]
                         return ElemConstrExpr.from_lits_or((lit_from.neg, lit_to))
                     case _:
                         assert False

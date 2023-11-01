@@ -37,8 +37,6 @@ class ConstrExpr(NamedTuple):
     class Kind(Enum):
         LEQ = auto()
         LT = auto()
-        GEQ = auto()
-        GT = auto()
         EQ = auto()
         NEQ = auto()
         OR = auto()
@@ -113,60 +111,6 @@ class ConstrExpr(NamedTuple):
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     @classmethod
-    def geq(cls,
-        int_or_frac_atoms_pair: Tuple[IntAtom, IntAtom] | Tuple[FracAtom, FracAtom]
-    ) -> ConstrExpr:
-        """
-        Returns:
-            A "high-level" expression for the ">=" (greater than or equal to, aka geq) constraint, \
-                between two `IntAtom`s or two `FracAtom`s.
-
-        Raises:
-            ValueError: If a pair of `FracAtom`s has different denominators.
-        """
-        match int_or_frac_atoms_pair:
-
-            case IntAtom(), IntAtom():
-                return ConstrExpr(ConstrExpr.Kind.GEQ, int_or_frac_atoms_pair)
-
-            case FracAtom(_, denom_left), FracAtom(_, denom_right):
-                if denom_left != denom_right:
-                    raise ValueError("`FracAtom`s are required to have the same denominator to be comparable.")
-                return ConstrExpr(ConstrExpr.Kind.GEQ, int_or_frac_atoms_pair)
-            
-            case _:
-                assert False
-
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-    @classmethod
-    def gt(cls,
-        int_or_frac_atoms_pair: Tuple[IntAtom, IntAtom] | Tuple[FracAtom, FracAtom]
-    ) -> ConstrExpr:
-        """
-        Returns:
-            A "high-level" expression for the ">" (greater than, aka gt) constraint, \
-                between two `IntAtom`s or two `FracAtom`s.
-
-        Raises:
-            ValueError: If a pair of `FracAtom`s has different denominators.
-        """
-        match int_or_frac_atoms_pair:
-
-            case IntAtom(), IntAtom():
-                return ConstrExpr(ConstrExpr.Kind.GT, int_or_frac_atoms_pair)
-
-            case FracAtom(_, denom_left), FracAtom(_, denom_right):
-                if denom_left != denom_right:
-                    raise ValueError("`FracAtom`s are required to have the same denominator to be comparable.")
-                return ConstrExpr(ConstrExpr.Kind.GT, int_or_frac_atoms_pair)
-            
-            case _:
-                assert False
-
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-    @classmethod
     def eq(cls,
         bool_int_frac_or_sym_atoms_pair: Union[Tuple[BoolAtom, BoolAtom],
                                                Tuple[IntAtom, IntAtom],
@@ -196,8 +140,11 @@ class ConstrExpr(NamedTuple):
                 return ConstrExpr(ConstrExpr.Kind.EQ, bool_int_frac_or_sym_atoms_pair)
             
             case SymbAtom(_, symb_type_left), SymbAtom(_, symb_type_right):
-                if symb_type_left != symb_type_right:
-                    raise ValueError("`SymbAtom`s are required to have the same symbol type to be comparable.")
+#               TODO !!!
+#                if (not symb_type_left.is_subtype_of(symb_type_right, ...)
+#                    and not symb_type_right.is_subtype_of(symb_type_left, ...)
+#                ):
+#                    raise ValueError("`SymbAtom`s are required to have the same symbol type to be comparable.")
                 return ConstrExpr(ConstrExpr.Kind.EQ, bool_int_frac_or_sym_atoms_pair)
             
             case _:
