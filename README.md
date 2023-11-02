@@ -1,12 +1,15 @@
 # nrealus' AI Planning Research Repository
 
+
 A long-term personal research project in AI planning and acting, which began in spring of 2020 (with a somewhat of a break in 2021-2022).
 
 Documentation (**WIP**) is available [here](https://nrealus.github.io/ai-planning-research-repo/).
 
 The following is **WIP** and is subject to change. Blanks, unclear wording and other imperfections are to be expected.
 
+
 # Introduction
+
 
 The main aim of this long-term project is to build a system / architecture / framework for **integrated planning and acting** (aka integrated planning, execution, and monitoring) with a particular focus on the aspects of **time** and **uncertainty**. In the last few years, a lot of progress has been made on the integration of planning, execution, and monitoring. The notions of time and uncertainty have also been studied for a long time in planning, but often only individually or in limited combination. Thus there's an **extremely exciting gap to fill** in combining advances on (online) planning, (online) acting, time, and uncertainty. We believe that filling this gap is very important to take AI systems to the next level, allowing them to tackle a very wide range of real-world problems in a general, comprehensive fashion.
 
@@ -61,13 +64,17 @@ Here's a list (in no particular order) of the sources which we're particularly i
 - [[13]]()
   - ...
 
+
 # Research directions and ideas
+
 
 The baseline for our work is the [Aries](https://github.com/plaans/aries) project [9]. It is a hybrid CP/SAT solver aimed at tackling planning problems by encoding them into constraint satisfaction problems. Aries is able to address hierarchical temporal and numeric planning. A project developed alongside Aries is [SOMPAS](https://github.com/plaans/aries) [7], which is an acting system inspired by RAE [8], and whose focus are: guidance of online acting using continuous planning, resource management, and conversion of operational models (defined by a custom acting language) into (hierarchical) chronicles [6], which are (temporal) descriptive models used by Aries.
 
 Uncertainty is the only important capability not addressed by these projects, which is understandable since it is very hard. Indeed, taking uncertainty into account leads to lots of intertwined questions and issues, affecting almost all aspects of planning and acting, and even the "philosophy" of what a planning and acting AI system should do. As such, uncertainty is almost always studied in very restricted settings, for example only temporal or non-temporal uncertainty. We want to address both!
 
+
 ## Temporal uncertainty (planning aspect)
+
 
 Temporal uncertainty is about contingent (aka uncontrollable, aka random) temporal variables (aka timepoints), which the system cannot control: it cannot set their value (i.e. schedule a time for their execution). Indeed their schedule time is set by Nature and can only be observed by us. Note that (for now) we assume full observability of contingent timepoints, as we think the case of partial controllability can largely (but maybe not completely) be reframed into full observability.
 
@@ -89,7 +96,11 @@ This idea is fairly simple, which is a good thing. However we're not sure how ef
 
 We also have some other ideas, but they're more suited for the STNU case, and it isn't clear to us yet how they could be adapted to PSTNs. Indeed, if we were in the STNU setting ("set bounded", not probabilistic uncertain durations), it could be possible to indicate to the CSP solver to not choose contingent random / variables during its decision phase (at least before all other variables have been set?), and to check whether (as a result of propagation) the domain size (interval) fo a contingent variable becomes smaller that the biggest contingent duration it participates it. This could be an extended "InvalidBoundUpdate" conflict in Aries. Another idea (still in STNU setting) could be to enhave the difference logic engine of the solver to check for "pseudo-controllability" during search, as not satisfying it would give an early indication of uncontrollability.
 
+There is also one accept that we haven't investigated yet, and hope that it's not going to introduce too much complexity. It's the possibility of specifying durations to be equal to a some function (for example, representing a duration, whose value may be calculated by some external module (?)). What impact would it have on our approach if this is done for controllable durations ? What would it be if it was done for uncontrollable durations (would we need to, for example, use conditional probabilities in our [2]-inspired algorithm ? and if so, would it even work ?)
+
+
 ## Non temporal uncertainty (planning aspect)
+
 
 "Non-temporal" uncertainty can actually be very broadly interpreted. Usually in planning, it is understood as a setting in which action effects are probabilistic or non deterministic. Depending on whether these effects are observable (as well as other complicated stuff), there can be several problems of interest. The most intuitive to imagine is the problem of finding a plan that whose execution is most likely to succeed.
 
@@ -120,11 +131,15 @@ Finally, another important issue is that the order in which we consider the vari
 Final important note !! In Aries, chronicle "conditions" defined on "resource" are encoded not with "support" constraints, but with special "resource" constraints. We haven't really looked at them yet, but know that they are basically encoded as a series of linear (pseudo-boolean? need to check) constraints.
 We should look into them to check that our reasoning can still apply to them.
 
+
 ### On the interactions between temporal and non temporal uncertainty (planning aspect)
+
 
 A priori, we have a feeling that it should be possible to consider these temporal and non temporal "chance specifications" independently. However, support constraints have 2 temporal ordering constraints in them ! So we should think about whether the temporal chance specifications would be affected by it... A priori, we think that there shouldn't be too much trouble because of this, but we should still be careful.
 
+
 ## Acting (and acting aspects of temporal and non temporal uncertainty)
+
 
 To our knowledge, there no actors yet that are able to support temporal and non-temporal uncertainty in an online, interleaved planning and acting setting. Indeed, the notions of policies, temporal plans, and contingent plans, can be difficult to stitch together. Indeed, for now the only "unified" mathematical framework for this would be that of POMDPs, which unfortunately are often intractable because of huge state or action spaces.
 
@@ -149,5 +164,6 @@ Is there a way to avoid the "policy" tree from growing too large ? Is it possibl
 Do we need an "order" in which to consider variables ? As it might be impactful for efficiency, for example for probabilistic knowledge representation and manipulation. Or maybe it may be useful as a "pessimistic"/"conservative" order in which we should constrain the actor to make decisions, to avoid the tree from getting too large because of "redundant" nodes / exploration ?. In case this issue ends up being relevant, we think that a good idea would be the following: order presence variables by the order of their earliest possible start time ; then, right after each presence variable, place the variables appearing in that chronicle, in the order of the earliest possible start time of the condition/effect/subtask they're involved in, and in case of ambiguity with the controllable variables before uncontrollable ones.
 
 Anyway, despite the fact that our general idea is still very crude, we believe that it may guide us (if we're lucky...) to an online acting architecture combining "proactive", "revision", and "progressive" approaches (as per the terminology of Bidot [...]) with support for complex temporal, numerical, and uncertainty specifications.
+
 
 ## ...
