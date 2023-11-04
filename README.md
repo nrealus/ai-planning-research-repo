@@ -120,7 +120,7 @@ And now, to the complicated part: how can we deal with such chance constraints ?
   - And/or branch and bound search [X]. However, we are worried that "forking" the search algorithm on AND nodes (corresponding to different possible values for random variables) could be very detrimental. But who knows, it might not be that bad in practice. Moreover, we could always resort to halting the search preemptively if we think that we are at a good enough level of (bounds, in our Aries-like case) consistency.
   - Numeric functions (linear sums in Aries) approximating cumulative distributions of random variables present in utility functions, and "standard" / deterministic solving (setting literals on bounds) ? This would bear some similarity to the risk allocation approach for temporal uncertainty.
   - Extensions taking into account (approximated) cumulative probability to filtering / (bounds) consistency based approaches
-  - (...anything else...?)
+  - Encoding a bayesian network into a pseudo boolean numeric function, which Aries could address ? [i]
 - Addressing the chance constraints directly, without resorting to reformulation into an expected utility optimization / bound satisfaction problem:
   - The 2 cases from the list above: indeed, they could be applicable for this case too
   - Studying the "support" constraints in more detail, and maybe (since they're highly structured) derive a special filtering algorithm for bounds consistency ?
@@ -130,6 +130,20 @@ Finally, another important issue is that the order in which we consider the vari
 
 Final important note !! In Aries, chronicle "conditions" defined on "resource" are encoded not with "support" constraints, but with special "resource" constraints. We haven't really looked at them yet, but know that they are basically encoded as a series of linear (pseudo-boolean? need to check) constraints.
 We should look into them to check that our reasoning can still apply to them.
+
+[[i]](https://dilkas.github.io/pdf/cw.pdf)
+
+### UPDATE (04/11/23)
+
+After thinking again, we came to the conclusion that "chance specifications" (or "risk specifications" as we want to call them now to avoid confusion with "actual" chance constraints) should be extended to all types of elements of a chronicle, so not only conditions and subtasks, but also effects, and maybe even constraints from X too. So we make an attempt at (sort of) formalizing them.
+
+In addition to its sets V, X, C, E, S, a chronicle should also come with a set R (for "risk"). The elements of R should be tuples (K, Delta) where Delta is a real (actual fractionary/rational/fixed point) value in [0,1], and K is a set of elements from C, E, S, and X (not yet sure about X). We call these elements of R "risk specifications" of the chronicle. It should be interpreted as a chance constraint for the CSP into which the planning problem is encoded: P(!coherent(eff, eff') for all effect eff in R (and any eff' != eff), !supported(cond) for all conditions cond in R, [? !cstr for all constraints cstr in R ?], all effects, constraints, and conditions of the refinement chronicle that will be chosen for subtasks in R) <= Delta
+
+Such chance constraints will be way too complex to deal with. And even though some of the ideas from above may still be relevant (approaches based on sampling...), we actually want to take a slightly different approach than that which we initially wanted. The idea is to follow the same approach as in [2] for risk bounded dynamic controllability of PSTNs, i.e. a risk allocation approach. In this setting, our goal will be to set bounds on random / contingent / uncontrollable variables such that we know that the constraints (including chance constraints) hold for them, and such that the total probability mass outside of these bounds is less than Delta. This approach is interesting because it seems like it may lead us to a simplified problem, and because it may be interesting for the acting part, as we could make use of the risk allocations to make some acting decisions when observing that some random variables outcomes don't fall into the bounds that were allocated for it. By "acting decisions" here we mean applying some sort of reactive dispatching or instantiation, plan repairing, or searching for new planning solutions with specific assumptions. (see below for notes on acting)
+
+But how could we make this work ? The simplest approach would be to defer this risk allocation step to the very end of the solving, just as we considered doing with for temporal uncertainty. Another more exciting idea would be try integrating it into the solver, possibly through a new "probabilistic" reasoner. Its purpose would be to propagate updates/events to the chance constraints, when an event/update modifies the domain of a variable from a chance constraint. But how exactly would that work ? Our current idea is to "watch" the Fréchet bounds for the chance constraints' probabilities, as well as the probabilities corresponding to the cumulative probability mass for the literals appearing in them. Indeed, we think that there's something interesting to be done with bound literals and cumulative probability masses. By the way, these cumulative probability masses would (hopefully?) be easily obtainable from conditional probability tables / trees / bayesian networks / influence diagrams attached to the chronicles. Also, we are motivated by the fact that there seems to already be support for max / min / sum constraints in Aries, because Fréchet bounds use max and min
+
+Also, all of this begs another question: could this be "unified" with the approach for temporal uncertainty ?
 
 
 ### On the interactions between temporal and non temporal uncertainty (planning aspect)
