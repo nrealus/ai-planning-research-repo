@@ -188,3 +188,5 @@ Following what we written above in "UPDATE (04/11/23)", we would like to add tha
 *: by "plan repair", we do not only mean "usual" plan repair approaches (which may also be called "partial replan"), but also the approach of Williams et al. for "plan relaxations" (where they try to see if the contingent durations can be made shorter, and/or controllable durations can be made longer, without changing the "structure" of the plan).
 
 ## ...
+
+NOTE 05/11/23: this file became too messy, needs to be cleaned
