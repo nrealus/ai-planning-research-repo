@@ -41,21 +41,21 @@ Here's a list (in no particular order) of the sources which we're particularly i
   - **E**, **G**, **H**, **I**, **J**, **D**
 - [[2]: A.J.Wang. Risk-Bounded Dynamic Scheduling of Temporal Plans]()
   - **D**, **I**
-- [[3]: K.Osanlou. Solving Disjunctive Temporal Networks with Uncertainty under Restricted Time-Based Controllability Using Tree Search and Graph Neural Networks]()
+- [[3]: K.Osanlou ... Solving Disjunctive Temporal Networks with Uncertainty under Restricted Time-Based Controllability Using Tree Search and Graph Neural Networks]()
   - **I**
-- [[4]: M.Saint-Guillain. Lila: Optimal Dispatching in Probabilistic Temporal Networks using Monte Carlo Tree Search]()
+- [[4]: M.Saint-Guillain ... Lila: Optimal Dispatching in Probabilistic Temporal Networks using Monte Carlo Tree Search]()
   - **I**, **J**, **G**
 - [[5]: A.Bit-Monnot. FAPE: MODELES TEMPORELS ET HIERARCHIQUES POUR LA PLANIFICATION ET L'ACTION EN ROBOTIQUE]()
   - **A**, **B**, **F**, **E**, **L**
-- [[6]: R.Godet. Chronicles for Representing Hierarchical Planning Problems with Time]()
+- [[6]: R.Godet ... Chronicles for Representing Hierarchical Planning Problems with Time]()
   - **A**, **B**, **C**
-- [[7]: J.Turi. Enhancing Operational Deliberation in a Refinement Acting Engine with Continuous Planning]()
+- [[7]: J.Turi ... Enhancing Operational Deliberation in a Refinement Acting Engine with Continuous Planning]()
   - **A**, **E**, **F**, **K**
-- [[8] S.Patra. Deliberative Acting, Online Planning and Learning with Hierarchical Operational Models]()
+- [[8] S.Patra ... Deliberative Acting, Online Planning and Learning with Hierarchical Operational Models]()
   - **E**, **F**, **J**, **K**
 - [[9] A.Bit-Monnot. Enhancing Hybrid CP-SAT Search for Disjunctive Scheduling]()
   - ...
-- [[10]]()
+- [[10] M.Ghallab ... Automated Planning and Acting]()
   - ...
 - [[11]]()
   - ...
@@ -159,7 +159,9 @@ To our knowledge, there no actors yet that are able to support temporal and non-
 
 We also want to point out that in acting, the interest in uncertainty is a bit different than in planning. As we saw above, our interest in planning is to ensure that solutions satisfy some chance constraints of "chance specifications". In acting, we want our dispatching / execution choices be optimal, in the sense that we want them to be as likely to end succesfully as we can. This corresponds to following the maximum expected utility principle. So in other words, during acting, online, we want to make execution decisions that are the most likely to a higher value for the utility of the final "history" (i.e. "past" plan, i.e. "history" chronicle). In order to enable such online deliberation, allowing to make "the best" (both temporal and non temporal) choices on the fly, we are interested in a "policy-like" representation for our actor.
 
-Before continuing further, we would like to note that despite its age, the work of Bidot [...] is very enlightening for us. Almost all actors / acting systems that we encountered could indeed be seen as concrete instantiations of the general framework he described. As such, his work is very interesting to us as it may help to find a common ground between acting capabilities that couldn't be combined in a principled manner yet.
+For the most part, our idea is not fundamentally new at all, since it is grounded in the general idea described in 4.5.3 of [10] (i.e. a "RAE"-like actor capable of online refinement, dispatching choices, and lookahead). However, as mentioned there, this idea comes with quite some challenges, so until now only it was tackled only in a limited way.
+
+Also, before continuing any further, we would like to note that despite its age, the work of Bidot [...] is very enlightening for us. Almost all actors / acting systems that we encountered could indeed be seen as concrete instantiations of the general framework he described. As such, his work is very interesting to us as it may help to find a common ground between acting capabilities that couldn't be combined in a principled manner yet.
 
 In our effort, we are inspired by the general framework of Bidot for stochasting scheduling [...], FAPE (the skill handlers system in particular) [...], RAE & UPOM [...] (and SOMPAS [...] which can be seen as their extension), Riker [...], Lila [...], and Restricted Time-Based Dynamic Controllability (R-TDC) strategies of Osanlou [...].
 
@@ -173,11 +175,14 @@ Another issue is "how to choose the best decisions to take" ? We may run MCTS or
 
 Also, do we need to maintain and update probabilistic knowledge online ? If so, can we do it (efficiently) ? And even if we can, won't the price of "converting" to more efficient forms / structures be worth it ?
 
-Is there a way to avoid the "policy" tree from growing too large ? Is it possible to leverage ideas from decision diagrams ? Perhaps adapt BDDs to use bounds on literals instead of 0/1 values ? And even if it was possible, would it be worth it ?
+Is there a way to avoid the "policy" tree from growing too large ? Is it possible to leverage ideas from decision diagrams ? Perhaps adapt BDDs to use bounds on literals instead of 0/1 values ? And even if it was possible, would it be worth it ? Maybe it should be represented as a variant of an continuously updated MDP ?
 
 Do we need an "order" in which to consider variables ? As it might be impactful for efficiency, for example for probabilistic knowledge representation and manipulation. Or maybe it may be useful as a "pessimistic"/"conservative" order in which we should constrain the actor to make decisions, to avoid the tree from getting too large because of "redundant" nodes / exploration ?. In case this issue ends up being relevant, we think that a good idea would be the following: order presence variables by the order of their earliest possible start time ; then, right after each presence variable, place the variables appearing in that chronicle, in the order of the earliest possible start time of the condition/effect/subtask they're involved in, and in case of ambiguity with the controllable variables before uncontrollable ones.
 
-Anyway, despite the fact that our general idea is still very crude, we believe that it may guide us (if we're lucky...) to an online acting architecture combining "proactive", "revision", and "progressive" approaches (as per the terminology of Bidot [...]) with support for complex temporal, numerical, and uncertainty specifications.
+Anyway, despite the fact that our general idea is still crude, we believe that it may guide us (if we're lucky...) to an online acting architecture combining "proactive", "revision", and "progressive" approaches (as per the terminology of Bidot [...]) with support for complex temporal, numerical, and uncertainty specifications.
 
+### UPDATE (05/11/23)
+
+Following what we written above in "UPDATE (04/11/23)", we would like to add that it seems the risk allocation approach for planning may lend itself quite well for acting. Recall that the risk allocation bounds on random variables guarantee that as long as the observed values are within them, the current plan will continue satisfying its "risk specifications". This means, that observing a value outside of risk allocation bounds can be "monitorable" event that we should, well, monitor, as a possible trigger for plan repair, replanning, or even not doing anything (i.e. continue the execution of the plan, hoping that the rest of the plan can still be executed correctly (and next random variables' observations fall inside the risk allocation bounds)). This is the same idea as that of [2] for the extension of dynamic execution strategies for STNUs to PSTNs. Such conditions (observing a random variable's value falling outside of our risk allocation bounds) are "readily available" after planning (we don't have to perform complex search/determination of relevant conditions), are quite simple, and therefore lend themselves well to the conditional/contingent policy idea we described. 
 
 ## ...
