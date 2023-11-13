@@ -8,185 +8,107 @@ Documentation (**WIP**) is available [here](https://nrealus.github.io/ai-plannin
 The following is **WIP** and is subject to change. Blanks, unclear wording and other imperfections are to be expected.
 
 
-# Introduction
+**General objective**: Integrated planning and acting with rich support for uncertainty, both temporal and non-temporal.
 
+**Current general ideas**:
 
-The main aim of this long-term project is to build a system / architecture / framework for **integrated planning and acting** (aka integrated planning, execution, and monitoring) with a particular focus on the aspects of **time** and **uncertainty**. In the last few years, a lot of progress has been made on the integration of planning, execution, and monitoring. The notions of time and uncertainty have also been studied for a long time in planning, but often only individually or in limited combination. Thus there's an **extremely exciting gap to fill** in combining advances on (online) planning, (online) acting, time, and uncertainty. We believe that filling this gap is very important to take AI systems to the next level, allowing them to tackle a very wide range of real-world problems in a general, comprehensive fashion.
+- Uncertainty specifications / representation / modelling:
 
-In no particular order, here is a list of **possibly overlapping**, general, high level deliberation capabilities / features that we would like to see combined (in theory, as it may be too ambitious in practice...):
-- **A**: Hierarchical (aka refinement) and generative planning
-- **B**: Temporal planning
-- **C**: Numeric planning (resources support)
-- **D**: Temporal and non temporal uncertainty (formalised in a probabilistic framework, for example bayesian networks) for "risk bounded" plans
-- **E**: Integrated (interleaved) planning and acting (monitoring and execution)
-- **F**: Online (reactive) plan repair / replanning
-- **G**: Conditional / contingent planning
-- **H**: Conformant planning or planning with incomplete knowledge or sensing capabilities
-- **I**: Use of policies allowing to make planning and execution choices online, instead of plans with fixed choices
-- **J**: Optimal (in terms of (maximal) expected utility) planning and execution (dispatching) choices of (temporal) plans (policies)
+  - Allow chronicles to define uncontrollable variables and chance constraints
 
-Also, there are two other important aspects that we think a general system such as the one we envision should support. However, we defer them and **do not** plan to address them yet, as we think they are quite independent (except maybe **L**) of the features from the list above:
-- **K**: In addition to descriptive planning models, use of operational planning models as well.
-- **L**: Partial observability (which may be reframable into full observability, at least partially)
-- **M**: Goal reasoning in the form of the following capabilities: addition, retraction, or modification of a (or set of) top level task/goal to pursue.
+    - Specify conditional probability distributions (depending on values both uncontrollable and controllable variables) through an influence diagram (without utility nodes, for now at least) attached to the chronicle. The influence diagram could be either denoted as `I` or considered to be implicitly part of `V`
 
-Again, note that many of the high level features we listed overlap and intertwine, and so in our effort to combine them, we should not approach them all individually.
+      - This means that state variables become probabilistic as well: could be useful to compute and attach to each of them a joint probability distribution (possibly conditionally to controllable variable parameters) for their possible parametrisations
 
-We believe that together, these features are enough (or even more than enough) to describe a very general AI system that should (in theory) be able to tackle a very wide variety of problems in a comprehensive fashion, while still remaining extendable.
+      - Uncontrollable durations / temporal constraints should be defined as `t_e - t_s = dur` where `dur` is an uncontrollable variable appearing in the influence diagram (possibly conditionned on other variables), and `t_s` and `t_e` are controllable (even though `t_e` isn't *really* controllable)
 
-The combination of the features, even just from the first list, is an **extremely (perhaps overly) ambitious** research problem.
+      - The (numeric) "cost" of a chronicle becomes probabilistic as well
+        - Need to think more about what that means how we could deal with it - couldn't we just consider a determinstic cost, which would be the expectation of the probabilistic one ?
+    
+    - Specify a set `R` of chance constraints attached to the chronicle
 
-Here's a list (in no particular order) of the sources which we're particularly inspired by, with an indication of the features (from the list above) for which we're inspired by it:
-- [[1]: S.Levine. Risk-bounded Coordination of Human-Robot Teams through Concurrent Intent Recognition and Adaptation]()
-  - **E**, **G**, **H**, **I**, **J**, **D**
-- [[2]: A.J.Wang. Risk-Bounded Dynamic Scheduling of Temporal Plans]()
-  - **D**, **I**
-- [[3]: K.Osanlou ... Solving Disjunctive Temporal Networks with Uncertainty under Restricted Time-Based Controllability Using Tree Search and Graph Neural Networks]()
-  - **I**
-- [[4]: M.Saint-Guillain ... Lila: Optimal Dispatching in Probabilistic Temporal Networks using Monte Carlo Tree Search]()
-  - **I**, **J**, **G**
-- [[5]: A.Bit-Monnot. FAPE: MODELES TEMPORELS ET HIERARCHIQUES POUR LA PLANIFICATION ET L'ACTION EN ROBOTIQUE]()
-  - **A**, **B**, **F**, **E**, **L**
-- [[6]: R.Godet ... Chronicles for Representing Hierarchical Planning Problems with Time]()
-  - **A**, **B**, **C**
-- [[7]: J.Turi ... Enhancing Operational Deliberation in a Refinement Acting Engine with Continuous Planning]()
-  - **A**, **E**, **F**, **K**
-- [[8] S.Patra ... Deliberative Acting, Online Planning and Learning with Hierarchical Operational Models]()
-  - **E**, **F**, **J**, **K**
-- [[9] A.Bit-Monnot. Enhancing Hybrid CP-SAT Search for Disjunctive Scheduling]()
-  - ...
-- [[10] M.Ghallab ... Automated Planning and Acting]()
-  - ...
-- [[11]]()
-  - ...
-- [[12]]()
-  - ...
-- [[13]]()
-  - ...
+      - We will also call them "risk specifications", to avoid using the word "constraint" too often
 
+      - The set `X` would now be the set of "hard constraints", instead of simply "constraints"
 
-# Research directions and ideas
+      - A risk specification (i.e. chance constraint) would be a tuple `(RR, risk)`. `RR` would be a set of constraints OR chronicle conditions (set `C`), and `risk` would be a value indicating the maximum tolerated probability for the (conjunction of) constraints `RR` to not hold.
+        - The chronicle conditions would be implicitly interpreted as their `supported` constraints.
 
+  - However, I don't really know how (and even if...) similar uncertainty specifications could be integrated in a operational model / acting language like that of SOMPAS.
+    - Maybe extending some primitives like "exec" with a value describing the acceptable failure risk of the task ?
+      - But what about other acting primitives ?
+    - This could be very important... but I'm not sure how to tackle this (I'm bad with formal languages)
 
-The baseline for our work is the [Aries](https://github.com/plaans/aries) project [9]. It is a hybrid CP/SAT solver aimed at tackling planning problems by encoding them into constraint satisfaction problems. Aries is able to address hierarchical temporal and numeric planning. A project developed alongside Aries is [SOMPAS](https://github.com/plaans/aries) [7], which is an acting system inspired by RAE [8], and whose focus are: guidance of online acting using continuous planning, resource management, and conversion of operational models (defined by a custom acting language) into (hierarchical) chronicles [6], which are (temporal) descriptive models used by Aries.
+- Uncertainty (planning aspect)
 
-Uncertainty is the only important capability not addressed by these projects, which is understandable since it is very hard. Indeed, taking uncertainty into account leads to lots of intertwined questions and issues, affecting almost all aspects of planning and acting, and even the "philosophy" of what a planning and acting AI system should do. As such, uncertainty is almost always studied in very restricted settings, for example only temporal or non-temporal uncertainty. We want to address both!
+  - With the uncertainty specifications described above, the goal of planning becomes more complex. The idea is that we want solutions to controllable variables such that the risk specifications are satisfied.
 
+  - This makes everything much, **MUCH** more difficult. The issues of dynamic controllability (alternatively, dynamic consistency) become more complex than in the case of purely temporal uncertainty. Also, the notion of risk awareness (chance constraints / risk specifications) adds a supplementary layer of complexity...
 
-## Temporal uncertainty (planning aspect)
+  - We suggest to take inspiration from Risk Allocation approaches ([?], [?], [?], ...)
+    
+    - The idea is to "allocate the risk budget" by searching for some lower and upper bounds in the domains of uncontrollable variables, such that:
+      1. the constraints from each risk specification are satisfied when uncontrollable variables' values are all within those bounds
+      2. the total probability mass outside of these bounds is less than the risk value of each risk specification
+    
+    - This is done by reformulating the risk specifications / chance constraints into a "reformulated chance constraint". This "reformulated chance constraint" is a sum of probability masses (in the literature, a simple upper bound of the actual probability (Boole inequality))
+      - It uses the cumulative distribution function, making it non linear. However, we can linearize or even discretize it.
+      - We could bridge the gap with the "optional variables" of our Aries-like framework by making the reformulated chance constraint pseudo-boolean
 
+    - There is also some literature on risk aware probabilistic planning / risk aware chance constrained POMDPs / the RAO* algorithm, ([?], [?], [?], ...) which could be interesting to investigate. We could adapt some aspects, for example by considering the states of the MDPs to assignments to all variables, and actions to be instantiations of controllable variables
+ 
+    - Our main inspiration is the PSTN risk-aware dynamic controllability work of Wang [?]. However, it addresses only temporal uncertainty, so more work is needed to adapt it.
+      - Also, what Wang left for future work (chapter 8 of [?]) could be very precious to us (like incrementality, optimization, and multiple chance constraints).
+        - The support for multiple chance constraints is actually **indispensable**, because even with one risk specification per chronicle, their conjunction yields multiple risk specifications (aka chance constraints).
+          - The key is determining which uncontrollable variables are "relevant" for the risk specification. In our implementation of Wang's algorithm, we made multiple chance constraints work (at least we think so...) based on Wang's insights in chapter 8. But adapting that to the context of planning with chronicles (with an Aries-like solver) won't be trivial, because of optional variables...
 
-Temporal uncertainty is about contingent (aka uncontrollable, aka random) temporal variables (aka timepoints), which the system cannot control: it cannot set their value (i.e. schedule a time for their execution). Indeed their schedule time is set by Nature and can only be observed by us. Note that (for now) we assume full observability of contingent timepoints, as we think the case of partial controllability can largely (but maybe not completely) be reframed into full observability.
+    - At the same time, the work of Cui [?] deals with dynamic controllability of CCTPUs (with some conservative assumptions which we actually consider reasonable). Its foundations are shared with the work of Wang. However, there is no probabilities nor risk, and choices / non-temporal variables are all controllable there.
 
-Temporal uncertainty is relevant and omnipresent in real-world problems, since in many cases we cannot predict when we will finish a certain action. To represent temporal information, we use temporal networks. Usually to adress uncertainty, Simple Temporal Networks with Uncertainty (STNU) are used. However, we're more interested in Probabilistic Simple Temporal Networks (PSTN) which extend STNUs with a probability distribution attached to contingent durations.
+      - There is also a simpler approach, which would be to have dynamic controllability on the temporal aspect, but "only" strong consistency for the non-temporal aspect, as is done in another line of work on CCTPUs ([?], [?], [?], ...)
 
-The main problem with temporal uncertainty is that depending on the outcome / scheduled / executed time of a contingent timepoint, the temporal network (and by extension the plan) can become inconsistent. To deal with that, the notion of controllability is defined (strong, dynamic, weak). In practice, dynamic controllability is the most interesting, but also the most complex. When no specific indication is given, assume that we're talking about dynamic controllability. In the case of PSTNs, where probabilities are involved, the problem is not just to assess controllability. Some works opt to quantify it with a metric [4]. Another one [2] instead suggests to assess "risk bounded" controllability.
+    - As such, we should investigate the algorithm of Cui and see if we could adapt it to handle:
+      1. uncontrollable choice variables (which would make the search space be "AND/OR", instead of just "OR"...)
+         - adapt with some sort of (stochastic) local search ? determinization, sampling (hindsight optimization?) ? maybe even take inspiration from (R)AO* ? 
+      2. risk allocation
+          - it won't be enough to run Wang's algorithm at the leaves of the tree, as that would account for risk allocation of only temporal uncontrollable variables.
+            - some sort of "two-stage" approach, with 1st stage corresponding to non-temporal uncontrollable variables, and the 2nd stage corresponding to temporal ones ? 
 
-The 1st approach is interesting for online optimal execution / dispatching of temporal plans. However, for the planning part, we're more interested in the 2nd approach (risk bounded controllability assessment). Briefly, given a set of "requirements" (which must be differentiated from "activities"!) of the PSTN, a temporal chance constraint can be defined. The idea then is to ensure that the network is indeed controllable with a probability "bounded" by a given "risk". In [2], this is done with a "risk allocation" approach, where the goal is to find bounds for the duration of probabilistic durations, which yield a dynamically controllable STNU, when replaced in the PSTN. Dynamic execution policies for PSTNs are also defined, extending those for STNUs.
+    - Let's also mention the original work of Tsamardinos [?] on CTPs, where we could look for insights on the early approaches to dynamic consistency
 
-In our project, we want to allow specifying similar "temporal chance constraints" (or "temporal chance specifications"?) on chronicles. As a first step for that, we have implemented the algorithm from [2], but with 1 notable extension: support for multiple joint chance constraints (instead of a single global one), following the insights given in chapter 8 of [2]. Without the support for multiple joint chance constraints, it wouldn't be possible to extend this approach to our case, as we'd need to define such chance constraints locally in chronicles (or rather chronicle templates). Our motivation is to require solutions to planning problems to guarantee that certain parts of it can fail / become inconsistent with a probability lower than a certain "risk" threshold.
+    - In everything discussed above, we assume that the Aries-like solver is used in an "uncertainty-relaxed" way (i.e. considering uncontrollable variables to be controllable). Everything we discussed above was considered to be performed on a "uncertainty-relaxed" solution given by the solver, where we then "lift" this relaxation, leading us to a new problem aimed at risk-aware controllability checking
+      - In other words, the solver would be used to give initial candidate solutions to an algorithm which would be responsible of checking risk-aware dynamic controllability.
+      - If we were to adapt the work of Cui, we would even need to have multiple "initial" candidate solutions. This is why we suggested some sort of local search to deal with the "AND/OR" search space which we would have when considering uncontrollable choice variables.
 
-What we described is relevant for planning (i.e. solving / search phase of the CSP into which the planning problem is converted). Now, how can we integrate these "risk bounds" on temporal uncertainty to it ? We're still exploring this, but the current main idea is the following:
-- simply perform "normal" (deterministic) CSP solving, ignoring anything related to uncertainty
-- once such a "uncertainty-relaxed" solution is found, "lift back" the assignments to temporal values: this will yield a PSTN that we can tackle with the approach of [2].
-- if the result is successful, great.
-- if it isn't, the "dynamic controllability conflicts" (which are disjunctive linear constraints) returned by the algorithm can be reinjected into the CSP.
+    - However, we could also extend the solver with new reasoners (or "sub-reasoners"?), aimed at detecting bad cases early, in a non-complete fashion.
+      - The simplest would be to catch as conflicts cases when propagation makes domains of uncontrollable variables smaller than the "largest" constraint they participate in
+      - It could also be interesting to adapt an incremental (temporal) dynamic controllability algorithm for STNUs (however it becomes unclear how we would deal with probabilities and risk, then) as a "sub-reasoner" of the difference logic reasoner.
+        - However, there would have to be some black magic to support optionals... Maybe we could take inspiration from the CSTNU propagation rules... (even though they're complex and the CSTNU DC-checking algorithms are exponential and far from ready in "practical" use) or make some (acceptable) assumptions like those of Cui
+      - A "probabilistic reasoner" was also among our ideas. We could take advantadge of the fact that our literals are "bound literals" and cumulative distribution functions are monotonous (and therefore bijective) to attach variables with a new variable or literal representing the probability mass for their current bounds
 
-This idea is fairly simple, which is a good thing. However we're not sure how efficient Aries is at dealing with linear (pseudo-boolean?) constraints. Maybe it is unrecommended to have a large amount of linear constraints... Another idea could be to extend the algorithm from [2] to support "PSTNs with choices". The same authors had already worked on problems where a problems with possible "choices" (cc-CCTPU ?) were addressed (BCDR algorithm). It could also be interesting to try integrating the algorithm from [2] a bit more deeply into Aries, and try to take advantadge of its native support of optional variables (through "presence" variables/literals).
+- Uncertainty (acting aspect):
 
-We also have some other ideas, but they're more suited for the STNU case, and it isn't clear to us yet how they could be adapted to PSTNs. Indeed, if we were in the STNU setting ("set bounded", not probabilistic uncertain durations), it could be possible to indicate to the CSP solver to not choose contingent random / variables during its decision phase (at least before all other variables have been set?), and to check whether (as a result of propagation) the domain size (interval) fo a contingent variable becomes smaller that the biggest contingent duration it participates it. This could be an extended "InvalidBoundUpdate" conflict in Aries. Another idea (still in STNU setting) could be to enhave the difference logic engine of the solver to check for "pseudo-controllability" during search, as not satisfying it would give an early indication of uncontrollability.
+  - The actor must be able to make choices that must be:
+    1. made online (i.e. during execution)
+    2. non-temporal
+       - i.e. "online refinement" - choice of refinement chronicle to use, and instantiation (choice of value) for its controllable parameters
+    3. temporal
+       - i.e. dispatching, with possibilitiy of defering the instantiation of an enabled/alive controllable timepoint
+    4. (approximately) "optimal" with regards to a metric
+       - notably the expected utility of "success" (i.e. consistency of the final history that may be obtained as a result of the choices)
+    5. make the choices based on lookahead (see 1. and 4.) while allowing for plan repair and replanning
+       - this would allow the combination of proactive, reactive, and progressive acting capabilities (as per the terminology of Bidot [?])
 
-There is also one accept that we haven't investigated yet, and hope that it's not going to introduce too much complexity. It's the possibility of specifying durations to be equal to a some function (for example, representing a duration, whose value may be calculated by some external module (?)). What impact would it have on our approach if this is done for controllable durations ? What would it be if it was done for uncontrollable durations (would we need to, for example, use conditional probabilities in our [2]-inspired algorithm ? and if so, would it even work ?)
+  - In a nutshell, what we're describing is a "super-eRAE" actor
 
+  - Our current idea is to have a structure containing solutions given by the planner (after processing by a risk-awareness controllability checker? see above) - like the Acting Tree in SOMPAS - which could be seen as an "oracle".
+    - it would be updated after execution choices / dispatching is made, or after receiving observations of the environment, or after receives updates from "skill handlers"
+      - Notably, probabilistic knowledge would thus also be updated by "filtering" conditional probability "rows" in the influence diagrams of the solutions' chronicle instances
 
-## Non temporal uncertainty (planning aspect)
+  - The structure in which lookahead would be performed is inspired by Lila [?] and R-TDC strategies [?]. The actor would be exploring a tree of possibles choices, possibly up until a certain horizon, 
 
+  - The acting would consist of performing lookahead in a tree of choices, like those of R-TDC [?] - which discretized time and "wait" actions / choices. The available choices in this tree would be those exposed by the "oracle" (see above). The exploration could be done with some form of MCTS.
+    - Alternatively, the nodes of the tree could correspond to "plan beliefs", i.e. chronicles. The "edges" of the tree could then correspond to (. \ Del) U Add operations on the parent chronicle.
 
-"Non-temporal" uncertainty can actually be very broadly interpreted. Usually in planning, it is understood as a setting in which action effects are probabilistic or non deterministic. Depending on whether these effects are observable (as well as other complicated stuff), there can be several problems of interest. The most intuitive to imagine is the problem of finding a plan that whose execution is most likely to succeed.
+  - The notion of "reactive strategies" from [?] could be kept as well, and even extended to non-temporal uncontrollable variables, and even "preemptive" planning for some conditions that may happen in the future, or simply replanning / repair on the spot.
 
-However, we are interested in a richer setting. Our motivation has two axes:
-- Similarly to the case for temporal uncertainty, allow constraining the sought solutions of a planning problem to satisfy "local" specification related to uncertainty. In other words, we want to be able to restrict solutions to our planning problem to satisfy certain constraints with a certain level of confidence (or, similarly a certain allowed level of risk - this distinction between risk and confidence is similar to that for temporal uncertainty in [2]).
-- Have stochastic / probabilsitic cost / utility functions for the chronicle, and seek to optimize (or guarantee a lower bound for) its expected utility.
-
-Below, we focus on the 1st axis.
-
-As such, in our proposed setting, we suggest to allow chronicles to have random / uncontrollable / contingent variables, with the possibility of specifying probability distributions (possibly in the form of conditional probability tables / trees / Bayesian networks / influence diagrams) in the "constraints" **(!)** of a chronicle (set `X` in [6]). This allows to specify "probabilistic effects" simply by setting a such a random variable to be the "value" of an "effect" of the chronicle. Moreover, if we want "probabilistic effects" to be "structurally" different, we can use "subtasks" of the chronicle instead, with refinement methods / chronicles for that subtasks containing describing those effects. These refinement methods / chronicles would be specified with "preference weights" reflecting the probabilities. Finally, similarly to the "temporal requirements chance constraints" from above, we suggest to attach a threshold value to subsets of "conditions" or "subtasks" of a chronicle. The meaning is that we want to require the instantiation (for the decision / non random variables) of the chronicle in the solution to be such that the probability of these conditions being unsatisfied and these tasks being failed / inconsistent / incorrect must be less than the specified "risk" threshold. (or alternatively, the probability for satisfaction / success to be greater than a "confidence" threshold). We think that the specification on a subtask should be interpreted as "all conditions of the refinement chronicle / method for that subtask". As such, our suggestion boils down to "chance specifications" on conditions of chronicles.
-
-We think that these specifications should be interepreted as chance constraints for the CSP into which the planning problem has been encoded. These chance constraints would have the following form: "probability of the negation of the conjunction of the 'supported' constraints for these conditions must be lower than the 'risk'" (or alternative with 'confidence' instead of 'risk').
-
-And now, to the complicated part: how can we deal with such chance constraints ??? Indeed, we now have a stochastic constraint satisfaction problem, and chance constraints are notoriously hard to address... They are even often left out in the stochastic constraint satisfaction literature because of that, and expected utility optimization is addressed more often. However, it would seem that chance constraints like these could "translated" into utility / cost / penalty function, which perhaps could make things easier for us (or not). Nevertheless, here are our ideas on how to tackle this:
-- Assuming we can reframe the chance constraint into an expected utility optimization / bound satisfaction problem, we could address it with a variety of approaches:
-  - Approaches based on sampling (hindisght optimization, SAA (MCTS...?), Evaluate & Cut (possibly with scenario grouping and/or sampling)...?).
-  - And/or branch and bound search [X]. However, we are worried that "forking" the search algorithm on AND nodes (corresponding to different possible values for random variables) could be very detrimental. But who knows, it might not be that bad in practice. Moreover, we could always resort to halting the search preemptively if we think that we are at a good enough level of (bounds, in our Aries-like case) consistency.
-  - Numeric functions (linear sums in Aries) approximating cumulative distributions of random variables present in utility functions, and "standard" / deterministic solving (setting literals on bounds) ? This would bear some similarity to the risk allocation approach for temporal uncertainty.
-  - Extensions taking into account (approximated) cumulative probability to filtering / (bounds) consistency based approaches
-  - Encoding a bayesian network into a pseudo boolean numeric function, which Aries could address ? [i]
-- Addressing the chance constraints directly, without resorting to reformulation into an expected utility optimization / bound satisfaction problem:
-  - The 2 cases from the list above: indeed, they could be applicable for this case too
-  - Studying the "support" constraints in more detail, and maybe (since they're highly structured) derive a special filtering algorithm for bounds consistency ?
-    - We could take advantadge of some of the algorithms we found for "stochastic arc consistency" (?) / filtering algorithms for stochastic global constraints.
-
-Finally, another important issue is that the order in which we consider the variables / parameters in the "support" constraints is important, because it impacts the probability and the way we compute it. Moreover, during online execution, these variables / parameter may not all be set yet, and in theory, a value could be given to them (either by assignment or observation) in any order...! For this whole problem, we probably should take inspiration from [1], and define some sort of "worst case" order for variables. A "Weight Model Counting"-inspired approach (like in [1]) could also be of interest...
-
-Final important note !! In Aries, chronicle "conditions" defined on "resource" are encoded not with "support" constraints, but with special "resource" constraints. We haven't really looked at them yet, but know that they are basically encoded as a series of linear (pseudo-boolean? need to check) constraints.
-We should look into them to check that our reasoning can still apply to them.
-
-[[i]](https://dilkas.github.io/pdf/cw.pdf)
-
-### UPDATE (04/11/23)
-
-After thinking again, we came to the conclusion that "chance specifications" (or "risk specifications" as we want to call them now to avoid confusion with "actual" chance constraints) should be extended to all types of elements of a chronicle, so not only conditions and subtasks, but also effects, and maybe even constraints from X too. So we make an attempt at (sort of) formalizing them.
-
-In addition to its sets V, X, C, E, S, a chronicle should also come with a set R (for "risk"). The elements of R should be tuples (K, Delta) where Delta is a real (actual fractionary/rational/fixed point) value in [0,1], and K is a set of elements from C, E, S, and X (not yet sure about X). We call these elements of R "risk specifications" of the chronicle. It should be interpreted as a chance constraint for the CSP into which the planning problem is encoded: P(!coherent(eff, eff') for all effect eff in R (and any eff' != eff), !supported(cond) for all conditions cond in R, [? !cstr for all constraints cstr in R ?], all effects, constraints, and conditions of the refinement chronicle that will be chosen for subtasks in R) <= Delta
-
-Such chance constraints will be way too complex to deal with. And even though some of the ideas from above may still be relevant (approaches based on sampling...), we actually want to take a slightly different approach than that which we initially wanted. The idea is to follow the same approach as in [2] for risk bounded dynamic controllability of PSTNs, i.e. a risk allocation approach. In this setting, our goal will be to set bounds on random / contingent / uncontrollable variables such that we know that the constraints (including chance constraints) hold for them, and such that the total probability mass outside of these bounds is less than Delta. This approach is interesting because it seems like it may lead us to a simplified problem, and because it may be interesting for the acting part, as we could make use of the risk allocations to make some acting decisions when observing that some random variables outcomes don't fall into the bounds that were allocated for it. By "acting decisions" here we mean applying some sort of reactive dispatching or instantiation, plan repairing, or searching for new planning solutions with specific assumptions. (see below for notes on acting)
-
-But how could we make this work ? The simplest approach would be to defer this risk allocation step to the very end of the solving, just as we considered doing with for temporal uncertainty. Another more exciting idea would be try integrating it into the solver, possibly through a new "probabilistic" reasoner. Its purpose would be to propagate updates/events to the chance constraints, when an event/update modifies the domain of a variable from a chance constraint. But how exactly would that work ? Our current idea is to "watch" the Fréchet bounds for the chance constraints' probabilities, as well as the probabilities corresponding to the cumulative probability mass for the literals appearing in them. Indeed, we think that there's something interesting to be done with bound literals and cumulative probability masses. By the way, these cumulative probability masses would (hopefully?) be easily obtainable from conditional probability tables / trees / bayesian networks / influence diagrams attached to the chronicles. Also, we are motivated by the fact that there seems to already be support for max / min / sum constraints in Aries, because Fréchet bounds use max and min
-
-Also, all of this begs another question: could this be "unified" with the approach for temporal uncertainty ?
-
-
-### On the interactions between temporal and non temporal uncertainty (planning aspect)
-
-
-A priori, we have a feeling that it should be possible to consider these temporal and non temporal "chance specifications" independently. However, support constraints have 2 temporal ordering constraints in them ! So we should think about whether the temporal chance specifications would be affected by it... A priori, we think that there shouldn't be too much trouble because of this, but we should still be careful.
-
-
-## Acting (and acting aspects of temporal and non temporal uncertainty)
-
-
-To our knowledge, there no actors yet that are able to support temporal and non-temporal uncertainty in an online, interleaved planning and acting setting. Indeed, the notions of policies, temporal plans, and contingent plans, can be difficult to stitch together. Indeed, for now the only "unified" mathematical framework for this would be that of POMDPs, which unfortunately are often intractable because of huge state or action spaces.
-
-We also want to point out that in acting, the interest in uncertainty is a bit different than in planning. As we saw above, our interest in planning is to ensure that solutions satisfy some chance constraints of "chance specifications". In acting, we want our dispatching / execution choices be optimal, in the sense that we want them to be as likely to end succesfully as we can. This corresponds to following the maximum expected utility principle. So in other words, during acting, online, we want to make execution decisions that are the most likely to a higher value for the utility of the final "history" (i.e. "past" plan, i.e. "history" chronicle). In order to enable such online deliberation, allowing to make "the best" (both temporal and non temporal) choices on the fly, we are interested in a "policy-like" representation for our actor.
-
-For the most part, our idea is not fundamentally new at all, since it is grounded in the general idea described in 4.5.3 of [10] (i.e. a "RAE"-like actor capable of online refinement, dispatching choices, and lookahead). However, as mentioned there, this idea comes with quite some challenges, so until now only it was tackled only in a limited way.
-
-Also, before continuing any further, we would like to note that despite its age, the work of Bidot [...] is very enlightening for us. Almost all actors / acting systems that we encountered could indeed be seen as concrete instantiations of the general framework he described. As such, his work is very interesting to us as it may help to find a common ground between acting capabilities that couldn't be combined in a principled manner yet.
-
-In our effort, we are inspired by the general framework of Bidot for stochasting scheduling [...], FAPE (the skill handlers system in particular) [...], RAE & UPOM [...] (and SOMPAS [...] which can be seen as their extension), Riker [...], Lila [...], and Restricted Time-Based Dynamic Controllability (R-TDC) strategies of Osanlou [...].
-
-Our general idea is to try and "stitch together" a "policy" tree inspired by the tree-like R-TDC strategies of Osanlou [...], the general acting loop with possible revision / reactive replanning / plan repair, as well as the use of "skill handlers" from FAPE [...], the continuous planning approach of SOMPAS to continuously "grow" the set of known possible solutions / choices [...], and the "lookahead" from RAE+UPOM [...] or Lila [...].
-
-We think that we could extend the tree in [...] in several ways. First, instead of DTNUs, nodes should "contain" the current "plan belief" (i.e. current allowed values for planning problems, which map to instantiated plans i.e. "chronicle networks"). Second, outgoing edges from "d-OR" nodes should also be able to set non temporal (controllable/decision) variables (including presence variables and parameters of chronicles), not only schedule (controllable) timepoints (at the current time). Third, "reactive strategies" and "AND" should be extended to take into account observations (of a value for a certain variable) and "plan updates" that may happen during the wait period. More generally, maybe we could define "reactive strategies" as mappings from observations (and plan updates?) to "\ Del U Add" operations on chronicles, by analogy with the "reactive strategies" in the paper (mapping from sets of uncontrollable timepoints to controllable timepoints to schedule at the same time, if these uncontrollable timepoints were to be observed during the wait). Plan repair / replanning could be integrated as either a special type of reactive strategy, or a special type of outgoing edge from "d-OR" nodes.
-
-Additionally, we would need to think about how to tie "continuous planning" into this: how can we make the planner and actor interact in this setting ? A priori, nodes of the "policy" tree should also contain a data structure holding the (remaining) possible instantiations for (non temporal) variables. These correspond to solution that have been found by the planner per continuous planning. In SOMPAS, the "acting tree" is such a structure. Would it be possible "interalize" nodes of our "policy" tree with "acting trees" from SOMPAS (or something similar) ?
-
-Another issue is "how to choose the best decisions to take" ? We may run MCTS or some kind of sampling approach over the "policy" tree. Techniques mentioned above in the paragraph about non temporal uncertainty could be applicable to this problem as well.
-
-Also, do we need to maintain and update probabilistic knowledge online ? If so, can we do it (efficiently) ? And even if we can, won't the price of "converting" to more efficient forms / structures be worth it ?
-
-Is there a way to avoid the "policy" tree from growing too large ? Is it possible to leverage ideas from decision diagrams ? Perhaps adapt BDDs to use bounds on literals instead of 0/1 values ? And even if it was possible, would it be worth it ? Maybe it should be represented as a variant of an continuously updated MDP ?
-
-Do we need an "order" in which to consider variables ? As it might be impactful for efficiency, for example for probabilistic knowledge representation and manipulation. Or maybe it may be useful as a "pessimistic"/"conservative" order in which we should constrain the actor to make decisions, to avoid the tree from getting too large because of "redundant" nodes / exploration ?. In case this issue ends up being relevant, we think that a good idea would be the following: order presence variables by the order of their earliest possible start time ; then, right after each presence variable, place the variables appearing in that chronicle, in the order of the earliest possible start time of the condition/effect/subtask they're involved in, and in case of ambiguity with the controllable variables before uncontrollable ones.
-
-Anyway, despite the fact that our general idea is still crude, we believe that it may guide us (if we're lucky...) to an online acting architecture combining "proactive", "revision", and "progressive" approaches (as per the terminology of Bidot [...]) with support for complex temporal, numerical, and uncertainty specifications.
-
-### UPDATE (05/11/23)
-
-Following what we written above in "UPDATE (04/11/23)", we would like to add that it seems the risk allocation approach for planning may lend itself quite well for acting. Recall that the risk allocation bounds on random variables guarantee that as long as the observed values are within them, the current plan will continue satisfying its "risk specifications". This means, that observing a value outside of risk allocation bounds can be "monitorable" event that we should, well, monitor, as a possible trigger for plan repair*, replanning, or even not doing anything (i.e. continue the execution of the plan, hoping that the rest of the plan can still be executed correctly (and next random variables' observations fall inside the risk allocation bounds)). This is the same idea as that of [2] for the extension of dynamic execution strategies for STNUs to PSTNs. Such conditions (observing a random variable's value falling outside of our risk allocation bounds) are "readily available" after planning (we don't have to perform complex search/determination of relevant conditions), are quite simple, and therefore lend themselves well to the conditional/contingent policy idea we described. 
-
-*: by "plan repair", we do not only mean "usual" plan repair approaches (which may also be called "partial replan"), but also the approach of Williams et al. for "plan relaxations" (where they try to see if the contingent durations can be made shorter, and/or controllable durations can be made longer, without changing the "structure" of the plan).
-
-## ...
-
-NOTE 05/11/23: this file became too messy, needs to be cleaned
+  - As such, we hope to keep the flexibility of the actor from FAPE and extend it with both temporal and non-temporal lookahead capabilities
