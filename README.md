@@ -73,11 +73,14 @@ The following is **WIP** and is subject to change. Blanks, unclear wording and o
           - it won't be enough to run Wang's algorithm at the leaves of the tree, as that would account for risk allocation of only temporal uncontrollable variables.
             - some sort of "two-stage" approach, with 1st stage corresponding to non-temporal uncontrollable variables, and the 2nd stage corresponding to temporal ones ? 
 
+    - It could also be very interesting to consider using some form of decision diagram instead of tree, as it is very likely that a large part of the leaf temporal problems / networks will be the same
+
     - Let's also mention the original work of Tsamardinos [?] on CTPs, where we could look for insights on the early approaches to dynamic consistency
 
     - In everything discussed above, we assume that the Aries-like solver is used in an "uncertainty-relaxed" way (i.e. considering uncontrollable variables to be controllable). Everything we discussed above was considered to be performed on a "uncertainty-relaxed" solution given by the solver, where we then "lift" this relaxation, leading us to a new problem aimed at risk-aware controllability checking
       - In other words, the solver would be used to give initial candidate solutions to an algorithm which would be responsible of checking risk-aware dynamic controllability.
       - If we were to adapt the work of Cui, we would even need to have multiple "initial" candidate solutions. This is why we suggested some sort of local search to deal with the "AND/OR" search space which we would have when considering uncontrollable choice variables.
+        - The "local search" ideas actually remind us of the "anytime bdd construction" of Levine. Indeed, just like in his case, our search space may be very big, so we are very interested in an anytime approach. Which seems to be quite compatible with "local search - like" approaches we had in mind (because of the "iterated" consideration of fully instantiated candidate solutions)
 
     - However, we could also extend the solver with new reasoners (or "sub-reasoners"?), aimed at detecting bad cases early, in a non-complete fashion.
       - The simplest would be to catch as conflicts cases when propagation makes domains of uncontrollable variables smaller than the "largest" constraint they participate in
