@@ -1,6 +1,14 @@
 # nrealus' AI Planning Research Repository
 
 
+## **UPDATE: 13/04/2024** ##
+
+**This repository is now discontinued / unmaintained, because I started a PhD on this same subject (AI planning)! As such, working on this repository has not only been very fun and interesting, but also very useful for my career!**
+
+**The notes below are now old (10/2023) - and still very messy - but they may still be of interest and use for the future, as a possible source of inspiration.**
+
+##
+
 A long-term personal research project in AI planning and acting, which began in spring of 2020 (with a somewhat of a break in 2021-2022).
 
 Documentation (**WIP**) is available [here](https://nrealus.github.io/ai-planning-research-repo/).
